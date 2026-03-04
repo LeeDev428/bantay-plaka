@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Residents{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">Residents</h1>
+    <p class="text-base-content/60 text-sm">Registered subdivision residents and vehicles</p>
+  </div>
+  {% if user.is_admin %}
+  <a href="{% url 'resident_create' %}" class="btn btn-primary btn-sm">
+    <i class="fa fa-plus mr-1"></i> Register Resident
+  </a>
+  {% endif %}
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Address</th>
+          <th>Contact</th>
+          <th>Vehicles</th>
+          {% if user.is_admin %}<th>Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for resident in residents %}
+        <tr>
+          <td class="font-medium">{{ resident.full_name }}</td>
+          <td class="text-sm">{{ resident.address }}</td>
+          <td class="text-sm">{{ resident.contact_number|default:'—' }}</td>
+          <td>
+            {% for v in resident.vehicles.all %}
+              <div class="flex items-center gap-1 mb-1">
+                <span class="badge badge-outline badge-sm font-mono">{{ v.plate_number }}</span>
+                <span class="text-xs text-base-content/50">{{ v.color }} {{ v.make }} {{ v.model }}</span>
+                {% if user.is_admin %}
+                <form method="post" action="{% url 'vehicle_delete' v.pk %}" class="inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-xs text-error" onclick="return confirm('Remove vehicle?')">
+                    <i class="fa fa-trash"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            {% empty %}
+              <span class="text-xs text-base-content/40">No vehicles</span>
+            {% endfor %}
+            {% if user.is_admin %}
+            <a href="{% url 'vehicle_create' resident.pk %}" class="btn btn-ghost btn-xs text-primary mt-1">
+              <i class="fa fa-plus mr-1"></i>Add Vehicle
+            </a>
+            {% endif %}
+          </td>
+          {% if user.is_admin %}
+          <td class="flex gap-1">
+            <a href="{% url 'resident_edit' resident.pk %}" class="btn btn-ghost btn-xs"><i class="fa fa-pen"></i></a>
+            <form method="post" action="{% url 'resident_delete' resident.pk %}" class="inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-ghost btn-xs text-error" onclick="return confirm('Remove resident?')">
+                <i class="fa fa-trash"></i>
+              </button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-base-content/40 py-8">No residents registered yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

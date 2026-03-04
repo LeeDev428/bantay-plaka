@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">User Management</h1>
+    <p class="text-base-content/60 text-sm">Manage admin and security guard accounts</p>
+  </div>
+  <a href="{% url 'user_create' %}" class="btn btn-primary btn-sm">
+    <i class="fa fa-plus mr-1"></i> Add User
+  </a>
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Contact</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.get_full_name|default:'—' }}</td>
+          <td class="font-mono text-sm">{{ u.username }}</td>
+          <td>
+            {% if u.role == 'ADMIN' %}
+              <span class="badge badge-primary badge-sm">Admin</span>
+            {% else %}
+              <span class="badge badge-secondary badge-sm">Guard</span>
+            {% endif %}
+          </td>
+          <td class="text-sm">{{ u.contact_number|default:'—' }}</td>
+          <td>
+            {% if u.is_active %}
+              <span class="badge badge-success badge-sm">Active</span>
+            {% else %}
+              <span class="badge badge-error badge-sm">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="flex gap-1">
+            <a href="{% url 'user_edit' u.pk %}" class="btn btn-ghost btn-xs">
+              <i class="fa fa-pen"></i>
+            </a>
+            <form method="post" action="{% url 'user_toggle_active' u.pk %}" class="inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-ghost btn-xs {% if u.is_active %}text-error{% else %}text-success{% endif %}"
+                title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}">
+                <i class="fa {% if u.is_active %}fa-user-slash{% else %}fa-user-check{% endif %}"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-base-content/40 py-8">No users found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

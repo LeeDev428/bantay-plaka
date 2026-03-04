@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Log Visitor{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold">Log Visitor</h1>
+    <p class="text-base-content/60 text-sm">Register visitor entry into the subdivision</p>
+  </div>
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+          <div class="form-control mb-4">
+            <label class="label"><span class="label-text font-medium">{{ field.label }}</span></label>
+            {{ field }}
+            {% if field.errors %}<span class="text-error text-xs mt-1">{{ field.errors.0 }}</span>{% endif %}
+          </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-info w-full mt-2">
+          <i class="fa fa-user-plus mr-1"></i> Log Visitor Time In
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

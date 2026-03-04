@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold">Admin Dashboard</h1>
+  <p class="text-base-content/60 text-sm">System overview and recent activity</p>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-figure text-primary"><i class="fa fa-house-user fa-2x"></i></div>
+    <div class="stat-title">Residents</div>
+    <div class="stat-value text-primary">{{ total_residents }}</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-figure text-secondary"><i class="fa fa-car fa-2x"></i></div>
+    <div class="stat-title">Registered Vehicles</div>
+    <div class="stat-value text-secondary">{{ total_vehicles }}</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-figure text-accent"><i class="fa fa-user-shield fa-2x"></i></div>
+    <div class="stat-title">Active Guards</div>
+    <div class="stat-value text-accent">{{ total_guards }}</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-figure text-success"><i class="fa fa-signal fa-2x"></i></div>
+    <div class="stat-title">Camera Status</div>
+    <div class="stat-value text-success text-sm pt-2">ONLINE</div>
+  </div>
+</div>
+
+<!-- Live Log Table -->
+<div class="card bg-base-100 shadow">
+  <div class="card-body p-0">
+    <div class="flex items-center justify-between px-4 pt-4 pb-2 border-b">
+      <h2 class="font-bold text-lg flex items-center gap-2">
+        <span class="badge badge-success badge-xs animate-ping inline-flex"></span>
+        Live Gate Log
+      </h2>
+      <a href="{% url 'log_list' %}" class="btn btn-ghost btn-sm">View All</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Plate</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="live-log-body">
+          {% for log in recent_logs %}
+            {% include 'partials/log_row.html' with log=log %}
+          {% empty %}
+            <tr><td colspan="6" class="text-center text-base-content/40 py-8">No logs yet today.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% include 'partials/websocket_listener.html' %}
+{% endblock %}

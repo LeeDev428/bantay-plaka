@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Manual Entry{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <div class="alert alert-warning shadow mb-4">
+    <i class="fa fa-triangle-exclamation"></i>
+    <span><strong>Manual Mode</strong> — Use this when the camera is offline or malfunctioning. Logs are flagged as Manual.</span>
+  </div>
+  <h1 class="text-2xl font-bold">Manual Log Entry</h1>
+  <p class="text-base-content/60 text-sm">Enter plate details manually to record time in/out</p>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <!-- Form -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title mb-2"><i class="fa fa-keyboard mr-2 text-warning"></i>Enter Details</h2>
+      <form method="post" novalidate id="manual-form">
+        {% csrf_token %}
+        {% for field in form %}
+          <div class="form-control mb-4">
+            <label class="label">
+              <span class="label-text font-medium">{{ field.label }}{% if field.field.required %} *{% endif %}</span>
+            </label>
+            {{ field }}
+            {% if field.errors %}
+              <span class="text-error text-xs mt-1">{{ field.errors.0 }}</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-warning w-full mt-2">
+          <i class="fa fa-floppy-disk mr-1"></i> Save Log Entry
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Recent Manual Logs -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body p-0">
+      <div class="px-4 pt-4 pb-2 border-b">
+        <h2 class="font-bold">Recent Manual Logs</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr><th>Plate</th><th>Type</th><th>Status</th><th>Time</th></tr>
+          </thead>
+          <tbody id="live-log-body">
+            {% for log in recent_logs %}
+              <tr>
+                <td class="font-mono font-bold">{{ log.plate_number }}</td>
+                <td>
+                  {% if log.entry_type == 'RESIDENT' %}
+                    <span class="badge badge-success badge-sm">RESIDENT</span>
+                  {% elif log.entry_type == 'VISITOR' %}
+                    <span class="badge badge-warning badge-sm">VISITOR</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">UNKNOWN</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if log.status == 'TIME_IN' %}
+                    <span class="badge badge-info badge-sm">TIME IN</span>
+                  {% else %}
+                    <span class="badge badge-error badge-sm">TIME OUT</span>
+                  {% endif %}
+                </td>
+                <td class="text-xs">{{ log.timestamp|date:"h:i A" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="text-center text-base-content/40 py-4">No manual entries yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% include 'partials/websocket_listener.html' %}
+{% endblock %}

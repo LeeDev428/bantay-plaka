@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+
+{% block auth_content %}
+<div class="min-h-screen flex items-center justify-center bg-neutral">
+  <div class="card w-full max-w-sm bg-base-100 shadow-2xl">
+    <div class="card-body">
+
+      <div class="text-center mb-6">
+        <div class="text-5xl mb-2"><i class="fa fa-shield-halved text-primary"></i></div>
+        <h1 class="text-2xl font-bold tracking-widest">BANTAYPLAKA</h1>
+        <p class="text-xs text-base-content/50 mt-1">ANPR Vehicle Monitoring System</p>
+      </div>
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="form-control mb-3">
+          <label class="label"><span class="label-text font-medium">Username</span></label>
+          {{ form.username }}
+          {% if form.username.errors %}
+            <span class="text-error text-xs mt-1">{{ form.username.errors.0 }}</span>
+          {% endif %}
+        </div>
+
+        <div class="form-control mb-5">
+          <label class="label"><span class="label-text font-medium">Password</span></label>
+          {{ form.password }}
+          {% if form.password.errors %}
+            <span class="text-error text-xs mt-1">{{ form.password.errors.0 }}</span>
+          {% endif %}
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-error mb-4 text-sm">
+            <i class="fa fa-circle-xmark"></i>
+            {{ form.non_field_errors.0 }}
+          </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary w-full">
+          <i class="fa fa-right-to-bracket mr-1"></i> Login
+        </button>
+      </form>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Guard Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold">Security Guard Dashboard</h1>
+  <p class="text-base-content/60 text-sm">Real-time gate activity — {{ request.user.get_full_name }}</p>
+</div>
+
+<!-- Live Log Table -->
+<div class="card bg-base-100 shadow">
+  <div class="card-body p-0">
+    <div class="flex items-center justify-between px-4 pt-4 pb-2 border-b">
+      <h2 class="font-bold text-lg flex items-center gap-2">
+        <span class="badge badge-success badge-xs animate-ping inline-flex"></span>
+        Live Gate Log
+      </h2>
+      <div class="flex gap-2">
+        <a href="{% url 'manual_entry' %}" class="btn btn-warning btn-sm">
+          <i class="fa fa-keyboard mr-1"></i> Manual Entry
+        </a>
+        <a href="{% url 'visitor_log_entry' %}" class="btn btn-info btn-sm">
+          <i class="fa fa-user-plus mr-1"></i> Log Visitor
+        </a>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Plate</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="live-log-body">
+          {% for log in recent_logs %}
+            {% include 'partials/log_row.html' with log=log %}
+          {% empty %}
+            <tr><td colspan="6" class="text-center text-base-content/40 py-8">No logs yet today.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% include 'partials/websocket_listener.html' %}
+{% endblock %}

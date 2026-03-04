@@ -1,0 +1,56 @@
+<ul class="menu bg-neutral text-neutral-content min-h-screen w-64 p-4 gap-1">
+  <li class="mb-4">
+    <span class="text-xl font-bold tracking-widest text-white">
+      <i class="fa fa-shield-halved mr-2 text-primary"></i>BantayPlaka
+    </span>
+    <span class="text-xs text-neutral-content/60 ml-1">ANPR Monitoring</span>
+  </li>
+
+  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest">Main</li>
+  <li>
+    <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'guard_dashboard' %}active{% endif %}">
+      <i class="fa fa-gauge-high w-5"></i> Dashboard
+    </a>
+  </li>
+  <li>
+    <a href="{% url 'log_list' %}" class="{% if 'log' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-clock-rotate-left w-5"></i> Vehicle Logs
+    </a>
+  </li>
+
+  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest mt-2">Operations</li>
+  <li>
+    <a href="{% url 'manual_entry' %}" class="{% if request.resolver_match.url_name == 'manual_entry' %}active{% endif %}">
+      <i class="fa fa-keyboard w-5"></i> Manual Entry
+    </a>
+  </li>
+  <li>
+    <a href="{% url 'visitor_log_entry' %}" class="{% if request.resolver_match.url_name == 'visitor_log_entry' %}active{% endif %}">
+      <i class="fa fa-user-plus w-5"></i> Log Visitor
+    </a>
+  </li>
+
+  {% if user.is_admin %}
+  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest mt-2">Admin</li>
+  <li>
+    <a href="{% url 'resident_list' %}" class="{% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-house-user w-5"></i> Residents
+    </a>
+  </li>
+  <li>
+    <a href="{% url 'user_management' %}" class="{% if 'user' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-users-gear w-5"></i> User Management
+    </a>
+  </li>
+  {% endif %}
+
+  <li class="mt-auto">
+    <a href="{% url 'logout' %}" class="text-error">
+      <i class="fa fa-right-from-bracket w-5"></i> Logout
+    </a>
+  </li>
+  <li class="text-xs text-neutral-content/40 px-2 py-1">
+    Logged in as: <strong>{{ user.get_full_name|default:user.username }}</strong><br/>
+    Role: <span class="badge badge-sm badge-primary">{{ user.role }}</span>
+  </li>
+</ul>

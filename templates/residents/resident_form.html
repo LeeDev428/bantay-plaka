@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Resident{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold">{{ action }} Resident</h1>
+  </div>
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+          <div class="form-control mb-4">
+            <label class="label"><span class="label-text font-medium">{{ field.label }}</span></label>
+            {{ field }}
+            {% if field.errors %}<span class="text-error text-xs mt-1">{{ field.errors.0 }}</span>{% endif %}
+          </div>
+        {% endfor %}
+        <div class="flex gap-2 mt-4">
+          <button type="submit" class="btn btn-primary flex-1">
+            <i class="fa fa-floppy-disk mr-1"></i> Save
+          </button>
+          <a href="{% url 'resident_list' %}" class="btn btn-ghost flex-1">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

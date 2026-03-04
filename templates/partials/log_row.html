@@ -1,0 +1,28 @@
+<tr id="log-row-{{ log.pk }}">
+  <td class="font-mono font-bold">{{ log.plate_number }}</td>
+  <td>{{ log.get_display_name }}</td>
+  <td>
+    {% if log.entry_type == 'RESIDENT' %}
+      <span class="badge badge-success badge-sm">RESIDENT</span>
+    {% elif log.entry_type == 'VISITOR' %}
+      <span class="badge badge-warning badge-sm">VISITOR</span>
+    {% else %}
+      <span class="badge badge-ghost badge-sm">UNKNOWN</span>
+    {% endif %}
+  </td>
+  <td>
+    {% if log.status == 'TIME_IN' %}
+      <span class="badge badge-info badge-sm"><i class="fa fa-arrow-right-to-bracket mr-1"></i>TIME IN</span>
+    {% else %}
+      <span class="badge badge-error badge-sm"><i class="fa fa-arrow-right-from-bracket mr-1"></i>TIME OUT</span>
+    {% endif %}
+  </td>
+  <td>
+    {% if log.source == 'MANUAL' %}
+      <span class="badge badge-outline badge-sm"><i class="fa fa-keyboard mr-1"></i>Manual</span>
+    {% else %}
+      <span class="badge badge-outline badge-sm badge-success"><i class="fa fa-camera mr-1"></i>Camera</span>
+    {% endif %}
+  </td>
+  <td class="text-xs text-base-content/60">{{ log.timestamp|date:"M d, Y h:i:s A" }}</td>
+</tr>

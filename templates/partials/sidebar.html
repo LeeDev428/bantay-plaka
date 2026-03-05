@@ -1,60 +1,55 @@
-<ul class="menu bg-neutral text-neutral-content min-h-screen w-64 p-4 gap-1">
-  <li class="mb-4">
-    <span class="text-xl font-bold tracking-widest text-white">
-      <i class="fa fa-shield-halved mr-2 text-primary"></i>BantayPlaka
-    </span>
-    <span class="text-xs text-neutral-content/60 ml-1">ANPR Monitoring</span>
-  </li>
+{% load static %}
+<aside id="sidebar">
 
-  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest">Main</li>
-  <li>
-    <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'guard_dashboard' %}active{% endif %}">
-      <i class="fa fa-gauge-high w-5"></i> Dashboard
-    </a>
-  </li>
-  <li>
-    <a href="{% url 'log_list' %}" class="{% if 'log' in request.resolver_match.url_name %}active{% endif %}">
-      <i class="fa fa-clock-rotate-left w-5"></i> Vehicle Logs
-    </a>
-  </li>
-
-  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest mt-2">Operations</li>
-  <li>
-    <a href="{% url 'manual_entry' %}" class="{% if request.resolver_match.url_name == 'manual_entry' %}active{% endif %}">
-      <i class="fa fa-keyboard w-5"></i> Manual Entry
-    </a>
-  </li>
-  <li>
-    <a href="{% url 'visitor_log_entry' %}" class="{% if request.resolver_match.url_name == 'visitor_log_entry' %}active{% endif %}">
-      <i class="fa fa-user-plus w-5"></i> Log Visitor
-    </a>
-  </li>
-
-  {% if user.is_admin %}
-  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest mt-2">Admin</li>
-  <li>
-    <a href="{% url 'resident_list' %}" class="{% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
-      <i class="fa fa-house-user w-5"></i> Residents
-    </a>
-  </li>
-  <li>
-    <a href="{% url 'user_management' %}" class="{% if 'user' in request.resolver_match.url_name %}active{% endif %}">
-      <i class="fa fa-users-gear w-5"></i> User Management
-    </a>
-  </li>
-  {% endif %}
-
-  <li class="mt-auto">
-    <div class="px-2 py-2 text-xs text-neutral-content/50">
-      <span class="font-semibold text-neutral-content/80">{{ user.get_full_name|default:user.username }}</span>
+  <!-- Logo Area -->
+  <div class="logo-area">
+    <img src="{% static 'img/bantayplaka.png' %}" alt="BantayPlaka Logo" />
+    <div class="logo-text">
+      <span class="logo-bantay">BANTAY</span>
+      <span class="logo-plaka">PLAKA</span>
     </div>
-  </li>
-  <li>
-    <form method="post" action="{% url 'logout' %}">
-      {% csrf_token %}
-      <button type="submit" class="w-full text-left text-error flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-error/10 transition">
-        <i class="fa fa-right-from-bracket w-5"></i> Logout
-      </button>
-    </form>
-  </li>
-</ul>
+    <p class="logo-sub">Automatic Number Plate Recognition-Based Vehicle Monitoring System</p>
+  </div>
+
+  <!-- Navigation -->
+  <nav>
+    <a href="{% url 'dashboard' %}"
+       class="{% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'guard_dashboard' or request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+      <i class="fa fa-gauge-high"></i> Dashboard
+    </a>
+    <a href="{% url 'camera_feed' %}"
+       class="{% if request.resolver_match.url_name == 'camera_feed' %}active{% endif %}">
+      <i class="fa fa-video"></i> Live Camera Feed
+    </a>
+    <a href="{% url 'log_list' %}"
+       class="{% if 'log' in request.resolver_match.url_name and request.resolver_match.url_name != 'manual_entry' %}active{% endif %}">
+      <i class="fa fa-car"></i> Vehicle Logs
+    </a>
+    <a href="{% url 'visitor_list' %}"
+       class="{% if 'visitor' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-users"></i> Guest Logs
+    </a>
+    <a href="{% url 'settings' %}"
+       class="{% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+      <i class="fa fa-gear"></i> Settings
+    </a>
+
+    {% if user.is_admin %}
+    <a href="{% url 'resident_list' %}"
+       class="{% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-house-user"></i> Residents
+    </a>
+    <a href="{% url 'user_management' %}"
+       class="{% if 'user' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-users-gear"></i> User Mgmt
+    </a>
+    {% endif %}
+  </nav>
+
+  <!-- Clock -->
+  <div class="clock-area">
+    <div class="clock-label">Current Time</div>
+    <span id="live-clock">12:00:00 AM</span>
+  </div>
+
+</aside>

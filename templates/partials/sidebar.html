@@ -45,12 +45,16 @@
   {% endif %}
 
   <li class="mt-auto">
-    <a href="{% url 'logout' %}" class="text-error">
-      <i class="fa fa-right-from-bracket w-5"></i> Logout
-    </a>
+    <div class="px-2 py-2 text-xs text-neutral-content/50">
+      <span class="font-semibold text-neutral-content/80">{{ user.get_full_name|default:user.username }}</span>
+    </div>
   </li>
-  <li class="text-xs text-neutral-content/40 px-2 py-1">
-    Logged in as: <strong>{{ user.get_full_name|default:user.username }}</strong><br/>
-    Role: <span class="badge badge-sm badge-primary">{{ user.role }}</span>
+  <li>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="w-full text-left text-error flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-error/10 transition">
+        <i class="fa fa-right-from-bracket w-5"></i> Logout
+      </button>
+    </form>
   </li>
 </ul>

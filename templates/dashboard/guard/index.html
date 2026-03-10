@@ -1,50 +1,56 @@
 {% extends 'base.html' %}
 {% block title %}Guard Dashboard{% endblock %}
+{% block breadcrumb %}Dashboard &raquo; Gate Monitor{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-bold">Security Guard Dashboard</h1>
-  <p class="text-base-content/60 text-sm">Real-time gate activity — {{ request.user.get_full_name }}</p>
+<!-- Page Header -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">Gate Monitor</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Real-time gate activity &mdash; {{ request.user.get_full_name }}</p>
+  </div>
+  <div class="flex gap-2">
+    <a href="{% url 'manual_entry' %}" class="btn btn-sm bg-amber-500 hover:bg-amber-600 border-0 text-white">
+      <i class="fa fa-keyboard mr-1"></i> Manual Entry
+    </a>
+    <a href="{% url 'visitor_log_entry' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+      <i class="fa fa-user-plus mr-1"></i> Log Visitor
+    </a>
+  </div>
 </div>
 
-<!-- Live Log Table -->
-<div class="card bg-base-100 shadow">
-  <div class="card-body p-0">
-    <div class="flex items-center justify-between px-4 pt-4 pb-2 border-b">
-      <h2 class="font-bold text-lg flex items-center gap-2">
-        <span class="badge badge-success badge-xs animate-ping inline-flex"></span>
-        Live Gate Log
-      </h2>
-      <div class="flex gap-2">
-        <a href="{% url 'manual_entry' %}" class="btn btn-warning btn-sm">
-          <i class="fa fa-keyboard mr-1"></i> Manual Entry
-        </a>
-        <a href="{% url 'visitor_log_entry' %}" class="btn btn-info btn-sm">
-          <i class="fa fa-user-plus mr-1"></i> Log Visitor
-        </a>
-      </div>
+<!-- Live Gate Log -->
+<div class="page-card">
+  <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+    <div class="flex items-center gap-2">
+      <span class="relative flex h-2.5 w-2.5">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+      </span>
+      <h2 class="font-semibold text-slate-800">Live Gate Log</h2>
     </div>
-    <div class="overflow-x-auto">
-      <table class="table table-sm">
-        <thead>
-          <tr>
-            <th>Plate</th>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Source</th>
-            <th>Time</th>
-          </tr>
-        </thead>
-        <tbody id="live-log-body">
-          {% for log in recent_logs %}
-            {% include 'partials/log_row.html' with log=log %}
-          {% empty %}
-            <tr><td colspan="6" class="text-center text-base-content/40 py-8">No logs yet today.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <a href="{% url 'log_list' %}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">View All &rarr;</a>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+          <th class="font-semibold">Plate</th>
+          <th class="font-semibold">Name</th>
+          <th class="font-semibold">Type</th>
+          <th class="font-semibold">Status</th>
+          <th class="font-semibold">Source</th>
+          <th class="font-semibold">Time</th>
+        </tr>
+      </thead>
+      <tbody id="live-log-body">
+        {% for log in recent_logs %}
+          {% include 'partials/log_row.html' with log=log %}
+        {% empty %}
+          <tr><td colspan="6" class="text-center text-slate-400 py-12">No gate activity recorded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 {% endblock %}

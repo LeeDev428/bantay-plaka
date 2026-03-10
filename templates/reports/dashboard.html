@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}Reports{% endblock %}
+{% block breadcrumb %}Reports &raquo; Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">Reports</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Analytics and activity summary &mdash; {{ today|date:"F d, Y" }}</p>
+  </div>
+  <a href="{% url 'report_export' %}" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white">
+    <i class="fa fa-file-csv mr-1"></i> Export CSV
+  </a>
+</div>
+
+<!-- Stats Cards -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="stat-card">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Time In Today</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1">{{ today_in }}</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+        <i class="fa fa-arrow-right-to-bracket text-blue-600"></i>
+      </div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Time Out Today</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1">{{ today_out }}</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+        <i class="fa fa-arrow-right-from-bracket text-red-600"></i>
+      </div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Unique Vehicles</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1">{{ today_unique }}</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center">
+        <i class="fa fa-car text-violet-600"></i>
+      </div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Currently Inside</p>
+        <p class="text-2xl font-bold text-emerald-600 mt-1">{{ currently_inside }}</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+        <i class="fa fa-location-dot text-emerald-600"></i>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-3 gap-6 mb-6">
+  <!-- 7-Day Activity Chart -->
+  <div class="lg:col-span-2 page-card p-5">
+    <h2 class="font-semibold text-slate-800 mb-4">7-Day Activity</h2>
+    <div class="h-64">
+      <canvas id="activityChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Top Vehicles -->
+  <div class="page-card">
+    <div class="px-5 py-4 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-800">Top Vehicles This Week</h2>
+    </div>
+    <div class="divide-y divide-slate-100">
+      {% for v in top_vehicles %}
+      <div class="px-5 py-3 flex items-center justify-between">
+        <div>
+          <p class="font-mono text-sm font-semibold text-slate-800">{{ v.plate_number }}</p>
+          <p class="text-xs text-slate-400">
+            {% if v.entry_type == 'RESIDENT' %}Resident{% elif v.entry_type == 'VISITOR' %}Visitor{% else %}Unknown{% endif %}
+          </p>
+        </div>
+        <span class="text-sm font-bold text-blue-600">{{ v.visits }}</span>
+      </div>
+      {% empty %}
+      <div class="px-5 py-8 text-center text-slate-400 text-sm">No vehicle activity this week.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- CSV Export with Date Range -->
+<div class="page-card p-5">
+  <h2 class="font-semibold text-slate-800 mb-4">Export Logs to CSV</h2>
+  <form method="get" action="{% url 'report_export' %}" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
+      <input type="date" name="from" class="input input-bordered input-sm bg-white" />
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
+      <input type="date" name="to" class="input input-bordered input-sm bg-white" />
+    </div>
+    <button type="submit" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white">
+      <i class="fa fa-download mr-1"></i> Download CSV
+    </button>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  const labels = {{ daily_data|safe }}.map(d => d.label);
+  const timeIn = {{ daily_data|safe }}.map(d => d.time_in);
+  const timeOut = {{ daily_data|safe }}.map(d => d.time_out);
+
+  new Chart(document.getElementById('activityChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Time In',
+          data: timeIn,
+          backgroundColor: '#3b82f6',
+          borderRadius: 4,
+          barPercentage: 0.7,
+        },
+        {
+          label: 'Time Out',
+          data: timeOut,
+          backgroundColor: '#ef4444',
+          borderRadius: 4,
+          barPercentage: 0.7,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { usePointStyle: true, pointStyle: 'circle', padding: 20, font: { size: 12 } }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, font: { size: 11 }, color: '#94a3b8' },
+          grid: { color: '#f1f5f9' }
+        },
+        x: {
+          ticks: { font: { size: 11 }, color: '#94a3b8' },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

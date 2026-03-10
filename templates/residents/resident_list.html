@@ -1,74 +1,79 @@
 {% extends 'base.html' %}
 {% block title %}Residents{% endblock %}
+{% block breadcrumb %}Admin &raquo; Residents{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
   <div>
-    <h1 class="text-2xl font-bold">Residents</h1>
-    <p class="text-base-content/60 text-sm">Registered subdivision residents and vehicles</p>
+    <h1 class="text-2xl font-bold text-slate-800">Residents</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Registered subdivision residents and their vehicles</p>
   </div>
   {% if user.is_admin %}
-  <a href="{% url 'resident_create' %}" class="btn btn-primary btn-sm">
+  <a href="{% url 'resident_create' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
     <i class="fa fa-plus mr-1"></i> Register Resident
   </a>
   {% endif %}
 </div>
 
-<div class="card bg-base-100 shadow">
+<div class="page-card">
   <div class="overflow-x-auto">
     <table class="table table-sm">
       <thead>
-        <tr>
-          <th>Name</th>
-          <th>Address</th>
-          <th>Contact</th>
-          <th>Vehicles</th>
-          {% if user.is_admin %}<th>Actions</th>{% endif %}
+        <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+          <th class="font-semibold">Name</th>
+          <th class="font-semibold">Address</th>
+          <th class="font-semibold">Contact</th>
+          <th class="font-semibold">Vehicles</th>
+          {% if user.is_admin %}<th class="font-semibold">Actions</th>{% endif %}
         </tr>
       </thead>
       <tbody>
         {% for resident in residents %}
-        <tr>
-          <td class="font-medium">{{ resident.full_name }}</td>
-          <td class="text-sm">{{ resident.address }}</td>
-          <td class="text-sm">{{ resident.contact_number|default:'—' }}</td>
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="font-medium text-slate-800">{{ resident.full_name }}</td>
+          <td class="text-sm text-slate-500">{{ resident.address }}</td>
+          <td class="text-sm text-slate-500">{{ resident.contact_number|default:'—' }}</td>
           <td>
             {% for v in resident.vehicles.all %}
-              <div class="flex items-center gap-1 mb-1">
-                <span class="badge badge-outline badge-sm font-mono">{{ v.plate_number }}</span>
-                <span class="text-xs text-base-content/50">{{ v.color }} {{ v.make }} {{ v.model }}</span>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-mono text-xs font-semibold px-2 py-0.5 bg-slate-100 rounded text-slate-700">{{ v.plate_number }}</span>
+                <span class="text-xs text-slate-400">{{ v.color }} {{ v.make }} {{ v.model }}</span>
                 {% if user.is_admin %}
                 <form method="post" action="{% url 'vehicle_delete' v.pk %}" class="inline">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-ghost btn-xs text-error" onclick="return confirm('Remove vehicle?')">
-                    <i class="fa fa-trash"></i>
+                  <button type="submit" class="text-red-400 hover:text-red-600 transition-colors" onclick="return confirm('Remove vehicle?')">
+                    <i class="fa fa-xmark text-xs"></i>
                   </button>
                 </form>
                 {% endif %}
               </div>
             {% empty %}
-              <span class="text-xs text-base-content/40">No vehicles</span>
+              <span class="text-xs text-slate-400 italic">No vehicles</span>
             {% endfor %}
             {% if user.is_admin %}
-            <a href="{% url 'vehicle_create' resident.pk %}" class="btn btn-ghost btn-xs text-primary mt-1">
-              <i class="fa fa-plus mr-1"></i>Add Vehicle
+            <a href="{% url 'vehicle_create' resident.pk %}" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1">
+              <i class="fa fa-plus text-[10px]"></i> Add
             </a>
             {% endif %}
           </td>
           {% if user.is_admin %}
-          <td class="flex gap-1">
-            <a href="{% url 'resident_edit' resident.pk %}" class="btn btn-ghost btn-xs"><i class="fa fa-pen"></i></a>
-            <form method="post" action="{% url 'resident_delete' resident.pk %}" class="inline">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-ghost btn-xs text-error" onclick="return confirm('Remove resident?')">
-                <i class="fa fa-trash"></i>
-              </button>
-            </form>
+          <td>
+            <div class="flex items-center gap-1">
+              <a href="{% url 'resident_edit' resident.pk %}" class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600" title="Edit">
+                <i class="fa fa-pen text-xs"></i>
+              </a>
+              <form method="post" action="{% url 'resident_delete' resident.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" onclick="return confirm('Remove resident?')" title="Delete">
+                  <i class="fa fa-trash text-xs"></i>
+                </button>
+              </form>
+            </div>
           </td>
           {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="text-center text-base-content/40 py-8">No residents registered yet.</td></tr>
+        <tr><td colspan="5" class="text-center text-slate-400 py-12">No residents registered yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

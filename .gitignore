@@ -1,0 +1,63 @@
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.pyo
+*.so
+
+# ─── Virtual Environment ──────────────────────────────────────────────────────
+venv/
+env/
+.env/
+.venv/
+ENV/
+
+# ─── Django ───────────────────────────────────────────────────────────────────
+*.log
+db.sqlite3
+media/
+staticfiles/
+static_collected/
+
+# ─── Environment / Secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── ANPR / ML model weights & cache ─────────────────────────────────────────
+anpr_engine/__pycache__/
+*.pt
+*.onnx
+*.weights
+*.cfg.bak
+*.tflite
+roboflow/
+
+# ─── IDE / Editor ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Build / Distribution ─────────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# ─── Coverage / Test artifacts ────────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# ─── Node (if any frontend tooling is added later) ───────────────────────────
+node_modules/
+npm-debug.log*

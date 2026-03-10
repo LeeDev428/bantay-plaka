@@ -1,3 +1,4 @@
+{% load tz %}
 <tr id="log-row-{{ log.pk }}" class="hover:bg-slate-50 transition-colors">
   <td class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</td>
   <td class="text-sm text-slate-600">{{ log.get_display_name }}</td>
@@ -28,5 +29,5 @@
       <span class="inline-flex items-center gap-1 text-xs text-emerald-600"><i class="fa fa-camera text-[10px]"></i> Camera</span>
     {% endif %}
   </td>
-  <td class="text-xs text-slate-400">{{ log.timestamp|date:"M d, Y h:i:s A" }}</td>
+  <td class="text-xs text-slate-400">{{ log.timestamp|localtime|date:"M d, Y h:i:s A" }}</td>
 </tr>

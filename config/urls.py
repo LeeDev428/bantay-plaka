@@ -11,4 +11,5 @@ urlpatterns = [
     path('visitors/', include('apps.visitors.urls')),
     path('logs/', include('apps.logs.urls')),
     path('detection/', include('apps.detection.urls')),
+    path('reports/', include('apps.reports.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

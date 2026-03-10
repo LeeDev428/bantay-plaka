@@ -2,12 +2,12 @@ import datetime
 
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
 from django.utils import timezone
 
 from apps.logs.models import VehicleLog
-from apps.logs.forms import ManualLogForm
+from apps.logs.forms import ManualLogForm, LogEditForm
 from apps.logs.services import broadcast_log
 from apps.residents.models import Vehicle
 
@@ -90,3 +90,25 @@ def log_list(request):
         'entry_type_q': entry_type_q,
         'date_q': date_q,
     })
+
+
+@login_required
+def log_edit(request, pk):
+    log = get_object_or_404(VehicleLog, pk=pk)
+    if request.method == 'POST':
+        form = LogEditForm(request.POST, instance=log)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Log #{pk} updated successfully.')
+        else:
+            messages.error(request, 'Failed to update log. Please check the fields.')
+    return redirect(request.POST.get('next', 'log_list'))
+
+
+@login_required
+def log_delete(request, pk):
+    log = get_object_or_404(VehicleLog, pk=pk)
+    if request.method == 'POST':
+        log.delete()
+        messages.success(request, f'Log #{pk} deleted.')
+    return redirect(request.POST.get('next', 'log_list'))

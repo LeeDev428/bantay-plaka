@@ -85,7 +85,7 @@
             {% endif %}
           </td>
           <td class="text-xs text-slate-500">{{ log.logged_by.get_full_name|default:'System' }}</td>
-          <td class="text-xs text-slate-400">{{ log.timestamp|localtime|date:"M d, Y h:i:s A" }}</td>
+          <td class="text-xs text-slate-400">{{ log.local_time|date:"M d, Y h:i:s A" }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="7" class="text-center text-slate-400 py-12">No logs found.</td></tr>

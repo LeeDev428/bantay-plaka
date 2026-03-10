@@ -23,19 +23,20 @@ REQUIREMENTS:
 USAGE EXAMPLES:
 
   # Recommended -- Roboflow mode with webcam test (no camera hardware needed yet):
-  python anpr_engine/anpr_engine.py --rtsp 0 --status TIME_IN
+  python anpr_engine/anpr_engine.py --rtsp 0
 
-  # Roboflow mode with real IP camera (entry gate):
-  python anpr_engine/anpr_engine.py --rtsp "rtsp://admin:admin@192.168.1.108:554/stream1" --status TIME_IN
-
-  # Exit gate camera (TIME_OUT):
-  python anpr_engine/anpr_engine.py --rtsp "rtsp://admin:admin@192.168.1.109:554/stream1" --status TIME_OUT
+  # Roboflow mode with real IP camera:
+  python anpr_engine/anpr_engine.py --rtsp "rtsp://admin:admin@192.168.1.108:554/stream1"
 
   # YOLO fallback mode:
-  python anpr_engine/anpr_engine.py --rtsp 0 --status TIME_IN --mode yolo
+  python anpr_engine/anpr_engine.py --rtsp 0 --mode yolo
 
   # Headless (no GUI window, background service):
-  python anpr_engine/anpr_engine.py --rtsp "rtsp://..." --status TIME_IN --no-preview
+  python anpr_engine/anpr_engine.py --rtsp "rtsp://..." --no-preview
+
+NOTE: TIME_IN / TIME_OUT is auto-determined by Django.
+      First scan = TIME_IN, second scan = TIME_OUT, and so on.
+      No need to specify --status anymore.
 """
 
 import argparse
@@ -225,15 +226,15 @@ class ANPREngine:
     def __init__(
         self,
         rtsp_url: str,
-        status: str,
         ingest_url: str,
         mode: str = 'roboflow',
         rf_model_id: str = DEFAULT_RF_MODEL_ID,
         yolo_model_path: str = DEFAULT_YOLO_MODEL,
+        debounce_seconds: int = DEBOUNCE_SECONDS,
     ):
         self.rtsp_url = rtsp_url
-        self.status = status
         self.ingest_url = ingest_url
+        self.debounce_seconds = debounce_seconds
         self._last_logged: dict[str, float] = {}
 
         # Initialize plate detector
@@ -251,7 +252,7 @@ class ANPREngine:
         log.info("EasyOCR ready.")
 
     def _is_debounced(self, plate: str) -> bool:
-        return (time.time() - self._last_logged.get(plate, 0)) < DEBOUNCE_SECONDS
+        return (time.time() - self._last_logged.get(plate, 0)) < self.debounce_seconds
 
     def _record_logged(self, plate: str):
         self._last_logged[plate] = time.time()
@@ -264,12 +265,14 @@ class ANPREngine:
         try:
             resp = requests.post(
                 self.ingest_url,
-                json={'plate_number': plate, 'status': self.status},
+                json={'plate_number': plate},
                 headers={'Content-Type': 'application/json', 'X-Api-Key': DJANGO_API_KEY},
                 timeout=5,
             )
             if resp.status_code == 200:
-                log.info(f"[LOGGED] '{plate}' -> Log ID {resp.json().get('log_id')}")
+                result = resp.json()
+                assigned_status = result.get('status', '?')
+                log.info(f"[LOGGED] '{plate}' -> {assigned_status} (Log ID {result.get('log_id')})")
                 return True
             else:
                 log.error(f"[REJECTED] Django returned {resp.status_code}: {resp.text}")
@@ -310,7 +313,7 @@ class ANPREngine:
                 log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
 
                 if self._is_debounced(plate):
-                    log.info(f"Skipping '{plate}' -- debounced ({DEBOUNCE_SECONDS}s).")
+                    log.info(f"Skipping '{plate}' -- debounced ({self.debounce_seconds}s).")
                     continue
 
                 # Draw box + plate text on preview window
@@ -385,16 +388,16 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Quick start (no camera hardware needed):
-  python anpr_engine/anpr_engine.py --rtsp 0 --status TIME_IN
+  python anpr_engine/anpr_engine.py --rtsp 0
 
 With IP camera:
-  python anpr_engine/anpr_engine.py --rtsp "rtsp://admin:admin@192.168.1.108:554/stream1" --status TIME_IN
+  python anpr_engine/anpr_engine.py --rtsp "rtsp://admin:admin@192.168.1.108:554/stream1"
+
+TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         """
     )
     parser.add_argument('--rtsp', required=True,
         help='Camera source: RTSP URL for IP cameras, or "0" for webcam.')
-    parser.add_argument('--status', choices=['TIME_IN', 'TIME_OUT'], default='TIME_IN',
-        help='Entry (TIME_IN) or exit (TIME_OUT) gate. Default: TIME_IN')
     parser.add_argument('--mode', choices=['roboflow', 'yolo'], default='roboflow',
         help='Detection mode. Default: roboflow (recommended, 98.8%% accuracy)')
     parser.add_argument('--model-id', default=DEFAULT_RF_MODEL_ID,
@@ -410,16 +413,13 @@ With IP camera:
 
     args = parser.parse_args()
 
-    global DEBOUNCE_SECONDS
-    DEBOUNCE_SECONDS = args.debounce
-
     engine = ANPREngine(
         rtsp_url=args.rtsp,
-        status=args.status,
         ingest_url=args.url,
         mode=args.mode,
         rf_model_id=args.model_id,
         yolo_model_path=args.model,
+        debounce_seconds=args.debounce,
     )
     engine.run(show_preview=not args.no_preview)
 

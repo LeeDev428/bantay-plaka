@@ -4,6 +4,25 @@
   const socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
   const tbody = document.getElementById('live-log-body');
 
+  function highlightRecentRows() {
+    // Clear existing highlights
+    tbody.querySelectorAll('tr.highlight-in, tr.highlight-out').forEach(r => {
+      r.classList.remove('highlight-in', 'highlight-out');
+    });
+    // Find first TIME_IN and first TIME_OUT (rows are newest-first)
+    const rows = tbody.querySelectorAll('tr[data-status]');
+    let foundIn = false, foundOut = false;
+    rows.forEach(r => {
+      if (!foundIn && r.dataset.status === 'TIME_IN') {
+        r.classList.add('highlight-in');
+        foundIn = true;
+      } else if (!foundOut && r.dataset.status === 'TIME_OUT') {
+        r.classList.add('highlight-out');
+        foundOut = true;
+      }
+    });
+  }
+
   socket.onmessage = function (e) {
     const data = JSON.parse(e.data);
 
@@ -23,7 +42,8 @@
 
     const row = document.createElement('tr');
     row.id = `log-row-${data.id}`;
-    row.classList.add('bg-blue-50', 'transition-all', 'duration-700');
+    row.dataset.status = data.status;
+    row.classList.add('transition-colors');
     row.innerHTML = `
       <td class="font-mono font-semibold text-slate-800">${data.plate_number}</td>
       <td class="text-sm text-slate-600">${data.display_name}</td>
@@ -37,10 +57,14 @@
     if (emptyRow) emptyRow.closest('tr').remove();
 
     tbody.insertBefore(row, tbody.firstChild);
-    setTimeout(() => row.classList.remove('bg-blue-50'), 2000);
+    // Re-run highlights after inserting new row
+    highlightRecentRows();
   };
 
   socket.onopen = () => console.log('[BantayPlaka] WebSocket connected.');
   socket.onclose = () => console.warn('[BantayPlaka] WebSocket disconnected.');
+
+  // Highlight on initial page load
+  document.addEventListener('DOMContentLoaded', highlightRecentRows);
 })();
 </script>

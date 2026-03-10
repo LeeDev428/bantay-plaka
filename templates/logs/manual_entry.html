@@ -1,80 +1,88 @@
 {% extends 'base.html' %}
 {% block title %}Manual Entry{% endblock %}
+{% block breadcrumb %}Operations &raquo; Manual Entry{% endblock %}
 
 {% block content %}
 <div class="mb-6">
-  <div class="alert alert-warning shadow mb-4">
-    <i class="fa fa-triangle-exclamation"></i>
-    <span><strong>Manual Mode</strong> — Use this when the camera is offline or malfunctioning. Logs are flagged as Manual.</span>
+  <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
+    <i class="fa fa-triangle-exclamation text-amber-500"></i>
+    <p class="text-sm text-amber-700"><strong>Manual Mode</strong> &mdash; Use when the camera is offline. Logs are flagged as Manual.</p>
   </div>
-  <h1 class="text-2xl font-bold">Manual Log Entry</h1>
-  <p class="text-base-content/60 text-sm">Enter plate details manually to record time in/out</p>
+  <h1 class="text-2xl font-bold text-slate-800">Manual Log Entry</h1>
+  <p class="text-slate-500 text-sm mt-0.5">Enter plate details manually to record time in/out</p>
 </div>
 
 <div class="grid lg:grid-cols-2 gap-6">
   <!-- Form -->
-  <div class="card bg-base-100 shadow">
-    <div class="card-body">
-      <h2 class="card-title mb-2"><i class="fa fa-keyboard mr-2 text-warning"></i>Enter Details</h2>
-      <form method="post" novalidate id="manual-form">
-        {% csrf_token %}
-        {% for field in form %}
-          <div class="form-control mb-4">
-            <label class="label">
-              <span class="label-text font-medium">{{ field.label }}{% if field.field.required %} *{% endif %}</span>
-            </label>
-            {{ field }}
-            {% if field.errors %}
-              <span class="text-error text-xs mt-1">{{ field.errors.0 }}</span>
-            {% endif %}
-          </div>
-        {% endfor %}
-        <button type="submit" class="btn btn-warning w-full mt-2">
-          <i class="fa fa-floppy-disk mr-1"></i> Save Log Entry
-        </button>
-      </form>
-    </div>
+  <div class="page-card p-6">
+    <h2 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+      <i class="fa fa-keyboard text-amber-500"></i> Enter Details
+    </h2>
+    <form method="post" novalidate id="manual-form">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.errors %}
+            <p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn bg-amber-500 hover:bg-amber-600 border-0 text-white w-full mt-2">
+        <i class="fa fa-floppy-disk mr-1"></i> Save Log Entry
+      </button>
+    </form>
   </div>
 
   <!-- Recent Manual Logs -->
-  <div class="card bg-base-100 shadow">
-    <div class="card-body p-0">
-      <div class="px-4 pt-4 pb-2 border-b">
-        <h2 class="font-bold">Recent Manual Logs</h2>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="table table-sm">
-          <thead>
-            <tr><th>Plate</th><th>Type</th><th>Status</th><th>Time</th></tr>
-          </thead>
-          <tbody id="live-log-body">
-            {% for log in recent_logs %}
-              <tr>
-                <td class="font-mono font-bold">{{ log.plate_number }}</td>
-                <td>
-                  {% if log.entry_type == 'RESIDENT' %}
-                    <span class="badge badge-success badge-sm">RESIDENT</span>
-                  {% elif log.entry_type == 'VISITOR' %}
-                    <span class="badge badge-warning badge-sm">VISITOR</span>
-                  {% else %}
-                    <span class="badge badge-ghost badge-sm">UNKNOWN</span>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if log.status == 'TIME_IN' %}
-                    <span class="badge badge-info badge-sm">TIME IN</span>
-                  {% else %}
-                    <span class="badge badge-error badge-sm">TIME OUT</span>
-                  {% endif %}
-                </td>
-                <td class="text-xs">{{ log.timestamp|date:"h:i A" }}</td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="4" class="text-center text-base-content/40 py-4">No manual entries yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+  <div class="page-card">
+    <div class="px-5 py-4 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-800">Recent Manual Logs</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+            <th class="font-semibold">Plate</th>
+            <th class="font-semibold">Type</th>
+            <th class="font-semibold">Status</th>
+            <th class="font-semibold">Time</th>
+          </tr>
+        </thead>
+        <tbody id="live-log-body">
+          {% for log in recent_logs %}
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</td>
+              <td>
+                {% if log.entry_type == 'RESIDENT' %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>
+                {% elif log.entry_type == 'VISITOR' %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>
+                {% else %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Unknown</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if log.status == 'TIME_IN' %}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                    <i class="fa fa-arrow-right text-[9px]"></i> IN
+                  </span>
+                {% else %}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                    <i class="fa fa-arrow-left text-[9px]"></i> OUT
+                  </span>
+                {% endif %}
+              </td>
+              <td class="text-xs text-slate-400">{{ log.timestamp|date:"h:i A" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center text-slate-400 py-8">No manual entries yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 </div>

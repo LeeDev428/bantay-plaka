@@ -77,7 +77,7 @@
                   </span>
                 {% endif %}
               </td>
-              <td class="text-xs text-slate-400">{{ log.timestamp|localtime|date:"h:i A" }}</td>
+              <td class="text-xs text-slate-400">{{ log.local_time|date:"h:i A" }}</td>
             </tr>
           {% empty %}
             <tr><td colspan="4" class="text-center text-slate-400 py-8">No manual entries yet.</td></tr>

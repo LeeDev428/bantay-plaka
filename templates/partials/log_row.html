@@ -29,5 +29,5 @@
       <span class="inline-flex items-center gap-1 text-xs text-emerald-600"><i class="fa fa-camera text-[10px]"></i> Camera</span>
     {% endif %}
   </td>
-  <td class="text-xs text-slate-400">{{ log.timestamp|localtime|date:"M d, Y h:i:s A" }}</td>
+  <td class="text-xs text-slate-400">{{ log.local_time|date:"M d, Y h:i:s A" }}</td>
 </tr>

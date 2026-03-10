@@ -2,48 +2,61 @@
 {% block title %}Login{% endblock %}
 
 {% block auth_content %}
-<div class="min-h-screen flex items-center justify-center bg-neutral">
-  <div class="card w-full max-w-sm bg-base-100 shadow-2xl">
-    <div class="card-body">
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+  <!-- Decorative background -->
+  <div class="absolute inset-0 opacity-10">
+    <div class="absolute top-1/4 -left-20 w-72 h-72 bg-blue-500 rounded-full blur-3xl"></div>
+    <div class="absolute bottom-1/4 -right-20 w-72 h-72 bg-blue-600 rounded-full blur-3xl"></div>
+  </div>
 
-      <div class="text-center mb-6">
-        <div class="text-5xl mb-2"><i class="fa fa-shield-halved text-primary"></i></div>
-        <h1 class="text-2xl font-bold tracking-widest">BANTAYPLAKA</h1>
-        <p class="text-xs text-base-content/50 mt-1">ANPR Vehicle Monitoring System</p>
+  <div class="relative z-10 w-full max-w-md px-6">
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 shadow-lg shadow-blue-500/25 mb-4">
+        <i class="fa fa-shield-halved text-white text-2xl"></i>
       </div>
+      <h1 class="text-3xl font-bold text-white tracking-wide">BANTAYPLAKA</h1>
+      <p class="text-slate-400 text-sm mt-1">Automatic Number Plate Recognition System</p>
+    </div>
+
+    <!-- Login Card -->
+    <div class="bg-white rounded-2xl shadow-2xl p-8">
+      <h2 class="text-xl font-semibold text-slate-800 mb-1">Welcome back</h2>
+      <p class="text-sm text-slate-400 mb-6">Sign in to your account to continue</p>
 
       <form method="post" novalidate>
         {% csrf_token %}
 
-        <div class="form-control mb-3">
-          <label class="label"><span class="label-text font-medium">Username</span></label>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
           {{ form.username }}
           {% if form.username.errors %}
-            <span class="text-error text-xs mt-1">{{ form.username.errors.0 }}</span>
+            <p class="text-red-500 text-xs mt-1">{{ form.username.errors.0 }}</p>
           {% endif %}
         </div>
 
-        <div class="form-control mb-5">
-          <label class="label"><span class="label-text font-medium">Password</span></label>
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
           {{ form.password }}
           {% if form.password.errors %}
-            <span class="text-error text-xs mt-1">{{ form.password.errors.0 }}</span>
+            <p class="text-red-500 text-xs mt-1">{{ form.password.errors.0 }}</p>
           {% endif %}
         </div>
 
         {% if form.non_field_errors %}
-          <div class="alert alert-error mb-4 text-sm">
-            <i class="fa fa-circle-xmark"></i>
+          <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm flex items-center gap-2">
+            <i class="fa fa-circle-exclamation"></i>
             {{ form.non_field_errors.0 }}
           </div>
         {% endif %}
 
-        <button type="submit" class="btn btn-primary w-full">
-          <i class="fa fa-right-to-bracket mr-1"></i> Login
+        <button type="submit" class="btn btn-primary w-full h-11 text-sm font-semibold">
+          Sign In <i class="fa fa-arrow-right ml-2"></i>
         </button>
       </form>
-
     </div>
+
+    <p class="text-center text-slate-500 text-xs mt-6">&copy; 2025 BantayPlaka &middot; ANPR Vehicle Monitoring</p>
   </div>
 </div>
 {% endblock %}

@@ -1,65 +1,68 @@
 {% extends 'base.html' %}
 {% block title %}User Management{% endblock %}
+{% block breadcrumb %}Admin &raquo; User Management{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
   <div>
-    <h1 class="text-2xl font-bold">User Management</h1>
-    <p class="text-base-content/60 text-sm">Manage admin and security guard accounts</p>
+    <h1 class="text-2xl font-bold text-slate-800">User Management</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Manage admin and security guard accounts</p>
   </div>
-  <a href="{% url 'user_create' %}" class="btn btn-primary btn-sm">
+  <a href="{% url 'user_create' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
     <i class="fa fa-plus mr-1"></i> Add User
   </a>
 </div>
 
-<div class="card bg-base-100 shadow">
+<div class="page-card">
   <div class="overflow-x-auto">
     <table class="table table-sm">
       <thead>
-        <tr>
-          <th>Name</th>
-          <th>Username</th>
-          <th>Role</th>
-          <th>Contact</th>
-          <th>Status</th>
-          <th>Actions</th>
+        <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+          <th class="font-semibold">Name</th>
+          <th class="font-semibold">Username</th>
+          <th class="font-semibold">Role</th>
+          <th class="font-semibold">Contact</th>
+          <th class="font-semibold">Status</th>
+          <th class="font-semibold">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for u in users %}
-        <tr>
-          <td>{{ u.get_full_name|default:'—' }}</td>
-          <td class="font-mono text-sm">{{ u.username }}</td>
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="font-medium text-slate-800">{{ u.get_full_name|default:'—' }}</td>
+          <td class="font-mono text-sm text-slate-600">{{ u.username }}</td>
           <td>
             {% if u.role == 'ADMIN' %}
-              <span class="badge badge-primary badge-sm">Admin</span>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Admin</span>
             {% else %}
-              <span class="badge badge-secondary badge-sm">Guard</span>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">Guard</span>
             {% endif %}
           </td>
-          <td class="text-sm">{{ u.contact_number|default:'—' }}</td>
+          <td class="text-sm text-slate-500">{{ u.contact_number|default:'—' }}</td>
           <td>
             {% if u.is_active %}
-              <span class="badge badge-success badge-sm">Active</span>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Active</span>
             {% else %}
-              <span class="badge badge-error badge-sm">Inactive</span>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Inactive</span>
             {% endif %}
           </td>
-          <td class="flex gap-1">
-            <a href="{% url 'user_edit' u.pk %}" class="btn btn-ghost btn-xs">
-              <i class="fa fa-pen"></i>
-            </a>
-            <form method="post" action="{% url 'user_toggle_active' u.pk %}" class="inline">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-ghost btn-xs {% if u.is_active %}text-error{% else %}text-success{% endif %}"
-                title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}">
-                <i class="fa {% if u.is_active %}fa-user-slash{% else %}fa-user-check{% endif %}"></i>
-              </button>
-            </form>
+          <td>
+            <div class="flex items-center gap-1">
+              <a href="{% url 'user_edit' u.pk %}" class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600" title="Edit">
+                <i class="fa fa-pen text-xs"></i>
+              </a>
+              <form method="post" action="{% url 'user_toggle_active' u.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs {% if u.is_active %}text-slate-500 hover:text-red-600{% else %}text-slate-500 hover:text-emerald-600{% endif %}"
+                  title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}">
+                  <i class="fa {% if u.is_active %}fa-user-slash{% else %}fa-user-check{% endif %} text-xs"></i>
+                </button>
+              </form>
+            </div>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-center text-base-content/40 py-8">No users found.</td></tr>
+        <tr><td colspan="6" class="text-center text-slate-400 py-12">No users found.</td></tr>
         {% endfor %}
       </tbody>
     </table>

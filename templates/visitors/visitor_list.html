@@ -1,34 +1,43 @@
 {% extends 'base.html' %}
 {% block title %}Visitor Logs{% endblock %}
+{% block breadcrumb %}Operations &raquo; Visitors{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
   <div>
-    <h1 class="text-2xl font-bold">Visitor Logs</h1>
-    <p class="text-base-content/60 text-sm">All visitor entries</p>
+    <h1 class="text-2xl font-bold text-slate-800">Visitors</h1>
+    <p class="text-slate-500 text-sm mt-0.5">All visitor entries</p>
   </div>
-  <a href="{% url 'visitor_log_entry' %}" class="btn btn-info btn-sm">
+  <a href="{% url 'visitor_log_entry' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
     <i class="fa fa-plus mr-1"></i> Log New Visitor
   </a>
 </div>
-<div class="card bg-base-100 shadow">
+
+<div class="page-card">
   <div class="overflow-x-auto">
     <table class="table table-sm">
       <thead>
-        <tr><th>Name</th><th>Plate</th><th>Purpose</th><th>Host</th><th>Logged By</th><th>Time</th></tr>
+        <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+          <th class="font-semibold">Name</th>
+          <th class="font-semibold">Plate</th>
+          <th class="font-semibold">Purpose</th>
+          <th class="font-semibold">Host</th>
+          <th class="font-semibold">Logged By</th>
+          <th class="font-semibold">Time</th>
+        </tr>
       </thead>
       <tbody>
         {% for visitor in visitors %}
-        <tr>
-          <td class="font-medium">{{ visitor.full_name }}</td>
-          <td class="font-mono">{{ visitor.plate_number|default:'—' }}</td>
-          <td class="text-sm">{{ visitor.purpose|default:'—' }}</td>
-          <td class="text-sm">{{ visitor.host_name|default:'—' }}</td>
-          <td class="text-xs">{{ visitor.logged_by.get_full_name|default:'—' }}</td>
-          <td class="text-xs text-base-content/60">{{ visitor.created_at|date:"M d, Y h:i A" }}</td>
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="font-medium text-slate-800">{{ visitor.full_name }}</td>
+          <td class="font-mono text-sm text-slate-600">{{ visitor.plate_number|default:'—' }}</td>
+          <td class="text-sm text-slate-500">{{ visitor.purpose|default:'—' }}</td>
+          <td class="text-sm text-slate-500">{{ visitor.host_name|default:'—' }}</td>
+          <td class="text-xs text-slate-500">{{ visitor.logged_by.get_full_name|default:'—' }}</td>
+          <td class="text-xs text-slate-400">{{ visitor.created_at|date:"M d, Y h:i A" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-center text-base-content/40 py-8">No visitors logged.</td></tr>
+        <tr><td colspan="6" class="text-center text-slate-400 py-12">No visitors logged.</td></tr>
         {% endfor %}
       </tbody>
     </table>

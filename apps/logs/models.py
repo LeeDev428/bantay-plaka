@@ -55,5 +55,11 @@ class VehicleLog(models.Model):
             return self.visitor_name or 'Visitor'
         return 'Unknown'
 
+    @property
+    def local_time(self):
+        """UTC timestamp converted to Asia/Manila local time."""
+        from django.utils import timezone
+        return timezone.localtime(self.timestamp)
+
     def __str__(self):
         return f'{self.plate_number} | {self.entry_type} | {self.status} | {self.timestamp:%Y-%m-%d %H:%M}'

@@ -3,24 +3,112 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}BantayPlaka{% endblock %} — ANPR System</title>
+  <title>{% block title %}BantayPlaka{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+
+    /* sidebar-link — defined with real CSS so Tailwind CDN @apply isn't needed */
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.625rem 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+      color: rgb(148 163 184);     /* slate-400 */
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all 150ms ease;
+      width: 100%;
+    }
+    .sidebar-link:hover {
+      color: #fff;
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+    .sidebar-link.active {
+      color: #fff;
+      background-color: rgba(37, 99, 235, 0.2);  /* blue-600/20 */
+      border-left-color: rgb(59 130 246);          /* blue-500 */
+      padding-left: calc(0.75rem - 0px);
+    }
+
+    /* page-card */
+    .page-card {
+      background-color: #fff;
+      border-radius: 0.75rem;
+      border: 1px solid rgb(226 232 240);   /* slate-200 */
+      box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    }
+
+    /* stat-card */
+    .stat-card {
+      background-color: #fff;
+      border-radius: 0.75rem;
+      border: 1px solid rgb(226 232 240);
+      box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      padding: 1.25rem;
+      transition: transform 150ms ease;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
   {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-base-200 min-h-screen">
+<body class="bg-slate-50 min-h-screen font-sans antialiased">
 
 {% if user.is_authenticated %}
-  {% include 'partials/navbar.html' %}
+  <!-- Mobile Top Bar -->
+  <nav class="lg:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-lg">
+    <label for="sidebar-toggle" class="btn btn-ghost btn-sm text-white">
+      <i class="fa fa-bars text-lg"></i>
+    </label>
+    <span class="font-bold text-lg tracking-wide">BantayPlaka</span>
+    <div class="w-8"></div>
+  </nav>
+
   <div class="drawer lg:drawer-open">
     <input id="sidebar-toggle" type="checkbox" class="drawer-toggle" />
-    <div class="drawer-content flex flex-col">
-      <div class="p-4 lg:p-6">
+    <div class="drawer-content flex flex-col min-h-screen">
+      <!-- Desktop Top Bar -->
+      <header class="hidden lg:flex items-center justify-between bg-white border-b border-slate-200 px-6 py-3">
+        <div class="text-sm text-slate-500">{% block breadcrumb %}{% endblock %}</div>
+        <div class="flex items-center gap-3">
+          <div class="text-right">
+            <p class="text-sm font-semibold text-slate-700">{{ user.get_full_name|default:user.username }}</p>
+            <p class="text-xs text-slate-400">{{ user.get_role_display|default:user.role }}</p>
+          </div>
+          <div class="avatar placeholder">
+            <div class="bg-blue-100 text-blue-600 w-9 rounded-full">
+              <span class="text-sm font-bold">{{ user.first_name.0|default:user.username.0|upper }}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="flex-1 p-4 lg:p-6">
         {% include 'partials/messages.html' %}
         {% block content %}{% endblock %}
-      </div>
+      </main>
     </div>
+
     <div class="drawer-side z-40">
       <label for="sidebar-toggle" class="drawer-overlay"></label>
       {% include 'partials/sidebar.html' %}

@@ -1,28 +1,32 @@
-<tr id="log-row-{{ log.pk }}">
-  <td class="font-mono font-bold">{{ log.plate_number }}</td>
-  <td>{{ log.get_display_name }}</td>
+<tr id="log-row-{{ log.pk }}" class="hover:bg-slate-50 transition-colors">
+  <td class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</td>
+  <td class="text-sm text-slate-600">{{ log.get_display_name }}</td>
   <td>
     {% if log.entry_type == 'RESIDENT' %}
-      <span class="badge badge-success badge-sm">RESIDENT</span>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>
     {% elif log.entry_type == 'VISITOR' %}
-      <span class="badge badge-warning badge-sm">VISITOR</span>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>
     {% else %}
-      <span class="badge badge-ghost badge-sm">UNKNOWN</span>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Unknown</span>
     {% endif %}
   </td>
   <td>
     {% if log.status == 'TIME_IN' %}
-      <span class="badge badge-info badge-sm"><i class="fa fa-arrow-right-to-bracket mr-1"></i>TIME IN</span>
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+        <i class="fa fa-arrow-right text-[9px]"></i> IN
+      </span>
     {% else %}
-      <span class="badge badge-error badge-sm"><i class="fa fa-arrow-right-from-bracket mr-1"></i>TIME OUT</span>
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+        <i class="fa fa-arrow-left text-[9px]"></i> OUT
+      </span>
     {% endif %}
   </td>
   <td>
     {% if log.source == 'MANUAL' %}
-      <span class="badge badge-outline badge-sm"><i class="fa fa-keyboard mr-1"></i>Manual</span>
+      <span class="inline-flex items-center gap-1 text-xs text-slate-500"><i class="fa fa-keyboard text-[10px]"></i> Manual</span>
     {% else %}
-      <span class="badge badge-outline badge-sm badge-success"><i class="fa fa-camera mr-1"></i>Camera</span>
+      <span class="inline-flex items-center gap-1 text-xs text-emerald-600"><i class="fa fa-camera text-[10px]"></i> Camera</span>
     {% endif %}
   </td>
-  <td class="text-xs text-base-content/60">{{ log.timestamp|date:"M d, Y h:i:s A" }}</td>
+  <td class="text-xs text-slate-400">{{ log.timestamp|date:"M d, Y h:i:s A" }}</td>
 </tr>

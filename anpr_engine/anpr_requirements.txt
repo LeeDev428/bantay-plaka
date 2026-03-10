@@ -1,12 +1,25 @@
 # ANPR Engine dependencies
-# Install with: pip install -r anpr_requirements.txt
+# Install with: pip install -r anpr_engine/anpr_requirements.txt
 #
-# These are SEPARATE from the Django app requirements.
-# Install these in the SAME venv as your Django project OR in a separate venv.
+# Install in the SAME venv as your Django project.
 
+# Camera frame reading
 opencv-python>=4.9.0
-ultralytics>=8.2.0
+
+# Plate text recognition (OCR)
 easyocr>=1.7.1
+
+# Roboflow inference SDK (PRIMARY detector -- 98.8% accuracy)
+# Downloads and runs the Roboflow-trained plate model locally after first use.
+inference>=0.9.0
+
+# YOLO (fallback detector -- only needed if using --mode yolo)
+ultralytics>=8.2.0
+
+# HTTP requests to Django
 requests>=2.31.0
+
+# Read .env file
 python-dotenv>=1.0.0
+
 numpy>=1.26.0

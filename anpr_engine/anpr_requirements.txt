@@ -1,0 +1,12 @@
+# ANPR Engine dependencies
+# Install with: pip install -r anpr_requirements.txt
+#
+# These are SEPARATE from the Django app requirements.
+# Install these in the SAME venv as your Django project OR in a separate venv.
+
+opencv-python>=4.9.0
+ultralytics>=8.2.0
+easyocr>=1.7.1
+requests>=2.31.0
+python-dotenv>=1.0.0
+numpy>=1.26.0

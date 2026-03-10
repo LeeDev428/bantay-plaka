@@ -15,10 +15,28 @@ def _check_api_key(request):
     """
     expected_key = getattr(settings, 'ANPR_API_KEY', None)
     if not expected_key:
-        # No key configured — deny all requests for safety
         return False
     incoming_key = request.headers.get('X-Api-Key', '')
     return incoming_key == expected_key
+
+
+def _next_status_for_plate(plate_number: str) -> str:
+    """
+    Determine the next status for a plate based on its last log.
+    If last log was TIME_IN  -> return TIME_OUT
+    If last log was TIME_OUT -> return TIME_IN
+    If no log exists         -> return TIME_IN (first visit)
+    """
+    last_log = (
+        VehicleLog.objects
+        .filter(plate_number__iexact=plate_number)
+        .order_by('-timestamp')
+        .values_list('status', flat=True)
+        .first()
+    )
+    if last_log == VehicleLog.STATUS_IN:
+        return VehicleLog.STATUS_OUT
+    return VehicleLog.STATUS_IN
 
 
 @csrf_exempt
@@ -26,7 +44,8 @@ def ingest_plate(request):
     """
     Endpoint called by the ANPR engine when a plate is detected.
     Requires header:  X-Api-Key: <ANPR_API_KEY from .env>
-    POST JSON: { "plate_number": "ABC 1234", "status": "TIME_IN" | "TIME_OUT" }
+    POST JSON: { "plate_number": "ABC 1234" }
+    Status (TIME_IN / TIME_OUT) is auto-determined based on the last log.
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -37,13 +56,12 @@ def ingest_plate(request):
     try:
         data = json.loads(request.body)
         plate = data.get('plate_number', '').upper().strip()
-        status = data.get('status', VehicleLog.STATUS_IN)
 
         if not plate:
             return JsonResponse({'error': 'plate_number required'}, status=400)
 
-        if status not in (VehicleLog.STATUS_IN, VehicleLog.STATUS_OUT):
-            return JsonResponse({'error': 'status must be TIME_IN or TIME_OUT'}, status=400)
+        # Auto-toggle: check last log for this plate and assign the opposite
+        status = _next_status_for_plate(plate)
 
         resolved = resolve_plate(plate)
         log = VehicleLog.objects.create(
@@ -54,7 +72,7 @@ def ingest_plate(request):
             resident_name=resolved.get('resident_name', ''),
         )
         broadcast_log(log)
-        return JsonResponse({'ok': True, 'log_id': log.pk})
+        return JsonResponse({'ok': True, 'log_id': log.pk, 'status': status})
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON body'}, status=400)

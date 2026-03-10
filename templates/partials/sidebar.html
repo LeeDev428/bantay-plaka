@@ -1,60 +1,74 @@
-<ul class="menu bg-neutral text-neutral-content min-h-screen w-64 p-4 gap-1">
-  <li class="mb-4">
-    <span class="text-xl font-bold tracking-widest text-white">
-      <i class="fa fa-shield-halved mr-2 text-primary"></i>BantayPlaka
-    </span>
-    <span class="text-xs text-neutral-content/60 ml-1">ANPR Monitoring</span>
-  </li>
-
-  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest">Main</li>
-  <li>
-    <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'guard_dashboard' %}active{% endif %}">
-      <i class="fa fa-gauge-high w-5"></i> Dashboard
-    </a>
-  </li>
-  <li>
-    <a href="{% url 'log_list' %}" class="{% if 'log' in request.resolver_match.url_name %}active{% endif %}">
-      <i class="fa fa-clock-rotate-left w-5"></i> Vehicle Logs
-    </a>
-  </li>
-
-  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest mt-2">Operations</li>
-  <li>
-    <a href="{% url 'manual_entry' %}" class="{% if request.resolver_match.url_name == 'manual_entry' %}active{% endif %}">
-      <i class="fa fa-keyboard w-5"></i> Manual Entry
-    </a>
-  </li>
-  <li>
-    <a href="{% url 'visitor_log_entry' %}" class="{% if request.resolver_match.url_name == 'visitor_log_entry' %}active{% endif %}">
-      <i class="fa fa-user-plus w-5"></i> Log Visitor
-    </a>
-  </li>
-
-  {% if user.is_admin %}
-  <li class="menu-title text-neutral-content/50 text-xs uppercase tracking-widest mt-2">Admin</li>
-  <li>
-    <a href="{% url 'resident_list' %}" class="{% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
-      <i class="fa fa-house-user w-5"></i> Residents
-    </a>
-  </li>
-  <li>
-    <a href="{% url 'user_management' %}" class="{% if 'user' in request.resolver_match.url_name %}active{% endif %}">
-      <i class="fa fa-users-gear w-5"></i> User Management
-    </a>
-  </li>
-  {% endif %}
-
-  <li class="mt-auto">
-    <div class="px-2 py-2 text-xs text-neutral-content/50">
-      <span class="font-semibold text-neutral-content/80">{{ user.get_full_name|default:user.username }}</span>
+<aside class="flex flex-col bg-slate-900 min-h-screen w-64 py-5 overflow-hidden">
+  <!-- Brand -->
+  <div class="px-5 mb-6">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
+        <i class="fa fa-shield-halved text-white text-sm"></i>
+      </div>
+      <div>
+        <h1 class="text-white font-bold text-lg tracking-wide leading-none">BantayPlaka</h1>
+        <p class="text-slate-500 text-[10px] uppercase tracking-widest mt-0.5">ANPR System</p>
+      </div>
     </div>
-  </li>
-  <li>
+  </div>
+
+  <div class="border-t border-slate-800 mx-5 mb-4"></div>
+
+  <!-- Navigation -->
+  <nav class="flex-1 px-3 space-y-1">
+    <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2">Main</p>
+    <a href="{% url 'dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'guard_dashboard' %}active{% endif %}">
+      <i class="fa fa-gauge-high w-5 text-center"></i> Dashboard
+    </a>
+    <a href="{% url 'log_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'log_list' %}active{% endif %}">
+      <i class="fa fa-clock-rotate-left w-5 text-center"></i> Vehicle Logs
+    </a>
+    <a href="{% url 'report_dashboard' %}" class="sidebar-link {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-chart-column w-5 text-center"></i> Reports
+    </a>
+
+    <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">Operations</p>
+    <a href="{% url 'manual_entry' %}" class="sidebar-link {% if request.resolver_match.url_name == 'manual_entry' %}active{% endif %}">
+      <i class="fa fa-keyboard w-5 text-center"></i> Manual Entry
+    </a>
+    <a href="{% url 'visitor_log_entry' %}" class="sidebar-link {% if request.resolver_match.url_name == 'visitor_log_entry' %}active{% endif %}">
+      <i class="fa fa-user-plus w-5 text-center"></i> Log Visitor
+    </a>
+    <a href="{% url 'visitor_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'visitor_list' %}active{% endif %}">
+      <i class="fa fa-users w-5 text-center"></i> Visitors
+    </a>
+
+    {% if user.is_admin %}
+    <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">Admin</p>
+    <a href="{% url 'resident_list' %}" class="sidebar-link {% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-house-user w-5 text-center"></i> Residents
+    </a>
+    <a href="{% url 'user_management' %}" class="sidebar-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="fa fa-users-gear w-5 text-center"></i> Users
+    </a>
+    {% endif %}
+  </nav>
+
+  <!-- User + Logout -->
+  <div class="px-3 mt-auto">
+    <div class="border-t border-slate-800 pt-4 mx-2 mb-2">
+      <div class="flex items-center gap-3 px-3 py-2">
+        <div class="avatar placeholder">
+          <div class="bg-slate-700 text-slate-300 w-8 rounded-full">
+            <span class="text-xs font-bold">{{ user.first_name.0|default:user.username.0|upper }}</span>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-slate-300 truncate">{{ user.get_full_name|default:user.username }}</p>
+          <p class="text-[10px] text-slate-500 uppercase">{{ user.role }}</p>
+        </div>
+      </div>
+    </div>
     <form method="post" action="{% url 'logout' %}">
       {% csrf_token %}
-      <button type="submit" class="w-full text-left text-error flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-error/10 transition">
-        <i class="fa fa-right-from-bracket w-5"></i> Logout
+      <button type="submit" class="sidebar-link text-red-400 hover:text-red-300 hover:bg-red-500/10 w-full">
+        <i class="fa fa-right-from-bracket w-5 text-center"></i> Logout
       </button>
     </form>
-  </li>
-</ul>
+  </div>
+</aside>

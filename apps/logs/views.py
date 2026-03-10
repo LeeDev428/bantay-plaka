@@ -1,7 +1,10 @@
+import datetime
+
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.core.paginator import Paginator
+from django.utils import timezone
 
 from apps.logs.models import VehicleLog
 from apps.logs.forms import ManualLogForm
@@ -68,7 +71,14 @@ def log_list(request):
     if entry_type_q:
         logs_qs = logs_qs.filter(entry_type=entry_type_q)
     if date_q:
-        logs_qs = logs_qs.filter(timestamp__date=date_q)
+        try:
+            tz = timezone.get_current_timezone()
+            d = datetime.date.fromisoformat(date_q)
+            day_start = timezone.make_aware(datetime.datetime.combine(d, datetime.time.min), tz)
+            day_end = day_start + datetime.timedelta(days=1)
+            logs_qs = logs_qs.filter(timestamp__gte=day_start, timestamp__lt=day_end)
+        except ValueError:
+            pass
 
     paginator = Paginator(logs_qs, 25)
     page = request.GET.get('page', 1)

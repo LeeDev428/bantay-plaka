@@ -101,6 +101,10 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/login/'
 
+# API key used by the ANPR engine script to authenticate POSTs to /detection/ingest/
+# Set this in .env as ANPR_API_KEY=<your-secret-key>
+ANPR_API_KEY = env('ANPR_API_KEY', default='')
+
 # Django Channels — in-memory for development
 CHANNEL_LAYERS = {
     'default': {

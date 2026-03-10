@@ -1,5 +1,5 @@
 {% load tz %}
-<tr id="log-row-{{ log.pk }}" class="hover:bg-slate-50 transition-colors">
+<tr id="log-row-{{ log.pk }}" data-status="{{ log.status }}" class="hover:bg-slate-50 transition-colors">
   <td class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</td>
   <td class="text-sm text-slate-600">{{ log.get_display_name }}</td>
   <td>

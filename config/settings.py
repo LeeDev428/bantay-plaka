@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'apps.visitors',
     'apps.logs',
     'apps.detection',
+    'apps.reports',
     # channels
     'channels',
 ]

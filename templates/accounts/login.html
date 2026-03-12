@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Login{% endblock %}
 
 {% block auth_content %}
@@ -12,10 +13,7 @@
   <div class="relative z-10 w-full max-w-md px-6">
     <!-- Logo -->
     <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 shadow-lg shadow-blue-500/25 mb-4">
-        <i class="fa fa-shield-halved text-white text-2xl"></i>
-      </div>
-      <h1 class="text-3xl font-bold text-white tracking-wide">BANTAYPLAKA</h1>
+      <img src="{% static 'img/bantayplaka.png' %}" alt="BantayPlaka" class="h-24 w-auto object-contain mx-auto mb-2" />
       <p class="text-slate-400 text-sm mt-1">Automatic Number Plate Recognition System</p>
     </div>
 

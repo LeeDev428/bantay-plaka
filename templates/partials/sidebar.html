@@ -1,15 +1,8 @@
+{% load static %}
 <aside class="flex flex-col bg-slate-900 min-h-screen w-64 py-5 overflow-hidden">
   <!-- Brand -->
   <div class="px-5 mb-6">
-    <div class="flex items-center gap-2.5">
-      <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
-        <i class="fa fa-shield-halved text-white text-sm"></i>
-      </div>
-      <div>
-        <h1 class="text-white font-bold text-lg tracking-wide leading-none">BantayPlaka</h1>
-        <p class="text-slate-500 text-[10px] uppercase tracking-widest mt-0.5">ANPR System</p>
-      </div>
-    </div>
+    <img src="{% static 'img/bantayplaka.png' %}" alt="BantayPlaka" class="h-10 w-auto object-contain" />
   </div>
 
   <div class="border-t border-slate-800 mx-5 mb-4"></div>

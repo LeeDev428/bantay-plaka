@@ -1,9 +1,11 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}BantayPlaka{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{% static 'img/bantayplaka.png' %}" />
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -83,7 +85,7 @@
     <label for="sidebar-toggle" class="btn btn-ghost btn-sm text-white">
       <i class="fa fa-bars text-lg"></i>
     </label>
-    <span class="font-bold text-lg tracking-wide">BantayPlaka</span>
+    <img src="{% static 'img/bantayplaka.png' %}" alt="BantayPlaka" class="h-8 object-contain" />
     <div class="w-8"></div>
   </nav>
 

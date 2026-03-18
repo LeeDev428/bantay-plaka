@@ -24,9 +24,9 @@
     <a href="{% url 'manual_entry' %}" class="sidebar-link {% if request.resolver_match.url_name == 'manual_entry' %}active{% endif %}">
       <i class="fa fa-keyboard w-5 text-center"></i> Manual Entry
     </a>
-    <a href="{% url 'visitor_log_entry' %}" class="sidebar-link {% if request.resolver_match.url_name == 'visitor_log_entry' %}active{% endif %}">
+    {% comment %} <a href="{% url 'visitor_log_entry' %}" class="sidebar-link {% if request.resolver_match.url_name == 'visitor_log_entry' %}active{% endif %}">
       <i class="fa fa-user-plus w-5 text-center"></i> Log Visitor
-    </a>
+    </a> {% endcomment %}
     <a href="{% url 'visitor_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'visitor_list' %}active{% endif %}">
       <i class="fa fa-users w-5 text-center"></i> Visitors
     </a>

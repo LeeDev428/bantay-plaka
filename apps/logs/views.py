@@ -10,6 +10,7 @@ from apps.logs.models import VehicleLog
 from apps.logs.forms import ManualLogForm, LogEditForm
 from apps.logs.services import broadcast_log
 from apps.residents.models import Vehicle
+from apps.visitors.models import BlacklistEntry
 
 
 def resolve_plate(plate_number: str) -> dict:
@@ -36,6 +37,11 @@ def manual_entry(request):
         form = ManualLogForm(request.POST)
         if form.is_valid():
             log = form.save(commit=False)
+
+            if BlacklistEntry.objects.filter(plate_number__iexact=log.plate_number, is_active=True).exists():
+                messages.error(request, f'Plate {log.plate_number} is blacklisted. Entry blocked.')
+                return redirect('manual_entry')
+
             log.source = VehicleLog.SOURCE_MANUAL
             log.logged_by = request.user
 

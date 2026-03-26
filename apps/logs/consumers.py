@@ -15,3 +15,6 @@ class LogConsumer(AsyncWebsocketConsumer):
     # receive broadcast from views
     async def log_entry(self, event):
         await self.send(text_data=json.dumps(event['data']))
+
+    async def blacklist_alert(self, event):
+        await self.send(text_data=json.dumps(event['data']))

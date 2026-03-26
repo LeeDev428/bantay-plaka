@@ -4,7 +4,7 @@ from django.conf import settings
 import json
 
 from apps.logs.models import VehicleLog
-from apps.logs.services import broadcast_log
+from apps.logs.services import broadcast_log, broadcast_blacklist_alert
 from apps.logs.views import resolve_plate
 from apps.visitors.models import BlacklistEntry
 
@@ -62,6 +62,7 @@ def ingest_plate(request):
             return JsonResponse({'error': 'plate_number required'}, status=400)
 
         if BlacklistEntry.objects.filter(plate_number__iexact=plate, is_active=True).exists():
+            broadcast_blacklist_alert(plate)
             return JsonResponse({'ok': False, 'blocked': True, 'error': 'Plate is blacklisted'}, status=403)
 
         # Auto-toggle: check last log for this plate and assign the opposite

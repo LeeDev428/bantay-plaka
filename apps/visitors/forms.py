@@ -1,5 +1,5 @@
 from django import forms
-from apps.visitors.models import Visitor
+from apps.visitors.models import Visitor, BlacklistEntry
 
 
 class VisitorForm(forms.ModelForm):
@@ -20,6 +20,27 @@ class VisitorForm(forms.ModelForm):
                 choices=[('', '-- Select --'), ('CAR', 'Car'), ('MOTORCYCLE', 'Motorcycle'), ('TRUCK', 'Truck'), ('VAN', 'Van'), ('OTHER', 'Other')],
                 attrs={'class': 'select select-bordered w-full'},
             ),
+        }
+
+    def clean_plate_number(self):
+        return self.cleaned_data['plate_number'].upper().strip()
+
+
+class BlacklistEntryForm(forms.ModelForm):
+    class Meta:
+        model = BlacklistEntry
+        fields = ['plate_number', 'reason']
+        widgets = {
+            'plate_number': forms.TextInput(attrs={
+                'class': 'input input-bordered w-full uppercase',
+                'placeholder': 'e.g. ABC 1234',
+                'maxlength': 20,
+            }),
+            'reason': forms.TextInput(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': 'Reason (optional)',
+                'maxlength': 255,
+            }),
         }
 
     def clean_plate_number(self):

@@ -20,18 +20,24 @@
       <i class="fa fa-chart-column w-5 text-center"></i> Reports
     </a>
 
+    {% if user.is_guard %}
     <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">Operations</p>
     <a href="{% url 'manual_entry' %}" class="sidebar-link {% if request.resolver_match.url_name == 'manual_entry' %}active{% endif %}">
       <i class="fa fa-keyboard w-5 text-center"></i> Manual Entry
     </a>
-    {% comment %} <a href="{% url 'visitor_log_entry' %}" class="sidebar-link {% if request.resolver_match.url_name == 'visitor_log_entry' %}active{% endif %}">
-      <i class="fa fa-user-plus w-5 text-center"></i> Log Visitor
-    </a> {% endcomment %}
     <a href="{% url 'visitor_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'visitor_list' %}active{% endif %}">
       <i class="fa fa-users w-5 text-center"></i> Visitors
     </a>
+    <a href="{% url 'blacklist_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'blacklist_list' %}active{% endif %}">
+      <i class="fa fa-ban w-5 text-center"></i> Blacklist
+    </a>
+    {% endif %}
 
     {% if user.is_admin %}
+    <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">Security</p>
+    <a href="{% url 'blacklist_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'blacklist_list' %}active{% endif %}">
+      <i class="fa fa-ban w-5 text-center"></i> Add Blacklist
+    </a>
     <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">Admin</p>
     <a href="{% url 'resident_list' %}" class="sidebar-link {% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-house-user w-5 text-center"></i> Residents

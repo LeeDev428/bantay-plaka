@@ -6,6 +6,7 @@ import json
 from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log
 from apps.logs.views import resolve_plate
+from apps.visitors.models import BlacklistEntry
 
 
 def _check_api_key(request):
@@ -59,6 +60,9 @@ def ingest_plate(request):
 
         if not plate:
             return JsonResponse({'error': 'plate_number required'}, status=400)
+
+        if BlacklistEntry.objects.filter(plate_number__iexact=plate, is_active=True).exists():
+            return JsonResponse({'ok': False, 'blocked': True, 'error': 'Plate is blacklisted'}, status=403)
 
         # Auto-toggle: check last log for this plate and assign the opposite
         status = _next_status_for_plate(plate)

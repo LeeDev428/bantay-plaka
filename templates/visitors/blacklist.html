@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}Blacklist{% endblock %}
+{% block breadcrumb %}Security &raquo; Blacklist{% endblock %}
+
+{% block content %}
+<div class="grid lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-1">
+    <div class="page-card p-6">
+      <h1 class="text-xl font-bold text-slate-800">Add Blacklist</h1>
+      <p class="text-slate-500 text-sm mt-1">Add or reactivate a plate number.</p>
+
+      <form method="post" class="mt-5" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+          </div>
+        {% endfor %}
+        <button type="submit" class="btn bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-2">
+          <i class="fa fa-ban mr-1"></i> Save Blacklist
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="lg:col-span-2">
+    <div class="page-card">
+      <div class="p-5 border-b border-slate-100">
+        <h2 class="font-semibold text-slate-800">Blacklist Entries</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+              <th class="font-semibold">Plate</th>
+              <th class="font-semibold">Reason</th>
+              <th class="font-semibold">Status</th>
+              <th class="font-semibold">Created By</th>
+              <th class="font-semibold">Created At</th>
+              <th class="font-semibold">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in entries %}
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="font-mono font-semibold text-slate-800">{{ entry.plate_number }}</td>
+              <td class="text-sm text-slate-600">{{ entry.reason|default:'—' }}</td>
+              <td>
+                {% if entry.is_active %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Active</span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Inactive</span>
+                {% endif %}
+              </td>
+              <td class="text-xs text-slate-500">{{ entry.created_by.get_full_name|default:'—' }}</td>
+              <td class="text-xs text-slate-400">{{ entry.created_at|date:"M d, Y h:i A" }}</td>
+              <td>
+                <form method="post" action="{% url 'blacklist_toggle' entry.pk %}">
+                  {% csrf_token %}
+                  {% if entry.is_active %}
+                  <button type="submit" class="btn btn-xs bg-slate-100 hover:bg-slate-200 border-0 text-slate-700">Deactivate</button>
+                  {% else %}
+                  <button type="submit" class="btn btn-xs bg-emerald-100 hover:bg-emerald-200 border-0 text-emerald-700">Activate</button>
+                  {% endif %}
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-slate-400 py-12">No blacklist entries yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

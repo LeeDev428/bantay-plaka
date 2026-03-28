@@ -75,10 +75,21 @@ def _next_status_for_plate(plate_number: str, camera_role: str = VehicleLog.CAME
 
 
 def _camera_rtsp_for_role(camera_role: str) -> str:
+    def _normalize_rtsp_url(rtsp_url: str) -> str:
+        if not rtsp_url or '://' not in rtsp_url:
+            return rtsp_url
+        scheme, rest = rtsp_url.split('://', 1)
+        if rest.count('@') <= 1:
+            return rtsp_url
+
+        userinfo, hostpart = rest.rsplit('@', 1)
+        userinfo = userinfo.replace('@', '%40')
+        return f'{scheme}://{userinfo}@{hostpart}'
+
     if camera_role == VehicleLog.CAMERA_ROLE_ENTRY:
-        return getattr(settings, 'ENTRY_CAMERA_RTSP', '').strip()
+        return _normalize_rtsp_url(getattr(settings, 'ENTRY_CAMERA_RTSP', '').strip())
     if camera_role == VehicleLog.CAMERA_ROLE_EXIT:
-        return getattr(settings, 'EXIT_CAMERA_RTSP', '').strip()
+        return _normalize_rtsp_url(getattr(settings, 'EXIT_CAMERA_RTSP', '').strip())
     return ''
 
 

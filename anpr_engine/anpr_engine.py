@@ -142,9 +142,10 @@ def clean_plate_text(raw_text: str) -> str | None:
         if letters and digits:
             cleaned = f'{letters} {digits}'
         else:
-            # Fallback: allow compact alphanumeric reads so we do not drop valid plates.
             compact = ''.join(c for c in cleaned if c.isalnum())
-            return compact if len(compact) >= 5 else None
+            if 5 <= len(compact) <= 8 and any(c.isalpha() for c in compact) and any(c.isdigit() for c in compact):
+                return compact
+            return None
 
     compact = ''.join(c for c in cleaned if c.isalnum())
 

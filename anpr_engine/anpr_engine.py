@@ -36,7 +36,7 @@ USAGE EXAMPLES:
 
 NOTE: TIME_IN / TIME_OUT is auto-determined by Django.
       First scan = TIME_IN, second scan = TIME_OUT, and so on.
-      No need to specify --status anymore.
+    To enforce strict per-camera status, pass --camera-role ENTRY_CAM or EXIT_CAM.
 """
 
 import argparse
@@ -78,6 +78,7 @@ MIN_OCR_CONFIDENCE = 0.3
 
 # Detection confidence threshold for both Roboflow and YOLO modes
 DETECTION_CONFIDENCE = 0.4
+VALID_CAMERA_ROLES = {'ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'}
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -228,12 +229,15 @@ class ANPREngine:
         rtsp_url: str,
         ingest_url: str,
         mode: str = 'roboflow',
+        camera_role: str = 'UNKNOWN',
         rf_model_id: str = DEFAULT_RF_MODEL_ID,
         yolo_model_path: str = DEFAULT_YOLO_MODEL,
         debounce_seconds: int = DEBOUNCE_SECONDS,
     ):
         self.rtsp_url = rtsp_url
         self.ingest_url = ingest_url
+        requested_role = (camera_role or 'UNKNOWN').strip().upper()
+        self.camera_role = requested_role if requested_role in VALID_CAMERA_ROLES else 'UNKNOWN'
         self.debounce_seconds = debounce_seconds
         self._last_logged: dict[str, float] = {}
 
@@ -265,14 +269,17 @@ class ANPREngine:
         try:
             resp = requests.post(
                 self.ingest_url,
-                json={'plate_number': plate},
+                json={'plate_number': plate, 'camera_role': self.camera_role},
                 headers={'Content-Type': 'application/json', 'X-Api-Key': DJANGO_API_KEY},
                 timeout=5,
             )
             if resp.status_code == 200:
                 result = resp.json()
                 assigned_status = result.get('status', '?')
-                log.info(f"[LOGGED] '{plate}' -> {assigned_status} (Log ID {result.get('log_id')})")
+                log.info(
+                    f"[LOGGED] '{plate}' ({self.camera_role}) -> {assigned_status} "
+                    f"(Log ID {result.get('log_id')})"
+                )
                 return True
             else:
                 log.error(f"[REJECTED] Django returned {resp.status_code}: {resp.text}")
@@ -406,6 +413,8 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         help='YOLO .pt file path (only for --mode yolo). Default: yolov8n.pt')
     parser.add_argument('--url', default=DEFAULT_INGEST_URL,
         help=f'Django ingest URL. Default: {DEFAULT_INGEST_URL}')
+    parser.add_argument('--camera-role', choices=['ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'], default='UNKNOWN',
+        help='Camera role for status mapping. ENTRY_CAM -> TIME_IN, EXIT_CAM -> TIME_OUT')
     parser.add_argument('--no-preview', action='store_true',
         help='Run without any GUI window.')
     parser.add_argument('--debounce', type=int, default=DEBOUNCE_SECONDS,
@@ -417,6 +426,7 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         rtsp_url=args.rtsp,
         ingest_url=args.url,
         mode=args.mode,
+        camera_role=args.camera_role,
         rf_model_id=args.model_id,
         yolo_model_path=args.model,
         debounce_seconds=args.debounce,

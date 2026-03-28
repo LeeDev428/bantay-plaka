@@ -125,6 +125,7 @@
 
   function startSnapshotRefresh() {
     const refreshTargets = document.querySelectorAll('img[data-live-snapshot]');
+    if (!refreshTargets.length) return;
     refreshTargets.forEach((img) => {
       const role = img.dataset.liveSnapshot;
       if (!role) return;

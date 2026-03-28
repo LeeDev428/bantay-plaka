@@ -57,6 +57,56 @@
   </div>
 </div>
 
+<!-- Live Detection Feed -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+  <div class="page-card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="font-semibold text-slate-800">Entry Camera Feed</h2>
+      <span class="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">TIME_IN</span>
+    </div>
+    <div class="p-4">
+      <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
+        {% if entry_feed and entry_feed.snapshot %}
+          <img id="entry-feed-image" src="{{ entry_feed.snapshot.url }}" alt="Entry camera detection" class="w-full h-full object-cover" />
+        {% else %}
+          <img id="entry-feed-image" src="" alt="Entry camera detection" class="w-full h-full object-cover hidden" />
+          <p id="entry-feed-empty" class="text-slate-500 text-sm">No entry detections yet.</p>
+        {% endif %}
+      </div>
+      <p id="entry-feed-meta" class="text-xs text-slate-500 mt-2">
+        {% if entry_feed %}
+          Plate {{ entry_feed.plate_number }} - {{ entry_feed.local_time|date:"M d, Y h:i:s A" }}
+        {% else %}
+          Waiting for ENTRY_CAM detections...
+        {% endif %}
+      </p>
+    </div>
+  </div>
+  <div class="page-card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="font-semibold text-slate-800">Exit Camera Feed</h2>
+      <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">TIME_OUT</span>
+    </div>
+    <div class="p-4">
+      <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
+        {% if exit_feed and exit_feed.snapshot %}
+          <img id="exit-feed-image" src="{{ exit_feed.snapshot.url }}" alt="Exit camera detection" class="w-full h-full object-cover" />
+        {% else %}
+          <img id="exit-feed-image" src="" alt="Exit camera detection" class="w-full h-full object-cover hidden" />
+          <p id="exit-feed-empty" class="text-slate-500 text-sm">No exit detections yet.</p>
+        {% endif %}
+      </div>
+      <p id="exit-feed-meta" class="text-xs text-slate-500 mt-2">
+        {% if exit_feed %}
+          Plate {{ exit_feed.plate_number }} - {{ exit_feed.local_time|date:"M d, Y h:i:s A" }}
+        {% else %}
+          Waiting for EXIT_CAM detections...
+        {% endif %}
+      </p>
+    </div>
+  </div>
+</div>
+
 <!-- Live Gate Log -->
 <div class="page-card">
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">

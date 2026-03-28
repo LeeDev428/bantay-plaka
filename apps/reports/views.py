@@ -108,7 +108,7 @@ def export_csv(request):
 
     writer = csv.writer(response)
     writer.writerow([
-        'Plate Number', 'Entry Type', 'Status', 'Source',
+        'Plate Number', 'Camera Role', 'Entry Type', 'Status', 'Source',
         'Resident/Visitor Name', 'Logged By', 'Timestamp (Asia/Manila)',
     ])
 
@@ -116,6 +116,7 @@ def export_csv(request):
         local_ts = timezone.localtime(log.timestamp)
         writer.writerow([
             log.plate_number,
+            log.camera_role,
             log.entry_type,
             log.status,
             log.source,

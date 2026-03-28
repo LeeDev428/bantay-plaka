@@ -10,6 +10,33 @@ from apps.accounts.models import User
 from apps.logs.models import VehicleLog
 
 
+def _camera_feed_context() -> dict:
+    latest_entry = (
+        VehicleLog.objects
+        .filter(
+            source=VehicleLog.SOURCE_CAMERA,
+            camera_role=VehicleLog.CAMERA_ROLE_ENTRY,
+            snapshot__isnull=False,
+        )
+        .order_by('-timestamp')
+        .first()
+    )
+    latest_exit = (
+        VehicleLog.objects
+        .filter(
+            source=VehicleLog.SOURCE_CAMERA,
+            camera_role=VehicleLog.CAMERA_ROLE_EXIT,
+            snapshot__isnull=False,
+        )
+        .order_by('-timestamp')
+        .first()
+    )
+    return {
+        'entry_feed': latest_entry,
+        'exit_feed': latest_exit,
+    }
+
+
 class BantayPlakaLoginView(LoginView):
     template_name = 'accounts/login.html'
     authentication_form = LoginForm
@@ -51,6 +78,7 @@ def admin_dashboard(request):
         'total_guards': User.objects.filter(role=User.ROLE_GUARD, is_active=True).count(),
         'recent_logs': VehicleLog.objects.select_related('logged_by').all()[:10],
     }
+    context.update(_camera_feed_context())
     return render(request, 'dashboard/admin/index.html', context)
 
 
@@ -103,4 +131,6 @@ def user_toggle_active(request, pk):
 @login_required
 def guard_dashboard(request):
     recent_logs = VehicleLog.objects.select_related('logged_by').all()[:10]
-    return render(request, 'dashboard/guard/index.html', {'recent_logs': recent_logs})
+    context = {'recent_logs': recent_logs}
+    context.update(_camera_feed_context())
+    return render(request, 'dashboard/guard/index.html', context)

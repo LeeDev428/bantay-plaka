@@ -1,10 +1,15 @@
 from django.http import JsonResponse
+from django.http import StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.core.files.base import ContentFile
+from django.contrib.auth.decorators import login_required
 import json
 import base64
 import binascii
+import time
+
+import cv2
 
 from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log, broadcast_blacklist_alert
@@ -55,6 +60,63 @@ def _next_status_for_plate(plate_number: str, camera_role: str = VehicleLog.CAME
     if last_log == VehicleLog.STATUS_IN:
         return VehicleLog.STATUS_OUT
     return VehicleLog.STATUS_IN
+
+
+def _camera_rtsp_for_role(camera_role: str) -> str:
+    if camera_role == VehicleLog.CAMERA_ROLE_ENTRY:
+        return getattr(settings, 'ENTRY_CAMERA_RTSP', '').strip()
+    if camera_role == VehicleLog.CAMERA_ROLE_EXIT:
+        return getattr(settings, 'EXIT_CAMERA_RTSP', '').strip()
+    return ''
+
+
+def _mjpeg_frame_stream(rtsp_url: str):
+    cap = cv2.VideoCapture(rtsp_url)
+    try:
+        if not cap.isOpened():
+            return
+
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                time.sleep(0.2)
+                continue
+
+            max_width = 960
+            if frame.shape[1] > max_width:
+                scale = max_width / frame.shape[1]
+                frame = cv2.resize(
+                    frame,
+                    (max_width, int(frame.shape[0] * scale)),
+                    interpolation=cv2.INTER_AREA,
+                )
+
+            encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            if not encoded_ok:
+                continue
+
+            payload = buffer.tobytes()
+            yield (
+                b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' + payload + b'\r\n'
+            )
+    finally:
+        cap.release()
+
+
+@login_required
+def camera_preview(request, camera_role: str):
+    role = _normalize_camera_role(camera_role)
+    rtsp_url = _camera_rtsp_for_role(role)
+    if role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
+        return JsonResponse({'error': 'Invalid camera role'}, status=400)
+    if not rtsp_url:
+        return JsonResponse({'error': f'RTSP URL not configured for {role}'}, status=400)
+
+    return StreamingHttpResponse(
+        _mjpeg_frame_stream(rtsp_url),
+        content_type='multipart/x-mixed-replace; boundary=frame',
+    )
 
 
 @csrf_exempt

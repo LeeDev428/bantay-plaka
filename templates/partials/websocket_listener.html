@@ -56,6 +56,22 @@
     });
   }
 
+  function updateFeedCard(role, data) {
+    const prefix = role === 'ENTRY_CAM' ? 'entry' : role === 'EXIT_CAM' ? 'exit' : null;
+    if (!prefix || !data.snapshot_url) return;
+
+    const img = document.getElementById(`${prefix}-feed-image`);
+    const empty = document.getElementById(`${prefix}-feed-empty`);
+    const meta = document.getElementById(`${prefix}-feed-meta`);
+
+    if (!img || !meta) return;
+
+    img.src = `${data.snapshot_url}?t=${Date.now()}`;
+    img.classList.remove('hidden');
+    if (empty) empty.classList.add('hidden');
+    meta.textContent = `Plate ${data.plate_number} - ${data.timestamp}`;
+  }
+
   socket.onmessage = function (e) {
     const data = JSON.parse(e.data);
 
@@ -97,6 +113,7 @@
     tbody.insertBefore(row, tbody.firstChild);
     // Re-run highlights after inserting new row
     highlightRecentRows();
+    updateFeedCard(data.camera_role, data);
   };
 
   socket.onopen = () => console.log('[BantayPlaka] WebSocket connected.');

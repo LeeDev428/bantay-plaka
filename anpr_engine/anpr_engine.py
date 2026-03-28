@@ -40,6 +40,7 @@ NOTE: TIME_IN / TIME_OUT is auto-determined by Django.
 """
 
 import argparse
+import base64
 import logging
 import os
 import sys
@@ -261,7 +262,7 @@ class ANPREngine:
     def _record_logged(self, plate: str):
         self._last_logged[plate] = time.time()
 
-    def _post_to_django(self, plate: str) -> bool:
+    def _post_to_django(self, plate: str, snapshot_b64: str = '') -> bool:
         """POST the detected plate to Django. Returns True on success."""
         if not DJANGO_API_KEY:
             log.error("ANPR_API_KEY is not set in .env -- cannot send plate to Django.")
@@ -269,7 +270,11 @@ class ANPREngine:
         try:
             resp = requests.post(
                 self.ingest_url,
-                json={'plate_number': plate, 'camera_role': self.camera_role},
+                json={
+                    'plate_number': plate,
+                    'camera_role': self.camera_role,
+                    'snapshot_b64': snapshot_b64,
+                },
                 headers={'Content-Type': 'application/json', 'X-Api-Key': DJANGO_API_KEY},
                 timeout=5,
             )
@@ -328,7 +333,28 @@ class ANPREngine:
                 cv2.putText(frame, plate, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                if self._post_to_django(plate):
+                snapshot_b64 = ''
+                try:
+                    preview_for_upload = frame
+                    max_width = 960
+                    if frame.shape[1] > max_width:
+                        scale = max_width / frame.shape[1]
+                        preview_for_upload = cv2.resize(
+                            frame,
+                            (max_width, int(frame.shape[0] * scale)),
+                            interpolation=cv2.INTER_AREA,
+                        )
+                    ok, encoded = cv2.imencode(
+                        '.jpg',
+                        preview_for_upload,
+                        [int(cv2.IMWRITE_JPEG_QUALITY), 75],
+                    )
+                    if ok:
+                        snapshot_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
+                except Exception:
+                    snapshot_b64 = ''
+
+                if self._post_to_django(plate, snapshot_b64=snapshot_b64):
                     self._record_logged(plate)
 
     def run(self, show_preview: bool = True):

@@ -43,6 +43,7 @@ import argparse
 import base64
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -107,8 +108,9 @@ def clean_plate_text(raw_text: str) -> str | None:
             AB 1234  (motorcycle: 2 letters + space + 4 digits)
     Returns None if the text looks like garbage.
     """
-    cleaned = ''.join(c for c in raw_text.upper() if c.isalnum() or c == ' ')
+    cleaned = ''.join(c for c in raw_text.upper() if c.isalnum() or c in {' ', '-'})
     cleaned = ' '.join(cleaned.split())
+    cleaned = cleaned.replace('-', ' ')
 
     if len(cleaned) < 5:
         return None
@@ -124,7 +126,19 @@ def clean_plate_text(raw_text: str) -> str | None:
             compact = ''.join(c for c in cleaned if c.isalnum())
             return compact if len(compact) >= 5 else None
 
-    return cleaned
+    compact = ''.join(c for c in cleaned if c.isalnum())
+
+    # Common PH patterns: ABC1234, AB1234, ABC123
+    if re.fullmatch(r'[A-Z]{2,4}\d{3,4}', compact):
+        letters = ''.join(c for c in compact if c.isalpha())
+        digits = ''.join(c for c in compact if c.isdigit())
+        return f'{letters} {digits}'
+
+    # Safe fallback for OCR noise, still requiring mixed alnum and practical length.
+    if 5 <= len(compact) <= 10 and any(c.isalpha() for c in compact) and any(c.isdigit() for c in compact):
+        return compact
+
+    return cleaned if len(cleaned) >= 5 else None
 
 
 def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
@@ -198,12 +212,36 @@ class RoboflowDetector:
             results = self._model.infer(frame, confidence=DETECTION_CONFIDENCE)
             if not results:
                 return boxes
-            for prediction in results[0].predictions:
+
+            raw_predictions = []
+            first = results[0]
+
+            # Support multiple inference response formats.
+            if hasattr(first, 'predictions'):
+                raw_predictions = first.predictions or []
+            elif isinstance(first, dict):
+                raw_predictions = first.get('predictions') or first.get('objects') or []
+
+            for prediction in raw_predictions:
+                if isinstance(prediction, dict):
+                    x = prediction.get('x')
+                    y = prediction.get('y')
+                    w = prediction.get('width')
+                    h = prediction.get('height')
+                else:
+                    x = getattr(prediction, 'x', None)
+                    y = getattr(prediction, 'y', None)
+                    w = getattr(prediction, 'width', None)
+                    h = getattr(prediction, 'height', None)
+
+                if None in (x, y, w, h):
+                    continue
+
                 # Roboflow uses center x, y, width, height -> convert to corners
-                x1 = int(prediction.x - prediction.width / 2)
-                y1 = int(prediction.y - prediction.height / 2)
-                x2 = int(prediction.x + prediction.width / 2)
-                y2 = int(prediction.y + prediction.height / 2)
+                x1 = int(x - w / 2)
+                y1 = int(y - h / 2)
+                x2 = int(x + w / 2)
+                y2 = int(y + h / 2)
                 boxes.append((x1, y1, x2, y2))
         except Exception as e:
             log.warning(f"Roboflow detection error: {e}")
@@ -277,6 +315,8 @@ class ANPREngine:
         self.debounce_seconds = debounce_seconds
         self.frame_skip = max(1, int(frame_skip))
         self._last_logged: dict[str, float] = {}
+        self._frames_no_box = 0
+        self._processed_frames = 0
 
         # Initialize plate detector
         if mode == 'roboflow':
@@ -340,10 +380,22 @@ class ANPREngine:
 
     def _process_frame(self, frame: np.ndarray):
         """Detect plates in this frame, read text, post to Django if valid."""
+        self._processed_frames += 1
         h, w = frame.shape[:2]
         pad = 10
 
-        for (x1, y1, x2, y2) in self.detector.detect(frame):
+        boxes = self.detector.detect(frame)
+        if boxes:
+            self._frames_no_box = 0
+            for (bx1, by1, bx2, by2) in boxes:
+                # Draw raw detector output so operator can see detector activity.
+                cv2.rectangle(frame, (max(0, bx1), max(0, by1)), (min(w, bx2), min(h, by2)), (0, 215, 255), 1)
+        else:
+            self._frames_no_box += 1
+            if self._frames_no_box % 30 == 0:
+                log.info("No plate boxes detected in last %s processed frames.", self._frames_no_box)
+
+        for (x1, y1, x2, y2) in boxes:
             # Expand bounding box slightly for better OCR
             x1 = max(0, x1 - pad)
             y1 = max(0, y1 - pad)
@@ -404,6 +456,28 @@ class ANPREngine:
                         self._record_logged(plate)
                     posted = True
                     break
+
+        # Fallback: if detector found no box, run OCR on whole frame every few processed frames.
+        # This keeps CPU manageable while recovering from weak detector outputs.
+        if not boxes and self._processed_frames % 8 == 0:
+            frame_variants = build_ocr_variants(frame)
+            for candidate in frame_variants:
+                for (_, text, confidence) in self.ocr.readtext(candidate):
+                    if confidence < max(0.15, MIN_OCR_CONFIDENCE - 0.05):
+                        continue
+
+                    plate = clean_plate_text(text)
+                    if plate is None:
+                        continue
+
+                    if self._is_debounced(plate):
+                        log.info("Fallback OCR plate '%s' skipped (debounced).", plate)
+                        return
+
+                    log.info("Fallback OCR hit: '%s' (conf: %.2f)", plate, confidence)
+                    if self._post_to_django(plate):
+                        self._record_logged(plate)
+                    return
 
     def run(self, show_preview: bool = True):
         """Open the camera and run ANPR loop until stopped."""

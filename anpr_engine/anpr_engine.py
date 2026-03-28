@@ -207,6 +207,86 @@ def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
     return variants
 
 
+def extract_plate_candidates_from_ocr(ocr_results) -> list[tuple[str, float, tuple[int, int, int, int] | None]]:
+    """Build plate candidates from OCR results, including split-token combinations like 'AB' + '123'."""
+    items: list[dict] = []
+    for row in ocr_results or []:
+        if not isinstance(row, (list, tuple)) or len(row) < 3:
+            continue
+        bbox, text, conf = row[0], row[1], row[2]
+        if text is None:
+            continue
+
+        raw = ''.join(c for c in str(text).upper() if c.isalnum())
+        if not raw:
+            continue
+
+        try:
+            xs = [int(p[0]) for p in bbox]
+            ys = [int(p[1]) for p in bbox]
+            x1, y1, x2, y2 = min(xs), min(ys), max(xs), max(ys)
+        except Exception:
+            x1 = y1 = x2 = y2 = 0
+
+        items.append(
+            {
+                'raw': raw,
+                'conf': float(conf),
+                'bbox': (x1, y1, x2, y2),
+                'cx': (x1 + x2) / 2,
+                'cy': (y1 + y2) / 2,
+                'h': max(1, y2 - y1),
+            }
+        )
+
+    candidates: list[tuple[str, float, tuple[int, int, int, int] | None]] = []
+    seen: set[tuple[str, int, int, int, int]] = set()
+
+    def add_candidate(text_value: str, conf_value: float, bbox_value: tuple[int, int, int, int] | None):
+        plate = clean_plate_text(text_value)
+        if not plate:
+            return
+        key_bbox = bbox_value or (0, 0, 0, 0)
+        key = (plate, key_bbox[0], key_bbox[1], key_bbox[2], key_bbox[3])
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append((plate, conf_value, bbox_value))
+
+    # Direct token candidates first.
+    for item in items:
+        add_candidate(item['raw'], item['conf'], item['bbox'])
+
+    # Combine adjacent same-line alpha token + digit token.
+    for i, left in enumerate(items):
+        for j, right in enumerate(items):
+            if i == j:
+                continue
+            if left['cx'] >= right['cx']:
+                continue
+
+            same_line = abs(left['cy'] - right['cy']) <= max(left['h'], right['h']) * 0.8
+            if not same_line:
+                continue
+
+            alpha_ok = left['raw'].isalpha() and 2 <= len(left['raw']) <= 4
+            digit_ok = right['raw'].isdigit() and 3 <= len(right['raw']) <= 4
+            if not (alpha_ok and digit_ok):
+                continue
+
+            x1 = min(left['bbox'][0], right['bbox'][0])
+            y1 = min(left['bbox'][1], right['bbox'][1])
+            x2 = max(left['bbox'][2], right['bbox'][2])
+            y2 = max(left['bbox'][3], right['bbox'][3])
+            merged_bbox = (x1, y1, x2, y2)
+            merged_conf = min(left['conf'], right['conf'])
+
+            add_candidate(f"{left['raw']} {right['raw']}", merged_conf, merged_bbox)
+            add_candidate(f"{left['raw']}{right['raw']}", merged_conf, merged_bbox)
+
+    return candidates
+
+
 # ---------------------------------------------------------------------------
 # Plate Detectors
 # ---------------------------------------------------------------------------
@@ -472,13 +552,14 @@ class ANPREngine:
             for candidate in build_ocr_variants(plate_crop):
                 if posted:
                     break
-                for (_, text, confidence) in self.ocr.readtext(candidate):
+                ocr_results = self.ocr.readtext(
+                    candidate,
+                    allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+                    detail=1,
+                    paragraph=False,
+                )
+                for (plate, confidence, _) in extract_plate_candidates_from_ocr(ocr_results):
                     if confidence < MIN_OCR_CONFIDENCE:
-                        continue
-
-                    plate = clean_plate_text(text)
-                    if plate is None:
-                        log.debug(f"OCR '{text}' -- invalid format, skipping.")
                         continue
 
                     log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
@@ -505,12 +586,14 @@ class ANPREngine:
         if not boxes and self._processed_frames % 3 == 0:
             frame_variants = build_ocr_variants(frame)
             for candidate in frame_variants:
-                for (bbox, text, confidence) in self.ocr.readtext(candidate):
+                ocr_results = self.ocr.readtext(
+                    candidate,
+                    allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+                    detail=1,
+                    paragraph=False,
+                )
+                for (plate, confidence, bbox_xyxy) in extract_plate_candidates_from_ocr(ocr_results):
                     if confidence < max(0.10, MIN_OCR_CONFIDENCE - 0.08):
-                        continue
-
-                    plate = clean_plate_text(text)
-                    if plate is None:
                         continue
 
                     if self._is_debounced(plate):
@@ -521,9 +604,12 @@ class ANPREngine:
 
                     # Draw OCR-based bounding polygon so fallback detections still show visual evidence.
                     try:
-                        pts = np.array(bbox, dtype=np.int32).reshape((-1, 1, 2))
-                        cv2.polylines(frame, [pts], True, (0, 255, 0), 2)
-                        x, y = pts[0][0]
+                        if bbox_xyxy:
+                            x1, y1, x2, y2 = bbox_xyxy
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                            x, y = x1, y1
+                        else:
+                            x, y = 20, 40
                         cv2.putText(
                             frame,
                             plate,

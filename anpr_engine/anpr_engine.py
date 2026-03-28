@@ -134,11 +134,14 @@ def clean_plate_text(raw_text: str) -> str | None:
         digits = ''.join(c for c in compact if c.isdigit())
         return f'{letters} {digits}'
 
-    # Safe fallback for OCR noise, still requiring mixed alnum and practical length.
-    if 5 <= len(compact) <= 10 and any(c.isalpha() for c in compact) and any(c.isdigit() for c in compact):
+    letters_count = sum(1 for c in compact if c.isalpha())
+    digits_count = sum(1 for c in compact if c.isdigit())
+
+    # Safe fallback for OCR noise (e.g., A8C12B4), bounded to practical plate lengths.
+    if 5 <= len(compact) <= 8 and 2 <= letters_count <= 4 and 3 <= digits_count <= 4:
         return compact
 
-    return cleaned if len(cleaned) >= 5 else None
+    return None
 
 
 def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:

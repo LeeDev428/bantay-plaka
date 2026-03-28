@@ -1,7 +1,10 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.core.files.base import ContentFile
 import json
+import base64
+import binascii
 
 from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log, broadcast_blacklist_alert
@@ -72,6 +75,7 @@ def ingest_plate(request):
         data = json.loads(request.body)
         plate = data.get('plate_number', '').upper().strip()
         camera_role = _normalize_camera_role(data.get('camera_role', ''))
+        snapshot_b64 = (data.get('snapshot_b64', '') or '').strip()
 
         if not plate:
             return JsonResponse({'error': 'plate_number required'}, status=400)
@@ -91,6 +95,16 @@ def ingest_plate(request):
             camera_role=camera_role,
             resident_name=resolved.get('resident_name', ''),
         )
+
+        if snapshot_b64:
+            try:
+                image_bytes = base64.b64decode(snapshot_b64, validate=True)
+                safe_plate = ''.join(c for c in plate if c.isalnum())[:12] or 'plate'
+                filename = f'{camera_role.lower()}_{safe_plate}_{log.pk}.jpg'
+                log.snapshot.save(filename, ContentFile(image_bytes), save=True)
+            except (binascii.Error, ValueError):
+                pass
+
         broadcast_log(log)
         return JsonResponse({'ok': True, 'log_id': log.pk, 'status': status, 'camera_role': camera_role})
 

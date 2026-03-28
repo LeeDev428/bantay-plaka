@@ -66,7 +66,9 @@
     </div>
     <div class="p-4">
       <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
-        {% if entry_feed and entry_feed.snapshot %}
+        {% if has_entry_camera_stream %}
+          <img id="entry-feed-image" src="{% url 'camera_preview' 'ENTRY_CAM' %}" alt="Entry camera live stream" class="w-full h-full object-cover" />
+        {% elif entry_feed and entry_feed.snapshot %}
           <img id="entry-feed-image" src="{{ entry_feed.snapshot.url }}" alt="Entry camera detection" class="w-full h-full object-cover" />
         {% else %}
           <img id="entry-feed-image" src="" alt="Entry camera detection" class="w-full h-full object-cover hidden" />
@@ -89,7 +91,9 @@
     </div>
     <div class="p-4">
       <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
-        {% if exit_feed and exit_feed.snapshot %}
+        {% if has_exit_camera_stream %}
+          <img id="exit-feed-image" src="{% url 'camera_preview' 'EXIT_CAM' %}" alt="Exit camera live stream" class="w-full h-full object-cover" />
+        {% elif exit_feed and exit_feed.snapshot %}
           <img id="exit-feed-image" src="{{ exit_feed.snapshot.url }}" alt="Exit camera detection" class="w-full h-full object-cover" />
         {% else %}
           <img id="exit-feed-image" src="" alt="Exit camera detection" class="w-full h-full object-cover hidden" />

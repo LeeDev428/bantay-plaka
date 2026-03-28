@@ -196,7 +196,7 @@ def _read_camera_http_snapshot(rtsp_url: str):
         channel = '102'
 
     snapshot_url = f'http://{parsed.hostname}/ISAPI/Streaming/channels/{channel}/picture'
-    timeout = 4
+    timeout = 1.2
 
     try:
         resp = requests.get(snapshot_url, auth=HTTPDigestAuth(username, password), timeout=timeout)
@@ -240,8 +240,6 @@ def camera_frame(request, camera_role: str):
         return JsonResponse({'error': f'RTSP URL not configured for {role}'}, status=400)
 
     frame = _read_camera_http_snapshot(rtsp_url)
-    if frame is None:
-        frame = _read_single_frame(rtsp_url)
     if frame is None:
         return JsonResponse({'error': 'Camera frame unavailable'}, status=503)
     return HttpResponse(frame, content_type='image/jpeg')

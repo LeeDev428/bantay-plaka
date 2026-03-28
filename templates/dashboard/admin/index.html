@@ -48,10 +48,22 @@
     <div class="flex items-center justify-between">
       <div>
         <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Camera</p>
-        <p class="text-lg font-bold text-emerald-600 mt-1">ONLINE</p>
+        {% if camera_stale %}
+          <p class="text-lg font-bold text-red-600 mt-1">STALE</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">
+            {% if last_camera_log_local %}
+              Last log {{ last_camera_log_local|date:"h:i:s A" }}
+            {% else %}
+              No camera detections yet
+            {% endif %}
+          </p>
+        {% else %}
+          <p class="text-lg font-bold text-emerald-600 mt-1">LIVE</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Last log {{ last_camera_log_local|date:"h:i:s A" }}</p>
+        {% endif %}
       </div>
-      <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-        <i class="fa fa-video text-emerald-600"></i>
+      <div class="w-10 h-10 rounded-lg {% if camera_stale %}bg-red-100{% else %}bg-emerald-100{% endif %} flex items-center justify-center">
+        <i class="fa fa-video {% if camera_stale %}text-red-600{% else %}text-emerald-600{% endif %}"></i>
       </div>
     </div>
   </div>

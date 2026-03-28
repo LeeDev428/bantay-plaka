@@ -1,5 +1,6 @@
 from django.http import JsonResponse
 from django.http import StreamingHttpResponse
+from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -146,6 +147,40 @@ def _mjpeg_frame_stream(rtsp_url: str):
         cap.release()
 
 
+def _read_single_frame(rtsp_url: str):
+    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
+    for candidate in _rtsp_candidates(rtsp_url):
+        cap = cv2.VideoCapture(candidate, cv2.CAP_FFMPEG)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        try:
+            if not cap.isOpened():
+                continue
+
+            # Skip a couple of frames to improve chance of clean decode.
+            for _ in range(3):
+                cap.read()
+
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                continue
+
+            max_width = 960
+            if frame.shape[1] > max_width:
+                scale = max_width / frame.shape[1]
+                frame = cv2.resize(
+                    frame,
+                    (max_width, int(frame.shape[0] * scale)),
+                    interpolation=cv2.INTER_AREA,
+                )
+
+            encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            if encoded_ok:
+                return buffer.tobytes()
+        finally:
+            cap.release()
+    return None
+
+
 @login_required
 def camera_preview(request, camera_role: str):
     role = _normalize_camera_role(camera_role)
@@ -159,6 +194,21 @@ def camera_preview(request, camera_role: str):
         _mjpeg_frame_stream(rtsp_url),
         content_type='multipart/x-mixed-replace; boundary=frame',
     )
+
+
+@login_required
+def camera_frame(request, camera_role: str):
+    role = _normalize_camera_role(camera_role)
+    rtsp_url = _camera_rtsp_for_role(role)
+    if role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
+        return JsonResponse({'error': 'Invalid camera role'}, status=400)
+    if not rtsp_url:
+        return JsonResponse({'error': f'RTSP URL not configured for {role}'}, status=400)
+
+    frame = _read_single_frame(rtsp_url)
+    if frame is None:
+        return JsonResponse({'error': 'Camera frame unavailable'}, status=503)
+    return HttpResponse(frame, content_type='image/jpeg')
 
 
 @csrf_exempt

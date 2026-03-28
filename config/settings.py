@@ -106,6 +106,10 @@ LOGOUT_REDIRECT_URL = '/login/'
 # Set this in .env as ANPR_API_KEY=<your-secret-key>
 ANPR_API_KEY = env('ANPR_API_KEY', default='')
 
+# Optional direct live preview streams for dashboard camera panels
+ENTRY_CAMERA_RTSP = env('ENTRY_CAMERA_RTSP', default='')
+EXIT_CAMERA_RTSP = env('EXIT_CAMERA_RTSP', default='')
+
 # Django Channels — in-memory for development
 CHANNEL_LAYERS = {
     'default': {

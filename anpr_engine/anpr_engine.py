@@ -80,10 +80,10 @@ DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 DEBOUNCE_SECONDS = 30
 
 # Minimum OCR confidence to accept a plate reading (0.0 - 1.0)
-MIN_OCR_CONFIDENCE = 0.3
+MIN_OCR_CONFIDENCE = 0.2
 
 # Detection confidence threshold for both Roboflow and YOLO modes
-DETECTION_CONFIDENCE = 0.4
+DETECTION_CONFIDENCE = 0.25
 VALID_CAMERA_ROLES = {'ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'}
 
 # ---------------------------------------------------------------------------
@@ -120,9 +120,38 @@ def clean_plate_text(raw_text: str) -> str | None:
         if letters and digits:
             cleaned = f'{letters} {digits}'
         else:
-            return None
+            # Fallback: allow compact alphanumeric reads so we do not drop valid plates.
+            compact = ''.join(c for c in cleaned if c.isalnum())
+            return compact if len(compact) >= 5 else None
 
     return cleaned
+
+
+def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
+    """Create multiple image variants to improve OCR hit rate under blur/lighting noise."""
+    variants: list[np.ndarray] = [plate_crop]
+    gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
+    variants.append(gray)
+
+    # Contrast-limited adaptive histogram equalization helps with dark/washed plates.
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    gray_clahe = clahe.apply(gray)
+    variants.append(gray_clahe)
+
+    # Binary variants often help EasyOCR with high-contrast characters.
+    _, th_otsu = cv2.threshold(gray_clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    variants.append(th_otsu)
+
+    th_adaptive = cv2.adaptiveThreshold(
+        gray_clahe,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31,
+        5,
+    )
+    variants.append(th_adaptive)
+    return variants
 
 
 # ---------------------------------------------------------------------------
@@ -325,49 +354,56 @@ class ANPREngine:
             if plate_crop.size == 0:
                 continue
 
-            for (_, text, confidence) in self.ocr.readtext(plate_crop):
-                if confidence < MIN_OCR_CONFIDENCE:
-                    continue
+            posted = False
+            for candidate in build_ocr_variants(plate_crop):
+                if posted:
+                    break
+                for (_, text, confidence) in self.ocr.readtext(candidate):
+                    if confidence < MIN_OCR_CONFIDENCE:
+                        continue
 
-                plate = clean_plate_text(text)
-                if plate is None:
-                    log.debug(f"OCR '{text}' -- invalid format, skipping.")
-                    continue
+                    plate = clean_plate_text(text)
+                    if plate is None:
+                        log.debug(f"OCR '{text}' -- invalid format, skipping.")
+                        continue
 
-                log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
+                    log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
 
-                if self._is_debounced(plate):
-                    log.info(f"Skipping '{plate}' -- debounced ({self.debounce_seconds}s).")
-                    continue
+                    if self._is_debounced(plate):
+                        log.info(f"Skipping '{plate}' -- debounced ({self.debounce_seconds}s).")
+                        posted = True
+                        break
 
-                # Draw box + plate text on preview window
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, plate, (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                    # Draw box + plate text on preview window
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(frame, plate, (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                snapshot_b64 = ''
-                try:
-                    preview_for_upload = frame
-                    max_width = 960
-                    if frame.shape[1] > max_width:
-                        scale = max_width / frame.shape[1]
-                        preview_for_upload = cv2.resize(
-                            frame,
-                            (max_width, int(frame.shape[0] * scale)),
-                            interpolation=cv2.INTER_AREA,
-                        )
-                    ok, encoded = cv2.imencode(
-                        '.jpg',
-                        preview_for_upload,
-                        [int(cv2.IMWRITE_JPEG_QUALITY), 75],
-                    )
-                    if ok:
-                        snapshot_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
-                except Exception:
                     snapshot_b64 = ''
+                    try:
+                        preview_for_upload = frame
+                        max_width = 960
+                        if frame.shape[1] > max_width:
+                            scale = max_width / frame.shape[1]
+                            preview_for_upload = cv2.resize(
+                                frame,
+                                (max_width, int(frame.shape[0] * scale)),
+                                interpolation=cv2.INTER_AREA,
+                            )
+                        ok, encoded = cv2.imencode(
+                            '.jpg',
+                            preview_for_upload,
+                            [int(cv2.IMWRITE_JPEG_QUALITY), 75],
+                        )
+                        if ok:
+                            snapshot_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
+                    except Exception:
+                        snapshot_b64 = ''
 
-                if self._post_to_django(plate, snapshot_b64=snapshot_b64):
-                    self._record_logged(plate)
+                    if self._post_to_django(plate, snapshot_b64=snapshot_b64):
+                        self._record_logged(plate)
+                    posted = True
+                    break
 
     def run(self, show_preview: bool = True):
         """Open the camera and run ANPR loop until stopped."""

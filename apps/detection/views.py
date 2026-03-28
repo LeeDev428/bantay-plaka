@@ -239,7 +239,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
 
         fail_count = 0
 
-        max_width = 720
+        max_width = 640
         if frame.shape[1] > max_width:
             scale = max_width / frame.shape[1]
             frame = cv2.resize(

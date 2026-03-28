@@ -37,6 +37,9 @@ start "BantayPlaka - EXIT CAM" cmd /k "venv\Scripts\activate.bat ^&^& python anp
 echo.
 echo  Open: http://127.0.0.1:8000
 echo  Login as guard/admin to see logs and detection feed.
+echo  Keep the 3 spawned windows open (Django + ENTRY CAM + EXIT CAM).
+echo  Do NOT run an extra "python manage.py runserver" manually.
+echo  You may close this launcher window after pressing any key.
 echo.
 pause
 

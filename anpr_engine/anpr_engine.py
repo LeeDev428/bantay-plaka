@@ -184,6 +184,19 @@ def clean_plate_text(raw_text: str) -> str | None:
 def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
     """Create multiple image variants to improve OCR hit rate under blur/lighting noise."""
     variants: list[np.ndarray] = [plate_crop]
+
+    # Upscale small crops to help OCR read distant/thin characters.
+    h0, w0 = plate_crop.shape[:2]
+    if w0 < 420:
+        scale = max(1.0, 420.0 / max(1, w0))
+        upscaled = cv2.resize(
+            plate_crop,
+            (int(w0 * scale), int(h0 * scale)),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        variants.append(upscaled)
+        plate_crop = upscaled
+
     gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
     variants.append(gray)
 
@@ -205,6 +218,11 @@ def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
         5,
     )
     variants.append(th_adaptive)
+
+    # Slightly sharpened grayscale can recover faint marker strokes.
+    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
+    sharp = cv2.filter2D(gray_clahe, -1, kernel)
+    variants.append(sharp)
     return variants
 
 
@@ -635,8 +653,9 @@ class ANPREngine:
     def run(self, show_preview: bool = True):
         """Open the camera and run ANPR loop until stopped."""
         source: str | int = self.rtsp_url
+        is_rtsp = isinstance(source, str) and '://' in source
 
-        if isinstance(source, str) and '://' in source:
+        if is_rtsp:
             scheme, rest = source.split('://', 1)
             if rest.count('@') > 1:
                 userinfo, hostpart = rest.rsplit('@', 1)
@@ -649,7 +668,8 @@ class ANPREngine:
         else:
             log.info(f"Connecting to RTSP stream: {source}")
 
-        cap = cv2.VideoCapture(source)
+        cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG) if is_rtsp else cv2.VideoCapture(source)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not cap.isOpened():
             log.error(
                 "Cannot open camera!\n"
@@ -668,12 +688,18 @@ class ANPREngine:
 
         try:
             while True:
+                if is_rtsp:
+                    # Drop stale buffered frames to keep OCR close to real-time.
+                    for _ in range(2):
+                        cap.grab()
+
                 ret, frame = cap.read()
                 if not ret:
                     log.warning("Lost camera feed. Retrying in 5 seconds...")
                     time.sleep(5)
                     cap.release()
-                    cap = cv2.VideoCapture(source)
+                    cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG) if is_rtsp else cv2.VideoCapture(source)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                     continue
 
                 frame_count += 1

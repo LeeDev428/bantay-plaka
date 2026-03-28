@@ -26,10 +26,26 @@ class VehicleLog(models.Model):
         (STATUS_OUT, 'Time Out'),
     ]
 
+    CAMERA_ROLE_ENTRY = 'ENTRY_CAM'
+    CAMERA_ROLE_EXIT = 'EXIT_CAM'
+    CAMERA_ROLE_UNKNOWN = 'UNKNOWN'
+    CAMERA_ROLE_CHOICES = [
+        (CAMERA_ROLE_ENTRY, 'Entry Camera'),
+        (CAMERA_ROLE_EXIT, 'Exit Camera'),
+        (CAMERA_ROLE_UNKNOWN, 'Unknown'),
+    ]
+
     plate_number = models.CharField(max_length=20, db_index=True)
     entry_type = models.CharField(max_length=10, choices=ENTRY_TYPE_CHOICES, default=TYPE_UNKNOWN)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
     source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default=SOURCE_CAMERA)
+    camera_role = models.CharField(
+        max_length=20,
+        choices=CAMERA_ROLE_CHOICES,
+        default=CAMERA_ROLE_UNKNOWN,
+        blank=True,
+        db_index=True,
+    )
 
     # optional links depending on entry type
     resident_name = models.CharField(max_length=200, blank=True)
@@ -62,4 +78,4 @@ class VehicleLog(models.Model):
         return timezone.localtime(self.timestamp)
 
     def __str__(self):
-        return f'{self.plate_number} | {self.entry_type} | {self.status} | {self.timestamp:%Y-%m-%d %H:%M}'
+        return f'{self.plate_number} | {self.camera_role} | {self.entry_type} | {self.status} | {self.timestamp:%Y-%m-%d %H:%M}'

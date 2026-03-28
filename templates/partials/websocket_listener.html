@@ -139,8 +139,12 @@
     refreshTargets.forEach((img) => {
       const role = img.dataset.liveSnapshot;
       if (!role) return;
+      const prefix = role === 'ENTRY_CAM' ? 'entry' : role === 'EXIT_CAM' ? 'exit' : null;
+      const empty = prefix ? document.getElementById(`${prefix}-feed-empty`) : null;
+      const meta = prefix ? document.getElementById(`${prefix}-feed-meta`) : null;
 
       let busy = false;
+      let failures = 0;
       setInterval(() => {
         if (busy) return;
         if (freezeUntilByRole[role] && Date.now() < freezeUntilByRole[role]) return;
@@ -148,9 +152,23 @@
         const probe = new Image();
         probe.onload = () => {
           img.src = probe.src;
+          img.classList.remove('hidden');
+          if (empty) empty.classList.add('hidden');
+          failures = 0;
           busy = false;
         };
         probe.onerror = () => {
+          failures += 1;
+          if (failures >= 2) {
+            img.classList.add('hidden');
+            if (empty) {
+              empty.textContent = 'Camera unavailable. Check power/network/IP settings.';
+              empty.classList.remove('hidden');
+            }
+            if (meta) {
+              meta.textContent = `Waiting for ${role} stream...`;
+            }
+          }
           busy = false;
         };
         probe.src = `/detection/frame/${role}/?t=${Date.now()}`;

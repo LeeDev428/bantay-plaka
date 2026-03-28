@@ -367,7 +367,7 @@ def camera_frame(request, camera_role: str):
         cached = _FRAME_CACHE.get(role)
     if cached:
         frame_bytes, ts = cached
-        if (time.time() - ts) <= 20:
+        if (time.time() - ts) <= 4:
             resp = HttpResponse(frame_bytes, content_type='image/jpeg')
             resp['Cache-Control'] = 'no-store'
             return resp

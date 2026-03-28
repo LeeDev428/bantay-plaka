@@ -10,7 +10,7 @@ import base64
 import binascii
 import time
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 import cv2
 import requests
@@ -189,8 +189,8 @@ def _read_camera_http_snapshot(rtsp_url: str):
     if not parsed.hostname:
         return None
 
-    username = parsed.username or 'admin'
-    password = parsed.password or ''
+    username = unquote(parsed.username or 'admin')
+    password = unquote(parsed.password or '')
     channel = '101'
     if '/Streaming/Channels/102' in rtsp_url:
         channel = '102'

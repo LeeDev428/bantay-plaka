@@ -19,6 +19,7 @@ def broadcast_log(vehicle_log: VehicleLog):
                 'status': vehicle_log.status,
                 'source': vehicle_log.source,
                 'camera_role': vehicle_log.camera_role,
+                'snapshot_url': vehicle_log.snapshot.url if vehicle_log.snapshot else '',
                 'display_name': vehicle_log.get_display_name(),
                 'timestamp': local_ts.strftime('%b %d, %Y %I:%M:%S %p'),
             },

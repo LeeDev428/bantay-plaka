@@ -560,7 +560,9 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, _) in extract_plate_candidates_from_ocr(ocr_results):
-                    if confidence < MIN_OCR_CONFIDENCE:
+                    strict_pattern = bool(re.fullmatch(r'[A-Z]{2,4} \d{3,4}', plate))
+                    min_conf = 0.04 if strict_pattern else MIN_OCR_CONFIDENCE
+                    if confidence < min_conf:
                         continue
 
                     log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
@@ -594,7 +596,9 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, bbox_xyxy) in extract_plate_candidates_from_ocr(ocr_results):
-                    if confidence < max(0.10, MIN_OCR_CONFIDENCE - 0.08):
+                    strict_pattern = bool(re.fullmatch(r'[A-Z]{2,4} \d{3,4}', plate))
+                    min_conf = 0.04 if strict_pattern else max(0.08, MIN_OCR_CONFIDENCE - 0.10)
+                    if confidence < min_conf:
                         continue
 
                     if self._is_debounced(plate):

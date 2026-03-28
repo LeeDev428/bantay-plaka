@@ -219,7 +219,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
 
         fail_count = 0
 
-        max_width = 960
+        max_width = 720
         if frame.shape[1] > max_width:
             scale = max_width / frame.shape[1]
             frame = cv2.resize(
@@ -347,15 +347,19 @@ def camera_frame(request, camera_role: str):
         cached = _FRAME_CACHE.get(role)
     if cached:
         frame_bytes, ts = cached
-        if (time.time() - ts) <= 8:
-            return HttpResponse(frame_bytes, content_type='image/jpeg')
+        if (time.time() - ts) <= 20:
+            resp = HttpResponse(frame_bytes, content_type='image/jpeg')
+            resp['Cache-Control'] = 'no-store'
+            return resp
 
     frame = _read_camera_http_snapshot(rtsp_url)
     if frame is None:
         frame = _read_single_frame(rtsp_url)
     if frame is None:
         return JsonResponse({'error': 'Camera frame unavailable'}, status=503)
-    return HttpResponse(frame, content_type='image/jpeg')
+    resp = HttpResponse(frame, content_type='image/jpeg')
+    resp['Cache-Control'] = 'no-store'
+    return resp
 
 
 @csrf_exempt

@@ -10,8 +10,11 @@ import base64
 import binascii
 import time
 import os
+from urllib.parse import urlparse
 
 import cv2
+import requests
+from requests.auth import HTTPDigestAuth, HTTPBasicAuth
 
 from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log, broadcast_blacklist_alert
@@ -181,6 +184,37 @@ def _read_single_frame(rtsp_url: str):
     return None
 
 
+def _read_camera_http_snapshot(rtsp_url: str):
+    parsed = urlparse(rtsp_url)
+    if not parsed.hostname:
+        return None
+
+    username = parsed.username or 'admin'
+    password = parsed.password or ''
+    channel = '101'
+    if '/Streaming/Channels/102' in rtsp_url:
+        channel = '102'
+
+    snapshot_url = f'http://{parsed.hostname}/ISAPI/Streaming/channels/{channel}/picture'
+    timeout = 4
+
+    try:
+        resp = requests.get(snapshot_url, auth=HTTPDigestAuth(username, password), timeout=timeout)
+        if resp.status_code == 200 and resp.content:
+            return resp.content
+    except Exception:
+        pass
+
+    try:
+        resp = requests.get(snapshot_url, auth=HTTPBasicAuth(username, password), timeout=timeout)
+        if resp.status_code == 200 and resp.content:
+            return resp.content
+    except Exception:
+        pass
+
+    return None
+
+
 @login_required
 def camera_preview(request, camera_role: str):
     role = _normalize_camera_role(camera_role)
@@ -205,7 +239,9 @@ def camera_frame(request, camera_role: str):
     if not rtsp_url:
         return JsonResponse({'error': f'RTSP URL not configured for {role}'}, status=400)
 
-    frame = _read_single_frame(rtsp_url)
+    frame = _read_camera_http_snapshot(rtsp_url)
+    if frame is None:
+        frame = _read_single_frame(rtsp_url)
     if frame is None:
         return JsonResponse({'error': 'Camera frame unavailable'}, status=503)
     return HttpResponse(frame, content_type='image/jpeg')

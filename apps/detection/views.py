@@ -168,6 +168,25 @@ def _mjpeg_frame_stream(rtsp_url: str):
         cap.release()
 
 
+def _cached_mjpeg_stream(camera_role: str, rtsp_url: str):
+    _ensure_camera_worker(camera_role, rtsp_url)
+    last_ts = 0.0
+    while True:
+        with _FRAME_CACHE_LOCK:
+            cached = _FRAME_CACHE.get(camera_role)
+
+        if cached:
+            frame_bytes, ts = cached
+            if ts != last_ts:
+                last_ts = ts
+                yield (
+                    b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n'
+                )
+
+        time.sleep(0.06)
+
+
 def _camera_worker_loop(camera_role: str, rtsp_url: str):
     os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
     candidate_urls = _rtsp_candidates(rtsp_url)
@@ -308,7 +327,7 @@ def camera_preview(request, camera_role: str):
         return JsonResponse({'error': f'RTSP URL not configured for {role}'}, status=400)
 
     return StreamingHttpResponse(
-        _mjpeg_frame_stream(rtsp_url),
+        _cached_mjpeg_stream(role, rtsp_url),
         content_type='multipart/x-mixed-replace; boundary=frame',
     )
 

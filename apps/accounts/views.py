@@ -2,6 +2,7 @@ from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.decorators import method_decorator
 
@@ -34,6 +35,8 @@ def _camera_feed_context() -> dict:
     return {
         'entry_feed': latest_entry,
         'exit_feed': latest_exit,
+        'has_entry_camera_stream': bool(getattr(settings, 'ENTRY_CAMERA_RTSP', '').strip()),
+        'has_exit_camera_stream': bool(getattr(settings, 'EXIT_CAMERA_RTSP', '').strip()),
     }
 
 

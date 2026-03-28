@@ -1,8 +1,12 @@
 <script>
 (function () {
+  if (window.__bpWsListenerInitialized) return;
+  window.__bpWsListenerInitialized = true;
+
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
   const tbody = document.getElementById('live-log-body');
+  const freezeUntilByRole = Object.create(null);
 
   function showBlacklistAlert(data) {
     const old = document.getElementById('blacklist-alert-banner');
@@ -66,6 +70,9 @@
 
     if (!img || !meta) return;
     if (img.dataset.liveStream === 'true' || img.dataset.liveSnapshot) {
+      // In live mode, briefly show the detection snapshot (with bbox/label) then resume polling.
+      img.src = `${data.snapshot_url}?t=${Date.now()}`;
+      freezeUntilByRole[role] = Date.now() + 3500;
       meta.textContent = `Plate ${data.plate_number} - ${data.timestamp}`;
       return;
     }
@@ -124,6 +131,9 @@
   socket.onclose = () => console.warn('[BantayPlaka] WebSocket disconnected.');
 
   function startSnapshotRefresh() {
+    if (window.__bpSnapshotRefreshStarted) return;
+    window.__bpSnapshotRefreshStarted = true;
+
     const refreshTargets = document.querySelectorAll('img[data-live-snapshot]');
     if (!refreshTargets.length) return;
     refreshTargets.forEach((img) => {
@@ -133,6 +143,7 @@
       let busy = false;
       setInterval(() => {
         if (busy) return;
+        if (freezeUntilByRole[role] && Date.now() < freezeUntilByRole[role]) return;
         busy = true;
         const probe = new Image();
         probe.onload = () => {
@@ -143,7 +154,7 @@
           busy = false;
         };
         probe.src = `/detection/frame/${role}/?t=${Date.now()}`;
-      }, 120);
+      }, 900);
     });
   }
 

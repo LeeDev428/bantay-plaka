@@ -10,6 +10,7 @@ import base64
 import binascii
 import time
 import os
+import threading
 from urllib.parse import urlparse, unquote
 
 import cv2
@@ -20,6 +21,12 @@ from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log, broadcast_blacklist_alert
 from apps.logs.views import resolve_plate
 from apps.visitors.models import BlacklistEntry
+
+
+_FRAME_CACHE: dict[str, tuple[bytes, float]] = {}
+_FRAME_CACHE_LOCK = threading.Lock()
+_CAMERA_WORKERS: dict[str, threading.Thread] = {}
+_CAMERA_WORKERS_LOCK = threading.Lock()
 
 
 def _check_api_key(request):
@@ -150,6 +157,71 @@ def _mjpeg_frame_stream(rtsp_url: str):
         cap.release()
 
 
+def _camera_worker_loop(camera_role: str, rtsp_url: str):
+    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
+    candidate_urls = _rtsp_candidates(rtsp_url)
+    candidate_idx = 0
+    cap = cv2.VideoCapture(candidate_urls[candidate_idx], cv2.CAP_FFMPEG)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    fail_count = 0
+
+    while True:
+        if not cap.isOpened():
+            cap.release()
+            time.sleep(0.5)
+            candidate_idx = (candidate_idx + 1) % len(candidate_urls)
+            cap = cv2.VideoCapture(candidate_urls[candidate_idx], cv2.CAP_FFMPEG)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            continue
+
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            fail_count += 1
+            if fail_count >= 12:
+                cap.release()
+                time.sleep(0.3)
+                candidate_idx = (candidate_idx + 1) % len(candidate_urls)
+                cap = cv2.VideoCapture(candidate_urls[candidate_idx], cv2.CAP_FFMPEG)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                fail_count = 0
+            time.sleep(0.03)
+            continue
+
+        fail_count = 0
+
+        max_width = 960
+        if frame.shape[1] > max_width:
+            scale = max_width / frame.shape[1]
+            frame = cv2.resize(
+                frame,
+                (max_width, int(frame.shape[0] * scale)),
+                interpolation=cv2.INTER_AREA,
+            )
+
+        encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        if encoded_ok:
+            with _FRAME_CACHE_LOCK:
+                _FRAME_CACHE[camera_role] = (buffer.tobytes(), time.time())
+
+        time.sleep(0.03)
+
+
+def _ensure_camera_worker(camera_role: str, rtsp_url: str):
+    with _CAMERA_WORKERS_LOCK:
+        thread = _CAMERA_WORKERS.get(camera_role)
+        if thread and thread.is_alive():
+            return
+
+        worker = threading.Thread(
+            target=_camera_worker_loop,
+            args=(camera_role, rtsp_url),
+            daemon=True,
+            name=f'camera-worker-{camera_role.lower()}',
+        )
+        worker.start()
+        _CAMERA_WORKERS[camera_role] = worker
+
+
 def _read_single_frame(rtsp_url: str):
     os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
     for candidate in _rtsp_candidates(rtsp_url):
@@ -239,7 +311,18 @@ def camera_frame(request, camera_role: str):
     if not rtsp_url:
         return JsonResponse({'error': f'RTSP URL not configured for {role}'}, status=400)
 
+    _ensure_camera_worker(role, rtsp_url)
+
+    with _FRAME_CACHE_LOCK:
+        cached = _FRAME_CACHE.get(role)
+    if cached:
+        frame_bytes, ts = cached
+        if (time.time() - ts) <= 8:
+            return HttpResponse(frame_bytes, content_type='image/jpeg')
+
     frame = _read_camera_http_snapshot(rtsp_url)
+    if frame is None:
+        frame = _read_single_frame(rtsp_url)
     if frame is None:
         return JsonResponse({'error': 'Camera frame unavailable'}, status=503)
     return HttpResponse(frame, content_type='image/jpeg')

@@ -8,6 +8,7 @@ import json
 import base64
 import binascii
 import time
+import os
 
 import cv2
 
@@ -71,7 +72,10 @@ def _camera_rtsp_for_role(camera_role: str) -> str:
 
 
 def _mjpeg_frame_stream(rtsp_url: str):
-    cap = cv2.VideoCapture(rtsp_url)
+    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp'
+    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    fail_count = 0
     try:
         if not cap.isOpened():
             return
@@ -79,8 +83,16 @@ def _mjpeg_frame_stream(rtsp_url: str):
         while True:
             ok, frame = cap.read()
             if not ok:
+                fail_count += 1
+                if fail_count >= 15:
+                    cap.release()
+                    time.sleep(0.5)
+                    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    fail_count = 0
                 time.sleep(0.2)
                 continue
+            fail_count = 0
 
             max_width = 960
             if frame.shape[1] > max_width:

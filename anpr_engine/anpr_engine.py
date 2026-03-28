@@ -97,6 +97,26 @@ logging.basicConfig(
 )
 log = logging.getLogger('bantayplaka.anpr')
 
+_DIGIT_LIKE_MAP = {
+    'O': '0', 'Q': '0', 'D': '0',
+    'I': '1', 'L': '1',
+    'Z': '2',
+    'S': '5',
+    'G': '6',
+    'T': '7',
+    'B': '8',
+}
+
+_LETTER_LIKE_MAP = {
+    '0': 'O',
+    '1': 'I',
+    '2': 'Z',
+    '5': 'S',
+    '6': 'G',
+    '7': 'T',
+    '8': 'B',
+}
+
 # ---------------------------------------------------------------------------
 # Plate text cleaning
 # ---------------------------------------------------------------------------
@@ -127,6 +147,22 @@ def clean_plate_text(raw_text: str) -> str | None:
             return compact if len(compact) >= 5 else None
 
     compact = ''.join(c for c in cleaned if c.isalnum())
+
+    # Fix common OCR confusions between letters/digits.
+    # Example: ABCI23 -> ABC123, A8C123 -> ABC123
+    if 5 <= len(compact) <= 8:
+        for letters_len in range(2, 5):
+            digits_len = len(compact) - letters_len
+            if digits_len < 3 or digits_len > 4:
+                continue
+
+            left = compact[:letters_len]
+            right = compact[letters_len:]
+            fixed_left = ''.join(_LETTER_LIKE_MAP.get(c, c) for c in left)
+            fixed_right = ''.join(_DIGIT_LIKE_MAP.get(c, c) for c in right)
+
+            if fixed_left.isalpha() and fixed_right.isdigit():
+                return f'{fixed_left} {fixed_right}'
 
     # Common PH patterns: ABC1234, AB1234, ABC123
     if re.fullmatch(r'[A-Z]{2,4}\d{3,4}', compact):
@@ -346,6 +382,29 @@ class ANPREngine:
     def _record_logged(self, plate: str):
         self._last_logged[plate] = time.time()
 
+    def _build_snapshot_b64(self, frame: np.ndarray) -> str:
+        snapshot_b64 = ''
+        try:
+            preview_for_upload = frame
+            max_width = 960
+            if frame.shape[1] > max_width:
+                scale = max_width / frame.shape[1]
+                preview_for_upload = cv2.resize(
+                    frame,
+                    (max_width, int(frame.shape[0] * scale)),
+                    interpolation=cv2.INTER_AREA,
+                )
+            ok, encoded = cv2.imencode(
+                '.jpg',
+                preview_for_upload,
+                [int(cv2.IMWRITE_JPEG_QUALITY), 75],
+            )
+            if ok:
+                snapshot_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
+        except Exception:
+            snapshot_b64 = ''
+        return snapshot_b64
+
     def _post_to_django(self, plate: str, snapshot_b64: str = '') -> bool:
         """POST the detected plate to Django. Returns True on success."""
         if not DJANGO_API_KEY:
@@ -434,26 +493,7 @@ class ANPREngine:
                     cv2.putText(frame, plate, (x1, y1 - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                    snapshot_b64 = ''
-                    try:
-                        preview_for_upload = frame
-                        max_width = 960
-                        if frame.shape[1] > max_width:
-                            scale = max_width / frame.shape[1]
-                            preview_for_upload = cv2.resize(
-                                frame,
-                                (max_width, int(frame.shape[0] * scale)),
-                                interpolation=cv2.INTER_AREA,
-                            )
-                        ok, encoded = cv2.imencode(
-                            '.jpg',
-                            preview_for_upload,
-                            [int(cv2.IMWRITE_JPEG_QUALITY), 75],
-                        )
-                        if ok:
-                            snapshot_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
-                    except Exception:
-                        snapshot_b64 = ''
+                    snapshot_b64 = self._build_snapshot_b64(frame)
 
                     if self._post_to_django(plate, snapshot_b64=snapshot_b64):
                         self._record_logged(plate)
@@ -462,11 +502,11 @@ class ANPREngine:
 
         # Fallback: if detector found no box, run OCR on whole frame every few processed frames.
         # This keeps CPU manageable while recovering from weak detector outputs.
-        if not boxes and self._processed_frames % 8 == 0:
+        if not boxes and self._processed_frames % 3 == 0:
             frame_variants = build_ocr_variants(frame)
             for candidate in frame_variants:
-                for (_, text, confidence) in self.ocr.readtext(candidate):
-                    if confidence < max(0.15, MIN_OCR_CONFIDENCE - 0.05):
+                for (bbox, text, confidence) in self.ocr.readtext(candidate):
+                    if confidence < max(0.10, MIN_OCR_CONFIDENCE - 0.08):
                         continue
 
                     plate = clean_plate_text(text)
@@ -478,7 +518,26 @@ class ANPREngine:
                         return
 
                     log.info("Fallback OCR hit: '%s' (conf: %.2f)", plate, confidence)
-                    if self._post_to_django(plate):
+
+                    # Draw OCR-based bounding polygon so fallback detections still show visual evidence.
+                    try:
+                        pts = np.array(bbox, dtype=np.int32).reshape((-1, 1, 2))
+                        cv2.polylines(frame, [pts], True, (0, 255, 0), 2)
+                        x, y = pts[0][0]
+                        cv2.putText(
+                            frame,
+                            plate,
+                            (int(x), max(20, int(y) - 10)),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8,
+                            (0, 255, 0),
+                            2,
+                        )
+                    except Exception:
+                        pass
+
+                    snapshot_b64 = self._build_snapshot_b64(frame)
+                    if self._post_to_django(plate, snapshot_b64=snapshot_b64):
                         self._record_logged(plate)
                     return
 

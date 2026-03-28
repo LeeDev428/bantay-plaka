@@ -53,6 +53,11 @@ import numpy as np
 import requests
 from dotenv import load_dotenv
 
+try:
+    import torch
+except Exception:
+    torch = None
+
 # ---------------------------------------------------------------------------
 # Load environment variables from Django project's .env
 # ---------------------------------------------------------------------------
@@ -252,8 +257,13 @@ class ANPREngine:
             sys.exit(1)
 
         # EasyOCR reads the text from the cropped plate image
+        use_gpu = bool(torch and torch.cuda.is_available())
+        if use_gpu:
+            log.info("CUDA detected. EasyOCR GPU mode enabled.")
+        else:
+            log.info("CUDA not available. EasyOCR CPU mode enabled.")
         log.info("Loading EasyOCR (first run downloads ~200 MB, then cached locally)...")
-        self.ocr = easyocr.Reader(['en'], gpu=False)
+        self.ocr = easyocr.Reader(['en'], gpu=use_gpu)
         log.info("EasyOCR ready.")
 
     def _is_debounced(self, plate: str) -> bool:

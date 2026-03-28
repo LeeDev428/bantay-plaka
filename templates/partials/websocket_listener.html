@@ -65,6 +65,10 @@
     const meta = document.getElementById(`${prefix}-feed-meta`);
 
     if (!img || !meta) return;
+    if (img.dataset.liveStream === 'true') {
+      meta.textContent = `Plate ${data.plate_number} - ${data.timestamp}`;
+      return;
+    }
 
     img.src = `${data.snapshot_url}?t=${Date.now()}`;
     img.classList.remove('hidden');
@@ -121,15 +125,5 @@
 
   // Highlight on initial page load
   document.addEventListener('DOMContentLoaded', highlightRecentRows);
-
-  // Poll snapshot endpoints to keep camera cards updated even when no detections are emitted.
-  setInterval(() => {
-    const feedImages = document.querySelectorAll('img[data-feed-role]');
-    feedImages.forEach((img) => {
-      const role = img.getAttribute('data-feed-role');
-      if (!role) return;
-      img.src = `/detection/frame/${role}/?t=${Date.now()}`;
-    });
-  }, 1500);
 })();
 </script>

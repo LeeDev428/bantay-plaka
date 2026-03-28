@@ -370,6 +370,14 @@ class ANPREngine:
     def run(self, show_preview: bool = True):
         """Open the camera and run ANPR loop until stopped."""
         source: str | int = self.rtsp_url
+
+        if isinstance(source, str) and '://' in source:
+            scheme, rest = source.split('://', 1)
+            if rest.count('@') > 1:
+                userinfo, hostpart = rest.rsplit('@', 1)
+                userinfo = userinfo.replace('@', '%40')
+                source = f'{scheme}://{userinfo}@{hostpart}'
+
         if str(source).isdigit():
             source = int(source)
             log.info(f"Opening webcam index {source} (your laptop/PC built-in camera)")

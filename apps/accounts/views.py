@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 
 from apps.accounts.forms import LoginForm, UserCreateForm, UserEditForm
 from apps.accounts.models import User
@@ -32,11 +33,27 @@ def _camera_feed_context() -> dict:
         .order_by('-timestamp')
         .first()
     )
+    last_camera_log = (
+        VehicleLog.objects
+        .filter(source=VehicleLog.SOURCE_CAMERA)
+        .order_by('-timestamp')
+        .first()
+    )
+
+    now = timezone.now()
+    last_camera_local = timezone.localtime(last_camera_log.timestamp) if last_camera_log else None
+    camera_age_seconds = int((now - last_camera_log.timestamp).total_seconds()) if last_camera_log else None
+    camera_stale = camera_age_seconds is None or camera_age_seconds > 120
+
     return {
         'entry_feed': latest_entry,
         'exit_feed': latest_exit,
         'has_entry_camera_stream': bool(getattr(settings, 'ENTRY_CAMERA_RTSP', '').strip()),
         'has_exit_camera_stream': bool(getattr(settings, 'EXIT_CAMERA_RTSP', '').strip()),
+        'last_camera_log': last_camera_log,
+        'last_camera_log_local': last_camera_local,
+        'camera_age_seconds': camera_age_seconds,
+        'camera_stale': camera_stale,
     }
 
 

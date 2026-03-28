@@ -71,14 +71,43 @@ def _camera_rtsp_for_role(camera_role: str) -> str:
     return ''
 
 
+def _rtsp_candidates(rtsp_url: str) -> list[str]:
+    urls = [rtsp_url]
+    if '/Streaming/Channels/101' in rtsp_url:
+        urls.append(rtsp_url.replace('/Streaming/Channels/101', '/Streaming/Channels/102'))
+    elif '/Streaming/Channels/102' in rtsp_url:
+        urls.append(rtsp_url.replace('/Streaming/Channels/102', '/Streaming/Channels/101'))
+
+    seen = set()
+    unique = []
+    for u in urls:
+        if u and u not in seen:
+            unique.append(u)
+            seen.add(u)
+    return unique
+
+
 def _mjpeg_frame_stream(rtsp_url: str):
-    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp'
-    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
+    candidate_urls = _rtsp_candidates(rtsp_url)
+    candidate_idx = 0
+    cap = cv2.VideoCapture(candidate_urls[candidate_idx], cv2.CAP_FFMPEG)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     fail_count = 0
     try:
         if not cap.isOpened():
-            return
+            switched = False
+            for idx, candidate in enumerate(candidate_urls[1:], start=1):
+                probe = cv2.VideoCapture(candidate, cv2.CAP_FFMPEG)
+                probe.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                if probe.isOpened():
+                    cap = probe
+                    candidate_idx = idx
+                    switched = True
+                    break
+                probe.release()
+            if not switched:
+                return
 
         while True:
             ok, frame = cap.read()
@@ -87,7 +116,8 @@ def _mjpeg_frame_stream(rtsp_url: str):
                 if fail_count >= 15:
                     cap.release()
                     time.sleep(0.5)
-                    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+                    candidate_idx = (candidate_idx + 1) % len(candidate_urls)
+                    cap = cv2.VideoCapture(candidate_urls[candidate_idx], cv2.CAP_FFMPEG)
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                     fail_count = 0
                 time.sleep(0.2)

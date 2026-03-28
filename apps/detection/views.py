@@ -29,6 +29,26 @@ _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
 
 
+def _open_capture_fast(rtsp_url: str):
+    """Open RTSP capture with short open/read timeouts to avoid request hangs."""
+    open_timeout = int(getattr(cv2, 'CAP_PROP_OPEN_TIMEOUT_MSEC', 53))
+    read_timeout = int(getattr(cv2, 'CAP_PROP_READ_TIMEOUT_MSEC', 54))
+    try:
+        return cv2.VideoCapture(
+            rtsp_url,
+            cv2.CAP_FFMPEG,
+            [open_timeout, 2000, read_timeout, 2000],
+        )
+    except Exception:
+        cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+        try:
+            cap.set(open_timeout, 2000)
+            cap.set(read_timeout, 2000)
+        except Exception:
+            pass
+        return cap
+
+
 def _check_api_key(request):
     """
     Validate the ANPR engine API key from the X-Api-Key header.
@@ -191,7 +211,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
     os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
     candidate_urls = _rtsp_candidates(rtsp_url)
     candidate_idx = 0
-    cap = cv2.VideoCapture(candidate_urls[candidate_idx], cv2.CAP_FFMPEG)
+    cap = _open_capture_fast(candidate_urls[candidate_idx])
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     fail_count = 0
 
@@ -200,7 +220,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
             cap.release()
             time.sleep(0.5)
             candidate_idx = (candidate_idx + 1) % len(candidate_urls)
-            cap = cv2.VideoCapture(candidate_urls[candidate_idx], cv2.CAP_FFMPEG)
+            cap = _open_capture_fast(candidate_urls[candidate_idx])
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             continue
 
@@ -211,7 +231,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
                 cap.release()
                 time.sleep(0.3)
                 candidate_idx = (candidate_idx + 1) % len(candidate_urls)
-                cap = cv2.VideoCapture(candidate_urls[candidate_idx], cv2.CAP_FFMPEG)
+                cap = _open_capture_fast(candidate_urls[candidate_idx])
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 fail_count = 0
             time.sleep(0.03)
@@ -255,7 +275,7 @@ def _ensure_camera_worker(camera_role: str, rtsp_url: str):
 def _read_single_frame(rtsp_url: str):
     os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
     for candidate in _rtsp_candidates(rtsp_url):
-        cap = cv2.VideoCapture(candidate, cv2.CAP_FFMPEG)
+        cap = _open_capture_fast(candidate)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         try:
             if not cap.isOpened():
@@ -353,8 +373,6 @@ def camera_frame(request, camera_role: str):
             return resp
 
     frame = _read_camera_http_snapshot(rtsp_url)
-    if frame is None:
-        frame = _read_single_frame(rtsp_url)
     if frame is None:
         return JsonResponse({'error': 'Camera frame unavailable'}, status=503)
     resp = HttpResponse(frame, content_type='image/jpeg')

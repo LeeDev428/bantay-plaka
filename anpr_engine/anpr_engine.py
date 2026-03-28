@@ -239,12 +239,14 @@ class ANPREngine:
         rf_model_id: str = DEFAULT_RF_MODEL_ID,
         yolo_model_path: str = DEFAULT_YOLO_MODEL,
         debounce_seconds: int = DEBOUNCE_SECONDS,
+        frame_skip: int = 2,
     ):
         self.rtsp_url = rtsp_url
         self.ingest_url = ingest_url
         requested_role = (camera_role or 'UNKNOWN').strip().upper()
         self.camera_role = requested_role if requested_role in VALID_CAMERA_ROLES else 'UNKNOWN'
         self.debounce_seconds = debounce_seconds
+        self.frame_skip = max(1, int(frame_skip))
         self._last_logged: dict[str, float] = {}
 
         # Initialize plate detector
@@ -398,7 +400,7 @@ class ANPREngine:
         if show_preview:
             log.info("Preview window open. Press 'q' inside it to quit.")
 
-        frame_interval = 5  # Process every 5th frame (CPU efficiency)
+        frame_interval = self.frame_skip
         frame_count = 0
 
         try:
@@ -463,6 +465,8 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         help='Run without any GUI window.')
     parser.add_argument('--debounce', type=int, default=DEBOUNCE_SECONDS,
         help=f'Seconds before same plate can be logged again. Default: {DEBOUNCE_SECONDS}')
+    parser.add_argument('--frame-skip', type=int, default=2,
+        help='Process every Nth frame. Lower is faster detection but higher CPU/GPU usage. Default: 2')
 
     args = parser.parse_args()
 
@@ -474,6 +478,7 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         rf_model_id=args.model_id,
         yolo_model_path=args.model,
         debounce_seconds=args.debounce,
+        frame_skip=args.frame_skip,
     )
     engine.run(show_preview=not args.no_preview)
 

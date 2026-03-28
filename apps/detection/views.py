@@ -21,13 +21,27 @@ def _check_api_key(request):
     return incoming_key == expected_key
 
 
-def _next_status_for_plate(plate_number: str) -> str:
+def _normalize_camera_role(camera_role: str) -> str:
+    role = (camera_role or '').strip().upper()
+    if role in {
+        VehicleLog.CAMERA_ROLE_ENTRY,
+        VehicleLog.CAMERA_ROLE_EXIT,
+        VehicleLog.CAMERA_ROLE_UNKNOWN,
+    }:
+        return role
+    return VehicleLog.CAMERA_ROLE_UNKNOWN
+
+
+def _next_status_for_plate(plate_number: str, camera_role: str = VehicleLog.CAMERA_ROLE_UNKNOWN) -> str:
     """
-    Determine the next status for a plate based on its last log.
-    If last log was TIME_IN  -> return TIME_OUT
-    If last log was TIME_OUT -> return TIME_IN
-    If no log exists         -> return TIME_IN (first visit)
+    Determine status from camera role when provided.
+    Fallback to plate-history auto-toggle for backward compatibility.
     """
+    if camera_role == VehicleLog.CAMERA_ROLE_ENTRY:
+        return VehicleLog.STATUS_IN
+    if camera_role == VehicleLog.CAMERA_ROLE_EXIT:
+        return VehicleLog.STATUS_OUT
+
     last_log = (
         VehicleLog.objects
         .filter(plate_number__iexact=plate_number)
@@ -45,8 +59,8 @@ def ingest_plate(request):
     """
     Endpoint called by the ANPR engine when a plate is detected.
     Requires header:  X-Api-Key: <ANPR_API_KEY from .env>
-    POST JSON: { "plate_number": "ABC 1234" }
-    Status (TIME_IN / TIME_OUT) is auto-determined based on the last log.
+    POST JSON: { "plate_number": "ABC 1234", "camera_role": "ENTRY_CAM|EXIT_CAM|UNKNOWN" }
+    Status is camera-role based when role is provided, otherwise auto-toggle fallback is used.
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -57,6 +71,7 @@ def ingest_plate(request):
     try:
         data = json.loads(request.body)
         plate = data.get('plate_number', '').upper().strip()
+        camera_role = _normalize_camera_role(data.get('camera_role', ''))
 
         if not plate:
             return JsonResponse({'error': 'plate_number required'}, status=400)
@@ -65,8 +80,7 @@ def ingest_plate(request):
             broadcast_blacklist_alert(plate)
             return JsonResponse({'ok': False, 'blocked': True, 'error': 'Plate is blacklisted'}, status=403)
 
-        # Auto-toggle: check last log for this plate and assign the opposite
-        status = _next_status_for_plate(plate)
+        status = _next_status_for_plate(plate, camera_role)
 
         resolved = resolve_plate(plate)
         log = VehicleLog.objects.create(
@@ -74,10 +88,11 @@ def ingest_plate(request):
             entry_type=resolved['entry_type'],
             status=status,
             source=VehicleLog.SOURCE_CAMERA,
+            camera_role=camera_role,
             resident_name=resolved.get('resident_name', ''),
         )
         broadcast_log(log)
-        return JsonResponse({'ok': True, 'log_id': log.pk, 'status': status})
+        return JsonResponse({'ok': True, 'log_id': log.pk, 'status': status, 'camera_role': camera_role})
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON body'}, status=400)

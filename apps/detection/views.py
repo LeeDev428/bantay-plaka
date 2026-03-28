@@ -228,7 +228,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
                 interpolation=cv2.INTER_AREA,
             )
 
-        encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
         if encoded_ok:
             with _FRAME_CACHE_LOCK:
                 _FRAME_CACHE[camera_role] = (buffer.tobytes(), time.time())
@@ -278,7 +278,7 @@ def _read_single_frame(rtsp_url: str):
                     interpolation=cv2.INTER_AREA,
                 )
 
-            encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
             if encoded_ok:
                 return buffer.tobytes()
         finally:

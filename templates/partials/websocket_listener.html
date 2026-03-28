@@ -65,7 +65,7 @@
     const meta = document.getElementById(`${prefix}-feed-meta`);
 
     if (!img || !meta) return;
-    if (img.dataset.liveStream === 'true') {
+    if (img.dataset.liveStream === 'true' || img.dataset.liveSnapshot) {
       meta.textContent = `Plate ${data.plate_number} - ${data.timestamp}`;
       return;
     }
@@ -123,7 +123,31 @@
   socket.onopen = () => console.log('[BantayPlaka] WebSocket connected.');
   socket.onclose = () => console.warn('[BantayPlaka] WebSocket disconnected.');
 
+  function startSnapshotRefresh() {
+    const refreshTargets = document.querySelectorAll('img[data-live-snapshot]');
+    refreshTargets.forEach((img) => {
+      const role = img.dataset.liveSnapshot;
+      if (!role) return;
+
+      let busy = false;
+      setInterval(() => {
+        if (busy) return;
+        busy = true;
+        const probe = new Image();
+        probe.onload = () => {
+          img.src = probe.src;
+          busy = false;
+        };
+        probe.onerror = () => {
+          busy = false;
+        };
+        probe.src = `/detection/frame/${role}/?t=${Date.now()}`;
+      }, 1200);
+    });
+  }
+
   // Highlight on initial page load
   document.addEventListener('DOMContentLoaded', highlightRecentRows);
+  document.addEventListener('DOMContentLoaded', startSnapshotRefresh);
 })();
 </script>

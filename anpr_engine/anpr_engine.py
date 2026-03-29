@@ -147,7 +147,7 @@ DEMO_FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DEMO_FALLBACK_QUICK_ACC
 DEMO_FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_DEMO_FALLBACK_EVERY_N_FRAMES', 4))
 
 # Detection confidence threshold for both Roboflow and YOLO modes
-DETECTION_CONFIDENCE = _env_float('ANPR_DETECTION_CONFIDENCE', 0.20)
+DETECTION_CONFIDENCE = _env_float('ANPR_DETECTION_CONFIDENCE', 0.34)
 VALID_CAMERA_ROLES = {'ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'}
 
 # Runtime diagnostics + RTSP resilience tuning.
@@ -183,6 +183,9 @@ _PLATE_PATTERNS = (
     re.compile(r'^[A-Z]{2,4}\d{3,4}$'),
     re.compile(r'^\d{3,4}[A-Z]{2,4}$'),
 )
+
+ALLOWED_PLATE_FORMAT = (os.getenv('ANPR_ALLOWED_PLATE_FORMAT', 'PH_3X3') or 'PH_3X3').strip().upper()
+FALLBACK_MIN_NO_BOX_STREAK = max(1, _env_int('ANPR_FALLBACK_MIN_NO_BOX_STREAK', 10))
 
 
 def _normalize_rtsp_url(rtsp_url: str) -> str:
@@ -389,6 +392,26 @@ def is_demo_strict_plate(plate: str) -> bool:
     return bool(re.fullmatch(r'(?:[A-Z]{3} \d{3}|\d{3} [A-Z]{3})', plate))
 
 
+def is_allowed_plate_format(plate: str) -> bool:
+    """Apply runtime-selectable plate format filter to suppress non-plate text."""
+    if ALLOWED_PLATE_FORMAT == 'PH_STRICT':
+        return is_strict_plate(plate)
+    if ALLOWED_PLATE_FORMAT == 'PH_3X3':
+        return is_demo_strict_plate(plate)
+    # PH_RELAXED: backwards-compatible strict mode.
+    return is_strict_plate(plate)
+
+
+def is_plausible_plate_bbox(bbox_xyxy: tuple[int, int, int, int] | None) -> bool:
+    if not bbox_xyxy:
+        return False
+    x1, y1, x2, y2 = bbox_xyxy
+    w = max(1, x2 - x1)
+    h = max(1, y2 - y1)
+    ratio = w / float(h)
+    return 1.6 <= ratio <= 8.0
+
+
 def normalize_plate_variant_noise(plate: str) -> str:
     """Collapse common OCR one-character prefix noise for stable dedupe/voting."""
     if not is_strict_plate(plate):
@@ -431,29 +454,9 @@ def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
     gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
     variants.append(gray)
 
-    # Contrast-limited adaptive histogram equalization helps with dark/washed plates.
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gray_clahe = clahe.apply(gray)
-    variants.append(gray_clahe)
-
-    # Binary variants often help EasyOCR with high-contrast characters.
-    _, th_otsu = cv2.threshold(gray_clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Keep OCR variants lightweight to reduce per-frame latency.
+    _, th_otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     variants.append(th_otsu)
-
-    th_adaptive = cv2.adaptiveThreshold(
-        gray_clahe,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31,
-        5,
-    )
-    variants.append(th_adaptive)
-
-    # Slightly sharpened grayscale can recover faint marker strokes.
-    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
-    sharp = cv2.filter2D(gray_clahe, -1, kernel)
-    variants.append(sharp)
     return variants
 
 
@@ -1032,10 +1035,7 @@ class ANPREngine:
                         continue
                     frame_seen.add(plate)
 
-                    if self.demo_mode:
-                        if not is_demo_strict_plate(plate):
-                            continue
-                    elif not is_strict_plate(plate):
+                    if not is_allowed_plate_format(plate):
                         continue
                     if confidence < self.min_ocr_confidence:
                         self._dropped_by_confidence += 1
@@ -1082,7 +1082,11 @@ class ANPREngine:
         # Fallback: if detector found no box, run OCR on whole frame every few processed frames.
         # This keeps CPU manageable while recovering from weak detector outputs.
         fallback_every = 1 if (self.demo_mode and DEMO_FORCE_FULLFRAME_OCR) else self.fallback_every_n_frames
-        if not boxes and self._processed_frames % fallback_every == 0:
+        if (
+            not boxes
+            and self._frames_no_box >= FALLBACK_MIN_NO_BOX_STREAK
+            and self._processed_frames % fallback_every == 0
+        ):
             frame_variants: list[tuple[np.ndarray, int, int]] = []
 
             # Demo mode: keep fallback OCR very lightweight to avoid CPU stalls.
@@ -1137,10 +1141,9 @@ class ANPREngine:
                         continue
                     frame_seen.add(plate)
 
-                    if self.demo_mode:
-                        if not is_demo_strict_plate(plate):
-                            continue
-                    elif not is_strict_plate(plate):
+                    if not is_allowed_plate_format(plate):
+                        continue
+                    if not is_plausible_plate_bbox(bbox_xyxy):
                         continue
                     if confidence < self.fallback_min_ocr_confidence:
                         self._dropped_by_confidence += 1

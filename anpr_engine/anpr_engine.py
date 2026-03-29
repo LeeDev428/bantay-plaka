@@ -81,6 +81,23 @@ def _env_float(name: str, default: float) -> float:
     except ValueError:
         return default
 
+
+def _env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name, '') or '').strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = (os.getenv(name, '') or '').strip().lower()
+    if not raw:
+        return default
+    return raw in {'1', 'true', 'yes', 'on'}
+
 # Key used to authenticate with your Django app's /detection/ingest/ endpoint
 DJANGO_API_KEY = os.getenv('ANPR_API_KEY', '')
 
@@ -111,6 +128,17 @@ VOTE_WINDOW_SECONDS = 2.0
 MIN_VOTE_COUNT = 2
 HIGH_CONF_SINGLE_SHOT = 0.88
 
+# Emergency demo profile for RTSP camera presentations.
+DEMO_RTSP_MODE = _env_bool('ANPR_DEMO_RTSP_MODE', True)
+DEMO_FORCE_FULLFRAME_OCR = _env_bool('ANPR_DEMO_FORCE_FULLFRAME_OCR', True)
+DEMO_FOCUS_ROI_ONLY = _env_bool('ANPR_DEMO_FOCUS_ROI_ONLY', False)
+DEMO_MIN_OCR_CONFIDENCE = _env_float('ANPR_DEMO_MIN_OCR_CONFIDENCE', 0.16)
+DEMO_FALLBACK_MIN_OCR_CONFIDENCE = _env_float('ANPR_DEMO_FALLBACK_MIN_OCR_CONFIDENCE', 0.22)
+DEMO_DETECTOR_MIN_VOTE_CONFIDENCE = _env_float('ANPR_DEMO_DETECTOR_VOTE_CONFIDENCE', 0.20)
+DEMO_MIN_VOTE_COUNT = _env_int('ANPR_DEMO_MIN_VOTE_COUNT', 1)
+DEMO_VOTE_WINDOW_SECONDS = _env_float('ANPR_DEMO_VOTE_WINDOW_SECONDS', 1.5)
+DEMO_HIGH_CONF_SINGLE_SHOT = _env_float('ANPR_DEMO_HIGH_CONF_SINGLE_SHOT', 0.65)
+
 # Detection confidence threshold for both Roboflow and YOLO modes
 DETECTION_CONFIDENCE = _env_float('ANPR_DETECTION_CONFIDENCE', 0.20)
 VALID_CAMERA_ROLES = {'ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'}
@@ -133,22 +161,14 @@ logging.basicConfig(
 log = logging.getLogger('bantayplaka.anpr')
 
 _DIGIT_LIKE_MAP = {
-    'O': '0', 'Q': '0', 'D': '0',
+    'O': '0', 'Q': '0',
     'I': '1', 'L': '1',
-    'Z': '2',
-    'S': '5',
-    'G': '6',
-    'T': '7',
     'B': '8',
 }
 
 _LETTER_LIKE_MAP = {
     '0': 'O',
     '1': 'I',
-    '2': 'Z',
-    '5': 'S',
-    '6': 'G',
-    '7': 'T',
     '8': 'B',
 }
 
@@ -220,6 +240,53 @@ def validate_decoded_frame(frame: np.ndarray | None) -> tuple[bool, str]:
         return False, f'unexpected-dtype={frame.dtype}'
 
     return True, f'{w}x{h}'
+
+
+def detect_plate_like_rectangles(frame: np.ndarray) -> list[tuple[int, int, int, int]]:
+    """Fast contour fallback for demo: find plate-like rectangles in lower frame area."""
+    try:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        blur = cv2.bilateralFilter(gray, 7, 60, 60)
+        edges = cv2.Canny(blur, 70, 180)
+        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    except Exception:
+        return []
+
+    fh, fw = frame.shape[:2]
+    frame_area = float(fh * fw)
+    boxes: list[tuple[int, int, int, int]] = []
+
+    for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:40]:
+        area = cv2.contourArea(contour)
+        if area < frame_area * 0.008:
+            continue
+
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.03 * peri, True)
+        if len(approx) != 4:
+            continue
+
+        x, y, w, h = cv2.boundingRect(approx)
+        if w <= 0 or h <= 0:
+            continue
+
+        ar = w / float(h)
+        if ar < 1.7 or ar > 7.0:
+            continue
+
+        if (w * h) > frame_area * 0.45:
+            continue
+
+        cy = y + (h / 2.0)
+        if cy < fh * 0.35:
+            # Skip top overlay/timestamp region.
+            continue
+
+        boxes.append((x, y, x + w, y + h))
+
+    # Keep biggest plausible rectangles first.
+    boxes.sort(key=lambda b: (b[2] - b[0]) * (b[3] - b[1]), reverse=True)
+    return boxes[:4]
 
 # ---------------------------------------------------------------------------
 # Plate text cleaning
@@ -676,11 +743,28 @@ class ANPREngine:
     ):
         self.rtsp_url = rtsp_url
         self.ingest_url = ingest_url
+        self._is_rtsp_source = isinstance(rtsp_url, str) and '://' in rtsp_url
         requested_role = (camera_role or 'UNKNOWN').strip().upper()
         self.camera_role = requested_role if requested_role in VALID_CAMERA_ROLES else 'UNKNOWN'
         self.debounce_seconds = debounce_seconds
         self.frame_skip = max(1, int(frame_skip))
         self.rtsp_drain_grabs = max(0, int(rtsp_drain_grabs))
+        self.demo_mode = bool(self._is_rtsp_source and DEMO_RTSP_MODE)
+        self.min_ocr_confidence = MIN_OCR_CONFIDENCE
+        self.detector_vote_confidence = DETECTOR_MIN_VOTE_CONFIDENCE
+        self.fallback_min_ocr_confidence = FALLBACK_MIN_OCR_CONFIDENCE
+        self.vote_window_seconds = VOTE_WINDOW_SECONDS
+        self.min_vote_count = MIN_VOTE_COUNT
+        self.high_conf_single_shot = HIGH_CONF_SINGLE_SHOT
+
+        if self.demo_mode:
+            self.min_ocr_confidence = min(MIN_OCR_CONFIDENCE, DEMO_MIN_OCR_CONFIDENCE)
+            self.detector_vote_confidence = min(DETECTOR_MIN_VOTE_CONFIDENCE, DEMO_DETECTOR_MIN_VOTE_CONFIDENCE)
+            self.fallback_min_ocr_confidence = min(FALLBACK_MIN_OCR_CONFIDENCE, DEMO_FALLBACK_MIN_OCR_CONFIDENCE)
+            self.vote_window_seconds = min(VOTE_WINDOW_SECONDS, DEMO_VOTE_WINDOW_SECONDS)
+            self.min_vote_count = max(1, DEMO_MIN_VOTE_COUNT)
+            self.high_conf_single_shot = min(HIGH_CONF_SINGLE_SHOT, DEMO_HIGH_CONF_SINGLE_SHOT)
+
         self._last_logged: dict[str, float] = {}
         self._vote_history: dict[str, list[tuple[float, float]]] = defaultdict(list)
         self._frames_no_box = 0
@@ -719,10 +803,14 @@ class ANPREngine:
         log.info(
             "Thresholds: detector=%.2f ocr=%.2f fallback_ocr=%.2f vote=%.2f",
             DETECTION_CONFIDENCE,
-            MIN_OCR_CONFIDENCE,
-            FALLBACK_MIN_OCR_CONFIDENCE,
-            DETECTOR_MIN_VOTE_CONFIDENCE,
+            self.min_ocr_confidence,
+            self.fallback_min_ocr_confidence,
+            self.detector_vote_confidence,
         )
+        if self.demo_mode:
+            log.warning(
+                "DEMO RTSP MODE ENABLED: aggressive full-frame OCR and relaxed vote thresholds are active."
+            )
 
     def _maybe_log_diagnostics(self, force: bool = False):
         now = time.time()
@@ -769,11 +857,11 @@ class ANPREngine:
         now = time.time()
         votes = self._vote_history[plate]
         votes.append((now, float(confidence)))
-        votes[:] = [(ts, conf) for (ts, conf) in votes if (now - ts) <= VOTE_WINDOW_SECONDS]
+        votes[:] = [(ts, conf) for (ts, conf) in votes if (now - ts) <= self.vote_window_seconds]
 
-        if confidence >= HIGH_CONF_SINGLE_SHOT:
+        if confidence >= self.high_conf_single_shot:
             return True
-        if len(votes) < MIN_VOTE_COUNT:
+        if len(votes) < self.min_vote_count:
             return False
 
         avg_conf = sum(conf for _, conf in votes) / len(votes)
@@ -845,6 +933,9 @@ class ANPREngine:
         pad = 10
 
         boxes = self.detector.detect(frame)
+        if self.demo_mode and not boxes:
+            # Emergency demo fallback when model misses plates on noisy RTSP frames.
+            boxes = detect_plate_like_rectangles(frame)
         if boxes:
             self._frames_no_box = 0
             self._detector_box_frames += 1
@@ -889,7 +980,7 @@ class ANPREngine:
 
                     if not is_strict_plate(plate):
                         continue
-                    if confidence < MIN_OCR_CONFIDENCE:
+                    if confidence < self.min_ocr_confidence:
                         self._dropped_by_confidence += 1
                         continue
 
@@ -903,7 +994,7 @@ class ANPREngine:
                 reverse=True,
             )
             for plate, confidence in ranked_candidates:
-                if not self._has_vote_consensus(plate, confidence, DETECTOR_MIN_VOTE_CONFIDENCE):
+                if not self._has_vote_consensus(plate, confidence, self.detector_vote_confidence):
                     continue
 
                 log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
@@ -928,10 +1019,45 @@ class ANPREngine:
 
         # Fallback: if detector found no box, run OCR on whole frame every few processed frames.
         # This keeps CPU manageable while recovering from weak detector outputs.
-        if not boxes and self._processed_frames % 3 == 0:
-            frame_variants = build_ocr_variants(frame)
+        fallback_every = 1 if (self.demo_mode and DEMO_FORCE_FULLFRAME_OCR) else 3
+        if not boxes and self._processed_frames % fallback_every == 0:
+            frame_variants: list[tuple[np.ndarray, int, int]] = []
+
+            # Demo mode: keep fallback OCR very lightweight to avoid CPU stalls.
+            if self.demo_mode:
+                fh, fw = frame.shape[:2]
+                roi_specs = [
+                    # Primary area where a held plate is expected during demo.
+                    (0.22, 0.52, 0.82, 0.93),
+                ]
+                for x1r, y1r, x2r, y2r in roi_specs:
+                    rx1 = max(0, min(fw - 1, int(fw * x1r)))
+                    ry1 = max(0, min(fh - 1, int(fh * y1r)))
+                    rx2 = max(rx1 + 1, min(fw, int(fw * x2r)))
+                    ry2 = max(ry1 + 1, min(fh, int(fh * y2r)))
+                    roi = frame[ry1:ry2, rx1:rx2]
+                    if roi.size == 0:
+                        continue
+                    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+                    frame_variants.append((gray, rx1, ry1))
+                    _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                    frame_variants.append((th, rx1, ry1))
+
+                # Scan most of the frame while excluding the top timestamp overlay strip.
+                safe_top = int(fh * 0.22)
+                if safe_top < fh - 10:
+                    safe_frame = frame[safe_top:, :]
+                    safe_gray = cv2.cvtColor(safe_frame, cv2.COLOR_BGR2GRAY)
+                    frame_variants.append((safe_gray, 0, safe_top))
+                    _, safe_th = cv2.threshold(safe_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                    frame_variants.append((safe_th, 0, safe_top))
+
+            if not (self.demo_mode and DEMO_FOCUS_ROI_ONLY):
+                for variant in build_ocr_variants(frame):
+                    frame_variants.append((variant, 0, 0))
+
             frame_seen: set[str] = set()
-            for candidate in frame_variants:
+            for candidate, offset_x, offset_y in frame_variants:
                 ocr_results = self.ocr.readtext(
                     candidate,
                     allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
@@ -939,6 +1065,10 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, bbox_xyxy) in extract_plate_candidates_from_ocr(ocr_results):
+                    if bbox_xyxy:
+                        x1b, y1b, x2b, y2b = bbox_xyxy
+                        bbox_xyxy = (x1b + offset_x, y1b + offset_y, x2b + offset_x, y2b + offset_y)
+
                     self._ocr_candidates += 1
                     plate = normalize_plate_variant_noise(plate)
                     if plate in frame_seen:
@@ -947,10 +1077,10 @@ class ANPREngine:
 
                     if not is_strict_plate(plate):
                         continue
-                    if confidence < FALLBACK_MIN_OCR_CONFIDENCE:
+                    if confidence < self.fallback_min_ocr_confidence:
                         self._dropped_by_confidence += 1
                         continue
-                    if not self._has_vote_consensus(plate, confidence, FALLBACK_MIN_OCR_CONFIDENCE):
+                    if not self._has_vote_consensus(plate, confidence, self.fallback_min_ocr_confidence):
                         continue
 
                     if self._is_debounced(plate):

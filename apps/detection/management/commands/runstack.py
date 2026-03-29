@@ -114,7 +114,7 @@ class Command(BaseCommand):
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', _anpr_rtsp(entry_rtsp),
                 '--frame-skip', '1',
-                '--rtsp-drain-grabs', '1',
+                '--rtsp-drain-grabs', '3',
                 '--no-preview',
             ]
             exit_cmd = [
@@ -122,7 +122,7 @@ class Command(BaseCommand):
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', _anpr_rtsp(exit_rtsp),
                 '--frame-skip', '1',
-                '--rtsp-drain-grabs', '1',
+                '--rtsp-drain-grabs', '3',
                 '--no-preview',
             ]
             if strict_roles:

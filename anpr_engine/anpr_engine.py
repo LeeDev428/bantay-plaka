@@ -66,6 +66,11 @@ except Exception:
 # ---------------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parent.parent / '.env')
 
+# We only use plate detection; disable optional Inference model families to avoid noisy warnings.
+os.environ.setdefault('CORE_MODEL_SAM_ENABLED', 'False')
+os.environ.setdefault('CORE_MODEL_SAM3_ENABLED', 'False')
+os.environ.setdefault('CORE_MODEL_GAZE_ENABLED', 'False')
+
 # Key used to authenticate with your Django app's /detection/ingest/ endpoint
 DJANGO_API_KEY = os.getenv('ANPR_API_KEY', '')
 

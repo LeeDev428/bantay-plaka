@@ -48,6 +48,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 import cv2
 import easyocr
@@ -130,6 +131,46 @@ _PLATE_PATTERNS = (
     re.compile(r'^[A-Z]{2,4}\d{3,4}$'),
     re.compile(r'^\d{3,4}[A-Z]{2,4}$'),
 )
+
+
+def _normalize_rtsp_url(rtsp_url: str) -> str:
+    """Normalize RTSP URL and safely encode userinfo so special chars don't break OpenCV/FFmpeg."""
+    if not rtsp_url or '://' not in rtsp_url:
+        return rtsp_url
+    parsed = urlparse(rtsp_url)
+    if parsed.scheme.lower() != 'rtsp':
+        return rtsp_url
+    netloc = parsed.netloc
+    if '@' not in netloc:
+        return rtsp_url
+
+    userinfo, host = netloc.rsplit('@', 1)
+    userinfo = userinfo.replace('@', '%40')
+    return urlunparse(parsed._replace(netloc=f'{userinfo}@{host}'))
+
+
+def _rtsp_candidates(rtsp_url: str) -> list[str]:
+    """Generate robust candidate URLs so engine can recover if one channel/path fails."""
+    source = _normalize_rtsp_url((rtsp_url or '').strip())
+    if not source or '://' not in source:
+        return [source]
+
+    candidates: list[str] = [source]
+    # Hikvision/HiLook main/sub channel fallback.
+    if '/Streaming/Channels/101' in source:
+        candidates.append(source.replace('/Streaming/Channels/101', '/Streaming/Channels/102'))
+    elif '/Streaming/Channels/102' in source:
+        candidates.append(source.replace('/Streaming/Channels/102', '/Streaming/Channels/101'))
+
+    # Generic fallback paths for some brands.
+    generic_paths = ('/stream1', '/live', '/h264')
+    parsed = urlparse(source)
+    for path in generic_paths:
+        alt = urlunparse(parsed._replace(path=path, params='', query='', fragment=''))
+        if alt not in candidates:
+            candidates.append(alt)
+
+    return candidates
 
 # ---------------------------------------------------------------------------
 # Plate text cleaning
@@ -766,11 +807,11 @@ class ANPREngine:
         is_rtsp = isinstance(source, str) and '://' in source
 
         if is_rtsp:
-            scheme, rest = source.split('://', 1)
-            if rest.count('@') > 1:
-                userinfo, hostpart = rest.rsplit('@', 1)
-                userinfo = userinfo.replace('@', '%40')
-                source = f'{scheme}://{userinfo}@{hostpart}'
+            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
+            source = _normalize_rtsp_url(str(source))
+            rtsp_candidates = _rtsp_candidates(str(source))
+        else:
+            rtsp_candidates = [source]
 
         if str(source).isdigit():
             source = int(source)
@@ -778,9 +819,27 @@ class ANPREngine:
         else:
             log.info(f"Connecting to RTSP stream: {source}")
 
-        cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG) if is_rtsp else cv2.VideoCapture(source)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if not cap.isOpened():
+        def _open_capture(src):
+            cap_local = cv2.VideoCapture(src, cv2.CAP_FFMPEG) if is_rtsp else cv2.VideoCapture(src)
+            cap_local.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            try:
+                cap_local.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+                cap_local.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
+            except Exception:
+                pass
+            return cap_local
+
+        cap = None
+        active_source = source
+        for candidate in rtsp_candidates:
+            active_source = candidate
+            log.info("Trying camera source: %s", candidate)
+            cap = _open_capture(candidate)
+            if cap.isOpened():
+                break
+            cap.release()
+
+        if not cap or not cap.isOpened():
             log.error(
                 "Cannot open camera!\n"
                 "  Webcam:    Make sure no other app is using it. Try index 1 if 0 fails.\n"
@@ -808,8 +867,19 @@ class ANPREngine:
                     log.warning("Lost camera feed. Retrying in 5 seconds...")
                     time.sleep(5)
                     cap.release()
-                    cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG) if is_rtsp else cv2.VideoCapture(source)
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+                    reopened = False
+                    for candidate in rtsp_candidates:
+                        active_source = candidate
+                        log.info("Reconnecting with source: %s", candidate)
+                        cap = _open_capture(candidate)
+                        if cap.isOpened():
+                            reopened = True
+                            break
+                        cap.release()
+
+                    if not reopened:
+                        log.warning("All camera source candidates failed; keeping retry loop active.")
                     continue
 
                 frame_count += 1

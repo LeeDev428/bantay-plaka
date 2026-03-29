@@ -69,8 +69,8 @@
 
     if (!img || !meta) return;
 
-    if (img.dataset.liveStream === 'true') {
-      // True live video mode: do not replace stream with snapshots.
+    if (img.dataset.liveStream === 'true' || img.dataset.liveSnapshot === role) {
+      // Live stream or polled live frame mode: do not replace source with event snapshots.
       meta.textContent = `Latest detection: Plate ${data.plate_number} - ${data.timestamp}`;
       return;
     }

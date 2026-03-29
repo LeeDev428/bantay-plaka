@@ -32,8 +32,21 @@ MIN_GLOBAL_PLATE_RELOG_SECONDS = 4
 MAX_FRESH_CACHE_SECONDS = 1.5
 
 
+def _is_webcam_source(camera_source: str) -> bool:
+    return bool((camera_source or '').strip().isdigit())
+
+
 def _open_capture_fast(rtsp_url: str):
     """Open RTSP capture with short open/read timeouts to avoid request hangs."""
+    source = (rtsp_url or '').strip()
+    if _is_webcam_source(source):
+        index = int(source)
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            cap.release()
+            cap = cv2.VideoCapture(index)
+        return cap
+
     open_timeout = int(getattr(cv2, 'CAP_PROP_OPEN_TIMEOUT_MSEC', 53))
     read_timeout = int(getattr(cv2, 'CAP_PROP_READ_TIMEOUT_MSEC', 54))
     try:
@@ -208,10 +221,11 @@ def _cached_mjpeg_stream(camera_role: str, rtsp_url: str):
 
 
 def _camera_worker_loop(camera_role: str, rtsp_url: str):
-    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
-        'rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|'
-        'max_delay;500000|stimeout;5000000|reorder_queue_size;0'
-    )
+    if not _is_webcam_source(rtsp_url):
+        os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
+            'rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|'
+            'max_delay;500000|stimeout;5000000|reorder_queue_size;0'
+        )
     candidate_urls = _rtsp_candidates(rtsp_url)
     candidate_idx = 0
     cap = _open_capture_fast(candidate_urls[candidate_idx])
@@ -275,6 +289,18 @@ def _no_cache_image_response(frame_bytes: bytes, stale: bool = False) -> HttpRes
 
 def _ensure_camera_worker(camera_role: str, rtsp_url: str):
     with _CAMERA_WORKERS_LOCK:
+        # If both roles point to the same webcam index, keep a single worker to avoid camera lock conflicts.
+        if _is_webcam_source(rtsp_url):
+            source = rtsp_url.strip()
+            for other_role, other_thread in _CAMERA_WORKERS.items():
+                if other_role == camera_role:
+                    continue
+                if not other_thread or not other_thread.is_alive():
+                    continue
+                other_src = _camera_rtsp_for_role(other_role)
+                if _is_webcam_source(other_src) and other_src.strip() == source:
+                    return
+
         thread = _CAMERA_WORKERS.get(camera_role)
         if thread and thread.is_alive():
             return
@@ -383,9 +409,22 @@ def camera_frame(request, camera_role: str):
 
     _ensure_camera_worker(role, rtsp_url)
 
+    sibling_role = (
+        VehicleLog.CAMERA_ROLE_EXIT if role == VehicleLog.CAMERA_ROLE_ENTRY
+        else VehicleLog.CAMERA_ROLE_ENTRY
+    )
+    sibling_rtsp_url = _camera_rtsp_for_role(sibling_role)
+    shared_webcam = (
+        _is_webcam_source(rtsp_url)
+        and _is_webcam_source(sibling_rtsp_url)
+        and rtsp_url.strip() == sibling_rtsp_url.strip()
+    )
+
     stale_frame_bytes = None
     with _FRAME_CACHE_LOCK:
         cached = _FRAME_CACHE.get(role)
+        if not cached and shared_webcam:
+            cached = _FRAME_CACHE.get(sibling_role)
     if cached:
         frame_bytes, ts = cached
         age = (time.time() - ts)

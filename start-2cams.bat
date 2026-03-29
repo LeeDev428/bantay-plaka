@@ -7,8 +7,25 @@ echo   BantayPlaka - Entry/Exit Camera Runtime
 echo  =============================================
 echo.
 
-set /p ENTRY_RTSP=Enter ENTRY camera RTSP URL: 
-set /p EXIT_RTSP=Enter EXIT camera RTSP URL: 
+set "ENTRY_RTSP="
+set "EXIT_RTSP="
+
+if exist ".env" (
+  for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
+    if /I "%%A"=="ENTRY_CAMERA_RTSP" set "ENTRY_RTSP=%%B"
+    if /I "%%A"=="EXIT_CAMERA_RTSP" set "EXIT_RTSP=%%B"
+  )
+)
+
+if not "%ENTRY_RTSP%"=="" (
+  echo Found ENTRY_CAMERA_RTSP from .env
+)
+if not "%EXIT_RTSP%"=="" (
+  echo Found EXIT_CAMERA_RTSP from .env
+)
+
+if "%ENTRY_RTSP%"=="" set /p ENTRY_RTSP=Enter ENTRY camera RTSP URL: 
+if "%EXIT_RTSP%"=="" set /p EXIT_RTSP=Enter EXIT camera RTSP URL: 
 
 if "%ENTRY_RTSP%"=="" (
   echo ENTRY RTSP is required.
@@ -32,16 +49,17 @@ start "BantayPlaka - Django" cmd /k "venv\Scripts\activate.bat ^&^& set ""ENTRY_
 timeout /t 3 /nobreak >nul
 
 echo [2/3] Starting ENTRY camera ANPR (TIME_IN mapping)...
-start "BantayPlaka - ENTRY CAM" cmd /k "venv\Scripts\activate.bat ^&^& python anpr_engine/anpr_engine.py --rtsp ""%ENTRY_RTSP_ANPR%"" --camera-role ENTRY_CAM --frame-skip 1"
+start "BantayPlaka - ENTRY CAM" cmd /k "venv\Scripts\activate.bat ^&^& python anpr_engine/anpr_engine.py --rtsp ""%ENTRY_RTSP_ANPR%"" --camera-role ENTRY_CAM --frame-skip 1 --no-preview"
 
 echo [3/3] Starting EXIT camera ANPR (TIME_OUT mapping)...
-start "BantayPlaka - EXIT CAM" cmd /k "venv\Scripts\activate.bat ^&^& python anpr_engine/anpr_engine.py --rtsp ""%EXIT_RTSP_ANPR%"" --camera-role EXIT_CAM --frame-skip 1"
+start "BantayPlaka - EXIT CAM" cmd /k "venv\Scripts\activate.bat ^&^& python anpr_engine/anpr_engine.py --rtsp ""%EXIT_RTSP_ANPR%"" --camera-role EXIT_CAM --frame-skip 1 --no-preview"
 
 echo.
 echo  Open: http://127.0.0.1:8000
 echo  Login as guard/admin to see logs and detection feed.
 echo  Keep the 3 spawned windows open (Django + ENTRY CAM + EXIT CAM).
 echo  Do NOT run an extra "python manage.py runserver" manually.
+echo  If dashboard shows ANPR STALE, check ENTRY/EXIT CAM windows for errors.
 echo  You may close this launcher window after pressing any key.
 echo.
 pause

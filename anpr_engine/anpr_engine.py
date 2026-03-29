@@ -1193,6 +1193,7 @@ class ANPREngine:
         """Open the camera and run ANPR loop until stopped."""
         source: str | int = self.rtsp_url
         is_rtsp = isinstance(source, str) and '://' in source
+        webcam_sources: list[int] = []
 
         if is_rtsp:
             os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
@@ -1206,6 +1207,13 @@ class ANPREngine:
 
         if str(source).isdigit():
             source = int(source)
+            webcam_sources = [source]
+            if source != 1:
+                webcam_sources.append(1)
+            if source != 0:
+                webcam_sources.append(0)
+            # preserve order while removing duplicates
+            webcam_sources = list(dict.fromkeys(webcam_sources))
             log.info(f"Opening webcam index {source} (your laptop/PC built-in camera)")
         else:
             log.info(f"Connecting to RTSP stream: {source}")
@@ -1214,6 +1222,11 @@ class ANPREngine:
             backend_attempts = [
                 ('FFMPEG', lambda: cv2.VideoCapture(src, cv2.CAP_FFMPEG)),
             ] if is_rtsp else []
+            if not is_rtsp:
+                backend_attempts.extend([
+                    ('DSHOW', lambda: cv2.VideoCapture(src, cv2.CAP_DSHOW)),
+                    ('MSMF', lambda: cv2.VideoCapture(src, cv2.CAP_MSMF)),
+                ])
             backend_attempts.append(('DEFAULT', lambda: cv2.VideoCapture(src)))
 
             for backend_name, factory in backend_attempts:
@@ -1252,7 +1265,8 @@ class ANPREngine:
 
         cap = None
         active_source = source
-        for candidate in rtsp_candidates:
+        candidate_sources = webcam_sources if webcam_sources else rtsp_candidates
+        for candidate in candidate_sources:
             active_source = candidate
             self._active_source = str(candidate)
             log.info("Trying camera source: %s", candidate)
@@ -1303,7 +1317,7 @@ class ANPREngine:
                     time.sleep(0.8)
 
                     reopened = False
-                    for candidate in rtsp_candidates:
+                    for candidate in candidate_sources:
                         active_source = candidate
                         self._active_source = str(candidate)
                         log.info("Reconnecting with source: %s", candidate)

@@ -112,33 +112,39 @@ DEFAULT_INGEST_URL = 'http://127.0.0.1:8000/detection/ingest/'
 DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 
 # Seconds before the same plate can be logged again (prevents duplicates)
-DEBOUNCE_SECONDS = 12
+DEBOUNCE_SECONDS = 4
 
 # Minimum OCR confidence to accept a plate reading (0.0 - 1.0)
-MIN_OCR_CONFIDENCE = _env_float('ANPR_MIN_OCR_CONFIDENCE', 0.30)
+MIN_OCR_CONFIDENCE = _env_float('ANPR_MIN_OCR_CONFIDENCE', 0.36)
 
 # Detector-path OCR still needs short temporal agreement to reduce one-frame misreads.
-DETECTOR_MIN_VOTE_CONFIDENCE = _env_float('ANPR_DETECTOR_VOTE_CONFIDENCE', 0.40)
+DETECTOR_MIN_VOTE_CONFIDENCE = _env_float('ANPR_DETECTOR_VOTE_CONFIDENCE', 0.50)
 
 # Full-frame fallback OCR is noisier, so keep a higher confidence bar.
-FALLBACK_MIN_OCR_CONFIDENCE = _env_float('ANPR_FALLBACK_MIN_OCR_CONFIDENCE', 0.48)
+FALLBACK_MIN_OCR_CONFIDENCE = _env_float('ANPR_FALLBACK_MIN_OCR_CONFIDENCE', 0.58)
 
 # Require short temporal agreement before posting a new plate to reduce OCR jitter.
-VOTE_WINDOW_SECONDS = 2.0
+VOTE_WINDOW_SECONDS = 1.4
 MIN_VOTE_COUNT = 2
-HIGH_CONF_SINGLE_SHOT = 0.88
+HIGH_CONF_SINGLE_SHOT = 0.80
+DETECTOR_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DETECTOR_QUICK_ACCEPT_CONFIDENCE', 0.66)
+FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_FALLBACK_QUICK_ACCEPT_CONFIDENCE', 0.86)
+FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_FALLBACK_EVERY_N_FRAMES', 6))
 
 # Emergency demo profile for RTSP camera presentations.
-DEMO_RTSP_MODE = _env_bool('ANPR_DEMO_RTSP_MODE', True)
-DEMO_FORCE_FULLFRAME_OCR = _env_bool('ANPR_DEMO_FORCE_FULLFRAME_OCR', True)
-DEMO_FOCUS_ROI_ONLY = _env_bool('ANPR_DEMO_FOCUS_ROI_ONLY', False)
-DEMO_SKIP_RF_DETECTOR = _env_bool('ANPR_DEMO_SKIP_RF_DETECTOR', True)
-DEMO_MIN_OCR_CONFIDENCE = _env_float('ANPR_DEMO_MIN_OCR_CONFIDENCE', 0.16)
-DEMO_FALLBACK_MIN_OCR_CONFIDENCE = _env_float('ANPR_DEMO_FALLBACK_MIN_OCR_CONFIDENCE', 0.22)
-DEMO_DETECTOR_MIN_VOTE_CONFIDENCE = _env_float('ANPR_DEMO_DETECTOR_VOTE_CONFIDENCE', 0.20)
-DEMO_MIN_VOTE_COUNT = _env_int('ANPR_DEMO_MIN_VOTE_COUNT', 1)
-DEMO_VOTE_WINDOW_SECONDS = _env_float('ANPR_DEMO_VOTE_WINDOW_SECONDS', 1.5)
-DEMO_HIGH_CONF_SINGLE_SHOT = _env_float('ANPR_DEMO_HIGH_CONF_SINGLE_SHOT', 0.65)
+DEMO_RTSP_MODE = _env_bool('ANPR_DEMO_RTSP_MODE', False)
+DEMO_FORCE_FULLFRAME_OCR = _env_bool('ANPR_DEMO_FORCE_FULLFRAME_OCR', False)
+DEMO_FOCUS_ROI_ONLY = _env_bool('ANPR_DEMO_FOCUS_ROI_ONLY', True)
+DEMO_SKIP_RF_DETECTOR = _env_bool('ANPR_DEMO_SKIP_RF_DETECTOR', False)
+DEMO_MIN_OCR_CONFIDENCE = _env_float('ANPR_DEMO_MIN_OCR_CONFIDENCE', 0.34)
+DEMO_FALLBACK_MIN_OCR_CONFIDENCE = _env_float('ANPR_DEMO_FALLBACK_MIN_OCR_CONFIDENCE', 0.56)
+DEMO_DETECTOR_MIN_VOTE_CONFIDENCE = _env_float('ANPR_DEMO_DETECTOR_VOTE_CONFIDENCE', 0.48)
+DEMO_MIN_VOTE_COUNT = _env_int('ANPR_DEMO_MIN_VOTE_COUNT', 2)
+DEMO_VOTE_WINDOW_SECONDS = _env_float('ANPR_DEMO_VOTE_WINDOW_SECONDS', 1.3)
+DEMO_HIGH_CONF_SINGLE_SHOT = _env_float('ANPR_DEMO_HIGH_CONF_SINGLE_SHOT', 0.78)
+DEMO_DETECTOR_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DEMO_DETECTOR_QUICK_ACCEPT_CONFIDENCE', 0.62)
+DEMO_FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DEMO_FALLBACK_QUICK_ACCEPT_CONFIDENCE', 0.84)
+DEMO_FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_DEMO_FALLBACK_EVERY_N_FRAMES', 4))
 
 # Detection confidence threshold for both Roboflow and YOLO modes
 DETECTION_CONFIDENCE = _env_float('ANPR_DETECTION_CONFIDENCE', 0.20)
@@ -448,6 +454,20 @@ def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
     kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
     sharp = cv2.filter2D(gray_clahe, -1, kernel)
     variants.append(sharp)
+    return variants
+
+
+def build_fast_fullframe_ocr_variants(frame: np.ndarray) -> list[np.ndarray]:
+    """Low-cost full-frame OCR variants to keep RTSP processing responsive."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    variants: list[np.ndarray] = [gray]
+
+    # Fast contrast bump for difficult lighting without expensive multi-pass filters.
+    normalized = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
+    variants.append(normalized)
+
+    _, otsu = cv2.threshold(normalized, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    variants.append(otsu)
     return variants
 
 
@@ -762,6 +782,9 @@ class ANPREngine:
         self.vote_window_seconds = VOTE_WINDOW_SECONDS
         self.min_vote_count = MIN_VOTE_COUNT
         self.high_conf_single_shot = HIGH_CONF_SINGLE_SHOT
+        self.detector_quick_accept_confidence = DETECTOR_QUICK_ACCEPT_CONFIDENCE
+        self.fallback_quick_accept_confidence = FALLBACK_QUICK_ACCEPT_CONFIDENCE
+        self.fallback_every_n_frames = FALLBACK_EVERY_N_FRAMES
 
         if self.demo_mode:
             self.min_ocr_confidence = min(MIN_OCR_CONFIDENCE, DEMO_MIN_OCR_CONFIDENCE)
@@ -770,6 +793,15 @@ class ANPREngine:
             self.vote_window_seconds = min(VOTE_WINDOW_SECONDS, DEMO_VOTE_WINDOW_SECONDS)
             self.min_vote_count = max(1, DEMO_MIN_VOTE_COUNT)
             self.high_conf_single_shot = min(HIGH_CONF_SINGLE_SHOT, DEMO_HIGH_CONF_SINGLE_SHOT)
+            self.detector_quick_accept_confidence = min(
+                DETECTOR_QUICK_ACCEPT_CONFIDENCE,
+                DEMO_DETECTOR_QUICK_ACCEPT_CONFIDENCE,
+            )
+            self.fallback_quick_accept_confidence = min(
+                FALLBACK_QUICK_ACCEPT_CONFIDENCE,
+                DEMO_FALLBACK_QUICK_ACCEPT_CONFIDENCE,
+            )
+            self.fallback_every_n_frames = max(1, DEMO_FALLBACK_EVERY_N_FRAMES)
 
         self._last_logged: dict[str, float] = {}
         self._vote_history: dict[str, list[tuple[float, float]]] = defaultdict(list)
@@ -872,6 +904,11 @@ class ANPREngine:
 
         avg_conf = sum(conf for _, conf in votes) / len(votes)
         return avg_conf >= min_conf
+
+    def _passes_consensus(self, plate: str, confidence: float, min_conf: float, quick_accept_conf: float) -> bool:
+        if confidence >= quick_accept_conf:
+            return True
+        return self._has_vote_consensus(plate, confidence, min_conf)
 
     def _build_snapshot_b64(self, frame: np.ndarray) -> str:
         snapshot_b64 = ''
@@ -1014,7 +1051,12 @@ class ANPREngine:
                 reverse=True,
             )
             for plate, confidence in ranked_candidates:
-                if not self._has_vote_consensus(plate, confidence, self.detector_vote_confidence):
+                if not self._passes_consensus(
+                    plate,
+                    confidence,
+                    self.detector_vote_confidence,
+                    self.detector_quick_accept_confidence,
+                ):
                     continue
 
                 log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
@@ -1039,7 +1081,7 @@ class ANPREngine:
 
         # Fallback: if detector found no box, run OCR on whole frame every few processed frames.
         # This keeps CPU manageable while recovering from weak detector outputs.
-        fallback_every = 1 if (self.demo_mode and DEMO_FORCE_FULLFRAME_OCR) else 3
+        fallback_every = 1 if (self.demo_mode and DEMO_FORCE_FULLFRAME_OCR) else self.fallback_every_n_frames
         if not boxes and self._processed_frames % fallback_every == 0:
             frame_variants: list[tuple[np.ndarray, int, int]] = []
 
@@ -1073,7 +1115,7 @@ class ANPREngine:
                     frame_variants.append((safe_th, 0, safe_top))
 
             if not (self.demo_mode and DEMO_FOCUS_ROI_ONLY):
-                for variant in build_ocr_variants(frame):
+                for variant in build_fast_fullframe_ocr_variants(frame):
                     frame_variants.append((variant, 0, 0))
 
             frame_seen: set[str] = set()
@@ -1103,7 +1145,12 @@ class ANPREngine:
                     if confidence < self.fallback_min_ocr_confidence:
                         self._dropped_by_confidence += 1
                         continue
-                    if not self._has_vote_consensus(plate, confidence, self.fallback_min_ocr_confidence):
+                    if not self._passes_consensus(
+                        plate,
+                        confidence,
+                        self.fallback_min_ocr_confidence,
+                        self.fallback_quick_accept_confidence,
+                    ):
                         continue
 
                     if self._is_debounced(plate):
@@ -1177,9 +1224,9 @@ class ANPREngine:
                 read_timeout_prop = getattr(cv2, 'CAP_PROP_READ_TIMEOUT_MSEC', None)
                 try:
                     if open_timeout_prop is not None:
-                        cap_local.set(open_timeout_prop, 8000)
+                        cap_local.set(open_timeout_prop, 2500)
                     if read_timeout_prop is not None:
-                        cap_local.set(read_timeout_prop, 8000)
+                        cap_local.set(read_timeout_prop, 2500)
                 except Exception:
                     pass
 
@@ -1241,7 +1288,7 @@ class ANPREngine:
                     self._read_failures += 1
                     consecutive_read_fails += 1
                     if consecutive_read_fails < MAX_CONSECUTIVE_READ_FAILS:
-                        time.sleep(0.08)
+                        time.sleep(0.03)
                         self._maybe_log_diagnostics()
                         continue
 
@@ -1354,8 +1401,8 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         help=f'Seconds before same plate can be logged again. Default: {DEBOUNCE_SECONDS}')
     parser.add_argument('--frame-skip', type=int, default=2,
         help='Process every Nth frame. Lower is faster detection but higher CPU/GPU usage. Default: 2')
-    parser.add_argument('--rtsp-drain-grabs', type=int, default=2,
-        help='How many buffered RTSP frames to grab/drop before each read. Higher lowers latency but can reduce decode stability. Default: 2')
+    parser.add_argument('--rtsp-drain-grabs', type=int, default=3,
+        help='How many buffered RTSP frames to grab/drop before each read. Higher lowers latency but can reduce decode stability. Default: 3')
 
     args = parser.parse_args()
 

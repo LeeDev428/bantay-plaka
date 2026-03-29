@@ -71,6 +71,16 @@ os.environ.setdefault('CORE_MODEL_SAM_ENABLED', 'False')
 os.environ.setdefault('CORE_MODEL_SAM3_ENABLED', 'False')
 os.environ.setdefault('CORE_MODEL_GAZE_ENABLED', 'False')
 
+
+def _env_float(name: str, default: float) -> float:
+    raw = (os.getenv(name, '') or '').strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
 # Key used to authenticate with your Django app's /detection/ingest/ endpoint
 DJANGO_API_KEY = os.getenv('ANPR_API_KEY', '')
 
@@ -88,13 +98,13 @@ DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 DEBOUNCE_SECONDS = 12
 
 # Minimum OCR confidence to accept a plate reading (0.0 - 1.0)
-MIN_OCR_CONFIDENCE = 0.30
+MIN_OCR_CONFIDENCE = _env_float('ANPR_MIN_OCR_CONFIDENCE', 0.30)
 
 # Detector-path OCR still needs short temporal agreement to reduce one-frame misreads.
-DETECTOR_MIN_VOTE_CONFIDENCE = 0.40
+DETECTOR_MIN_VOTE_CONFIDENCE = _env_float('ANPR_DETECTOR_VOTE_CONFIDENCE', 0.40)
 
 # Full-frame fallback OCR is noisier, so keep a higher confidence bar.
-FALLBACK_MIN_OCR_CONFIDENCE = 0.48
+FALLBACK_MIN_OCR_CONFIDENCE = _env_float('ANPR_FALLBACK_MIN_OCR_CONFIDENCE', 0.48)
 
 # Require short temporal agreement before posting a new plate to reduce OCR jitter.
 VOTE_WINDOW_SECONDS = 2.0
@@ -102,7 +112,7 @@ MIN_VOTE_COUNT = 2
 HIGH_CONF_SINGLE_SHOT = 0.88
 
 # Detection confidence threshold for both Roboflow and YOLO modes
-DETECTION_CONFIDENCE = 0.25
+DETECTION_CONFIDENCE = _env_float('ANPR_DETECTION_CONFIDENCE', 0.20)
 VALID_CAMERA_ROLES = {'ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'}
 
 # Runtime diagnostics + RTSP resilience tuning.
@@ -706,6 +716,13 @@ class ANPREngine:
         log.info("Loading EasyOCR (first run downloads ~200 MB, then cached locally)...")
         self.ocr = easyocr.Reader(['en'], gpu=use_gpu)
         log.info("EasyOCR ready.")
+        log.info(
+            "Thresholds: detector=%.2f ocr=%.2f fallback_ocr=%.2f vote=%.2f",
+            DETECTION_CONFIDENCE,
+            MIN_OCR_CONFIDENCE,
+            FALLBACK_MIN_OCR_CONFIDENCE,
+            DETECTOR_MIN_VOTE_CONFIDENCE,
+        )
 
     def _maybe_log_diagnostics(self, force: bool = False):
         now = time.time()

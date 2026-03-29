@@ -144,6 +144,7 @@
 
       let busy = false;
       let failures = 0;
+      let hadSuccess = false;
       setInterval(() => {
         if (img.dataset.liveSnapshot !== role) return;
         if (busy) return;
@@ -153,25 +154,26 @@
           img.src = probe.src;
           img.classList.remove('hidden');
           if (empty) empty.classList.add('hidden');
+          hadSuccess = true;
           failures = 0;
           busy = false;
         };
         probe.onerror = () => {
           failures += 1;
-          if (failures >= 2) {
+          if (!hadSuccess && failures >= 6) {
             img.classList.add('hidden');
             if (empty) {
               empty.textContent = 'Camera unavailable. Check power/network/IP settings.';
               empty.classList.remove('hidden');
             }
-            if (meta) {
-              meta.textContent = `Waiting for ${role} stream...`;
-            }
+          }
+          if (hadSuccess && failures >= 10 && meta) {
+            meta.textContent = `Reconnecting ${role} feed...`;
           }
           busy = false;
         };
         probe.src = `/detection/frame/${role}/?t=${Date.now()}`;
-      }, 300);
+      }, 80);
     });
   }
 

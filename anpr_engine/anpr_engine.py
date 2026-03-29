@@ -80,13 +80,13 @@ DEFAULT_INGEST_URL = 'http://127.0.0.1:8000/detection/ingest/'
 DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 
 # Seconds before the same plate can be logged again (prevents duplicates)
-DEBOUNCE_SECONDS = 30
+DEBOUNCE_SECONDS = 12
 
 # Minimum OCR confidence to accept a plate reading (0.0 - 1.0)
-MIN_OCR_CONFIDENCE = 0.35
+MIN_OCR_CONFIDENCE = 0.24
 
 # Full-frame fallback OCR is noisier, so keep a higher confidence bar.
-FALLBACK_MIN_OCR_CONFIDENCE = 0.55
+FALLBACK_MIN_OCR_CONFIDENCE = 0.42
 
 # Require short temporal agreement before posting a new plate to reduce OCR jitter.
 VOTE_WINDOW_SECONDS = 2.0
@@ -722,8 +722,6 @@ class ANPREngine:
                     if not is_strict_plate(plate):
                         continue
                     if confidence < MIN_OCR_CONFIDENCE:
-                        continue
-                    if not self._has_vote_consensus(plate, confidence, MIN_OCR_CONFIDENCE):
                         continue
 
                     log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")

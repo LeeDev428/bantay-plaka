@@ -384,16 +384,15 @@ class RoboflowDetector:
 
     def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int]]:
         """Returns list of (x1, y1, x2, y2) bounding boxes for detected plates."""
-        boxes = []
-        try:
-            results = self._model.infer(frame, confidence=DETECTION_CONFIDENCE)
-            if not results:
-                return boxes
+        boxes: list[tuple[int, int, int, int]] = []
+
+        def parse_predictions(results_obj, scale_back: float = 1.0) -> list[tuple[int, int, int, int]]:
+            parsed: list[tuple[int, int, int, int]] = []
+            if not results_obj:
+                return parsed
 
             raw_predictions = []
-            first = results[0]
-
-            # Support multiple inference response formats.
+            first = results_obj[0]
             if hasattr(first, 'predictions'):
                 raw_predictions = first.predictions or []
             elif isinstance(first, dict):
@@ -414,12 +413,30 @@ class RoboflowDetector:
                 if None in (x, y, w, h):
                     continue
 
-                # Roboflow uses center x, y, width, height -> convert to corners
-                x1 = int(x - w / 2)
-                y1 = int(y - h / 2)
-                x2 = int(x + w / 2)
-                y2 = int(y + h / 2)
-                boxes.append((x1, y1, x2, y2))
+                x1 = int((x - w / 2) * scale_back)
+                y1 = int((y - h / 2) * scale_back)
+                x2 = int((x + w / 2) * scale_back)
+                y2 = int((y + h / 2) * scale_back)
+                parsed.append((x1, y1, x2, y2))
+            return parsed
+
+        try:
+            results = self._model.infer(frame, confidence=DETECTION_CONFIDENCE)
+            boxes = parse_predictions(results, scale_back=1.0)
+
+            # For CCTV feeds where plates are tiny in the full frame, retry on upscaled image.
+            if not boxes:
+                h, w = frame.shape[:2]
+                max_dim = max(h, w)
+                if max_dim < 1600:
+                    scale = min(2.0, 1600.0 / max(1.0, float(max_dim)))
+                    upscaled = cv2.resize(
+                        frame,
+                        (int(w * scale), int(h * scale)),
+                        interpolation=cv2.INTER_CUBIC,
+                    )
+                    results_up = self._model.infer(upscaled, confidence=DETECTION_CONFIDENCE)
+                    boxes = parse_predictions(results_up, scale_back=1.0 / scale)
         except Exception as e:
             log.warning(f"Roboflow detection error: {e}")
         return boxes

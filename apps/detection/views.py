@@ -28,7 +28,8 @@ _FRAME_CACHE: dict[str, tuple[bytes, float]] = {}
 _FRAME_CACHE_LOCK = threading.Lock()
 _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
-MIN_GLOBAL_PLATE_RELOG_SECONDS = 8
+MIN_GLOBAL_PLATE_RELOG_SECONDS = 4
+MAX_FRESH_CACHE_SECONDS = 1.5
 
 
 def _open_capture_fast(rtsp_url: str):
@@ -227,7 +228,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
             continue
 
         # Drain buffered frames to keep feed close to real-time.
-        for _ in range(2):
+        for _ in range(4):
             cap.grab()
 
         ok, frame = cap.read()
@@ -245,7 +246,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
 
         fail_count = 0
 
-        max_width = 640
+        max_width = 560
         if frame.shape[1] > max_width:
             scale = max_width / frame.shape[1]
             frame = cv2.resize(
@@ -254,12 +255,22 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
                 interpolation=cv2.INTER_AREA,
             )
 
-        encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
+        encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 58])
         if encoded_ok:
             with _FRAME_CACHE_LOCK:
                 _FRAME_CACHE[camera_role] = (buffer.tobytes(), time.time())
 
-        time.sleep(0.03)
+        time.sleep(0.012)
+
+
+def _no_cache_image_response(frame_bytes: bytes, stale: bool = False) -> HttpResponse:
+    resp = HttpResponse(frame_bytes, content_type='image/jpeg')
+    resp['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp['Pragma'] = 'no-cache'
+    resp['Expires'] = '0'
+    if stale:
+        resp['X-Frame-Stale'] = '1'
+    return resp
 
 
 def _ensure_camera_worker(camera_role: str, rtsp_url: str):
@@ -372,25 +383,22 @@ def camera_frame(request, camera_role: str):
 
     _ensure_camera_worker(role, rtsp_url)
 
+    stale_frame_bytes = None
     with _FRAME_CACHE_LOCK:
         cached = _FRAME_CACHE.get(role)
     if cached:
         frame_bytes, ts = cached
-        if (time.time() - ts) <= 4:
-            resp = HttpResponse(frame_bytes, content_type='image/jpeg')
-            resp['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            resp['Pragma'] = 'no-cache'
-            resp['Expires'] = '0'
-            return resp
+        age = (time.time() - ts)
+        if age <= MAX_FRESH_CACHE_SECONDS:
+            return _no_cache_image_response(frame_bytes)
+        stale_frame_bytes = frame_bytes
 
     frame = _read_camera_http_snapshot(rtsp_url)
     if frame is None:
+        if stale_frame_bytes is not None:
+            return _no_cache_image_response(stale_frame_bytes, stale=True)
         return JsonResponse({'error': 'Camera frame unavailable'}, status=503)
-    resp = HttpResponse(frame, content_type='image/jpeg')
-    resp['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    resp['Pragma'] = 'no-cache'
-    resp['Expires'] = '0'
-    return resp
+    return _no_cache_image_response(frame)
 
 
 @csrf_exempt

@@ -132,6 +132,7 @@ HIGH_CONF_SINGLE_SHOT = 0.88
 DEMO_RTSP_MODE = _env_bool('ANPR_DEMO_RTSP_MODE', True)
 DEMO_FORCE_FULLFRAME_OCR = _env_bool('ANPR_DEMO_FORCE_FULLFRAME_OCR', True)
 DEMO_FOCUS_ROI_ONLY = _env_bool('ANPR_DEMO_FOCUS_ROI_ONLY', False)
+DEMO_SKIP_RF_DETECTOR = _env_bool('ANPR_DEMO_SKIP_RF_DETECTOR', True)
 DEMO_MIN_OCR_CONFIDENCE = _env_float('ANPR_DEMO_MIN_OCR_CONFIDENCE', 0.16)
 DEMO_FALLBACK_MIN_OCR_CONFIDENCE = _env_float('ANPR_DEMO_FALLBACK_MIN_OCR_CONFIDENCE', 0.22)
 DEMO_DETECTOR_MIN_VOTE_CONFIDENCE = _env_float('ANPR_DEMO_DETECTOR_VOTE_CONFIDENCE', 0.20)
@@ -375,6 +376,11 @@ def clean_plate_text(raw_text: str) -> str | None:
 
 def is_strict_plate(plate: str) -> bool:
     return bool(re.fullmatch(r'(?:[A-Z]{2,4} \d{3,4}|\d{3,4} [A-Z]{2,4})', plate))
+
+
+def is_demo_strict_plate(plate: str) -> bool:
+    # Demo profile: accept only 3x3 formats to suppress random text hits.
+    return bool(re.fullmatch(r'(?:[A-Z]{3} \d{3}|\d{3} [A-Z]{3})', plate))
 
 
 def normalize_plate_variant_noise(plate: str) -> str:
@@ -932,10 +938,14 @@ class ANPREngine:
         h, w = frame.shape[:2]
         pad = 10
 
-        boxes = self.detector.detect(frame)
-        if self.demo_mode and not boxes:
-            # Emergency demo fallback when model misses plates on noisy RTSP frames.
+        if self.demo_mode and DEMO_SKIP_RF_DETECTOR:
+            # Fast path for demo: skip expensive model inference and use contour boxes directly.
             boxes = detect_plate_like_rectangles(frame)
+        else:
+            boxes = self.detector.detect(frame)
+            if self.demo_mode and not boxes:
+                # Emergency demo fallback when model misses plates on noisy RTSP frames.
+                boxes = detect_plate_like_rectangles(frame)
         if boxes:
             self._frames_no_box = 0
             self._detector_box_frames += 1
@@ -962,7 +972,14 @@ class ANPREngine:
             posted = False
             frame_seen: set[str] = set()
             best_conf_by_plate: dict[str, float] = {}
-            for candidate in build_ocr_variants(plate_crop):
+            if self.demo_mode:
+                gray_crop = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
+                _, th_crop = cv2.threshold(gray_crop, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                ocr_variants = [gray_crop, th_crop]
+            else:
+                ocr_variants = build_ocr_variants(plate_crop)
+
+            for candidate in ocr_variants:
                 if posted:
                     break
                 ocr_results = self.ocr.readtext(
@@ -978,7 +995,10 @@ class ANPREngine:
                         continue
                     frame_seen.add(plate)
 
-                    if not is_strict_plate(plate):
+                    if self.demo_mode:
+                        if not is_demo_strict_plate(plate):
+                            continue
+                    elif not is_strict_plate(plate):
                         continue
                     if confidence < self.min_ocr_confidence:
                         self._dropped_by_confidence += 1
@@ -1075,7 +1095,10 @@ class ANPREngine:
                         continue
                     frame_seen.add(plate)
 
-                    if not is_strict_plate(plate):
+                    if self.demo_mode:
+                        if not is_demo_strict_plate(plate):
+                            continue
+                    elif not is_strict_plate(plate):
                         continue
                     if confidence < self.fallback_min_ocr_confidence:
                         self._dropped_by_confidence += 1

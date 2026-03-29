@@ -208,7 +208,10 @@ def _cached_mjpeg_stream(camera_role: str, rtsp_url: str):
 
 
 def _camera_worker_loop(camera_role: str, rtsp_url: str):
-    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
+    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
+        'rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|'
+        'max_delay;500000|stimeout;5000000|reorder_queue_size;0'
+    )
     candidate_urls = _rtsp_candidates(rtsp_url)
     candidate_idx = 0
     cap = _open_capture_fast(candidate_urls[candidate_idx])
@@ -223,6 +226,10 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
             cap = _open_capture_fast(candidate_urls[candidate_idx])
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             continue
+
+        # Drain buffered frames to keep feed close to real-time.
+        for _ in range(2):
+            cap.grab()
 
         ok, frame = cap.read()
         if not ok or frame is None:
@@ -273,7 +280,10 @@ def _ensure_camera_worker(camera_role: str, rtsp_url: str):
 
 
 def _read_single_frame(rtsp_url: str):
-    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
+    os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
+        'rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|'
+        'max_delay;500000|stimeout;5000000|reorder_queue_size;0'
+    )
     for candidate in _rtsp_candidates(rtsp_url):
         cap = _open_capture_fast(candidate)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -369,14 +379,18 @@ def camera_frame(request, camera_role: str):
         frame_bytes, ts = cached
         if (time.time() - ts) <= 4:
             resp = HttpResponse(frame_bytes, content_type='image/jpeg')
-            resp['Cache-Control'] = 'no-store'
+            resp['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            resp['Pragma'] = 'no-cache'
+            resp['Expires'] = '0'
             return resp
 
     frame = _read_camera_http_snapshot(rtsp_url)
     if frame is None:
         return JsonResponse({'error': 'Camera frame unavailable'}, status=503)
     resp = HttpResponse(frame, content_type='image/jpeg')
-    resp['Cache-Control'] = 'no-store'
+    resp['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp['Pragma'] = 'no-cache'
+    resp['Expires'] = '0'
     return resp
 
 

@@ -6,7 +6,6 @@
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
   const tbody = document.getElementById('live-log-body');
-  const freezeUntilByRole = Object.create(null);
 
   function showBlacklistAlert(data) {
     const old = document.getElementById('blacklist-alert-banner');
@@ -69,10 +68,9 @@
     const meta = document.getElementById(`${prefix}-feed-meta`);
 
     if (!img || !meta) return;
-    if (img.dataset.liveSnapshot === role) {
-      // Live mode: briefly flash the exact detection snapshot, then resume real-time polling.
-      img.src = `${data.snapshot_url}?t=${Date.now()}`;
-      freezeUntilByRole[role] = Date.now() + 1200;
+
+    if (img.dataset.liveStream === 'true') {
+      // True live video mode: do not replace stream with snapshots.
       meta.textContent = `Latest detection: Plate ${data.plate_number} - ${data.timestamp}`;
       return;
     }
@@ -149,7 +147,6 @@
       setInterval(() => {
         if (img.dataset.liveSnapshot !== role) return;
         if (busy) return;
-        if (freezeUntilByRole[role] && Date.now() < freezeUntilByRole[role]) return;
         busy = true;
         const probe = new Image();
         probe.onload = () => {
@@ -174,7 +171,7 @@
           busy = false;
         };
         probe.src = `/detection/frame/${role}/?t=${Date.now()}`;
-      }, 250);
+      }, 300);
     });
   }
 

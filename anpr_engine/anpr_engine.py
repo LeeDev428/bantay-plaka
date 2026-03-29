@@ -220,6 +220,29 @@ def is_strict_plate(plate: str) -> bool:
     return bool(re.fullmatch(r'(?:[A-Z]{2,4} \d{3,4}|\d{3,4} [A-Z]{2,4})', plate))
 
 
+def normalize_plate_variant_noise(plate: str) -> str:
+    """Collapse common OCR one-character prefix noise for stable dedupe/voting."""
+    if not is_strict_plate(plate):
+        return plate
+
+    try:
+        left, right = plate.split(' ', 1)
+    except ValueError:
+        return plate
+
+    confusable_prefixes = {'I', 'L', 'G', 'T', 'J'}
+
+    # letters+digits format
+    if left.isalpha() and right.isdigit() and len(left) == 4 and left[0] in confusable_prefixes:
+        return f'{left[1:]} {right}'
+
+    # digits+letters format
+    if left.isdigit() and right.isalpha() and len(right) == 4 and right[0] in confusable_prefixes:
+        return f'{left} {right[1:]}'
+
+    return plate
+
+
 def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
     """Create multiple image variants to improve OCR hit rate under blur/lighting noise."""
     variants: list[np.ndarray] = [plate_crop]
@@ -650,6 +673,7 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, _) in extract_plate_candidates_from_ocr(ocr_results):
+                    plate = normalize_plate_variant_noise(plate)
                     if plate in frame_seen:
                         continue
                     frame_seen.add(plate)
@@ -693,6 +717,7 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, bbox_xyxy) in extract_plate_candidates_from_ocr(ocr_results):
+                    plate = normalize_plate_variant_noise(plate)
                     if plate in frame_seen:
                         continue
                     frame_seen.add(plate)

@@ -88,10 +88,13 @@ DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 DEBOUNCE_SECONDS = 12
 
 # Minimum OCR confidence to accept a plate reading (0.0 - 1.0)
-MIN_OCR_CONFIDENCE = 0.24
+MIN_OCR_CONFIDENCE = 0.30
+
+# Detector-path OCR still needs short temporal agreement to reduce one-frame misreads.
+DETECTOR_MIN_VOTE_CONFIDENCE = 0.40
 
 # Full-frame fallback OCR is noisier, so keep a higher confidence bar.
-FALLBACK_MIN_OCR_CONFIDENCE = 0.42
+FALLBACK_MIN_OCR_CONFIDENCE = 0.48
 
 # Require short temporal agreement before posting a new plate to reduce OCR jitter.
 VOTE_WINDOW_SECONDS = 2.0
@@ -101,6 +104,13 @@ HIGH_CONF_SINGLE_SHOT = 0.88
 # Detection confidence threshold for both Roboflow and YOLO modes
 DETECTION_CONFIDENCE = 0.25
 VALID_CAMERA_ROLES = {'ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'}
+
+# Runtime diagnostics + RTSP resilience tuning.
+DIAGNOSTIC_INTERVAL_SECONDS = 5.0
+MAX_CONSECUTIVE_READ_FAILS = 20
+MAX_CONSECUTIVE_INVALID_FRAMES = 12
+MIN_VALID_FRAME_WIDTH = 160
+MIN_VALID_FRAME_HEIGHT = 120
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -176,6 +186,30 @@ def _rtsp_candidates(rtsp_url: str) -> list[str]:
             candidates.append(alt)
 
     return candidates
+
+
+def validate_decoded_frame(frame: np.ndarray | None) -> tuple[bool, str]:
+    """Validate decoded frames so None/corrupt frames are visible in logs and recovery flow."""
+    if frame is None:
+        return False, 'frame=None'
+
+    if not isinstance(frame, np.ndarray):
+        return False, f'invalid-type={type(frame).__name__}'
+
+    if frame.size == 0:
+        return False, 'empty-frame'
+
+    if frame.ndim < 2:
+        return False, f'invalid-ndim={frame.ndim}'
+
+    h, w = frame.shape[:2]
+    if w < MIN_VALID_FRAME_WIDTH or h < MIN_VALID_FRAME_HEIGHT:
+        return False, f'too-small={w}x{h}'
+
+    if frame.dtype != np.uint8:
+        return False, f'unexpected-dtype={frame.dtype}'
+
+    return True, f'{w}x{h}'
 
 # ---------------------------------------------------------------------------
 # Plate text cleaning
@@ -384,7 +418,7 @@ def extract_plate_candidates_from_ocr(ocr_results) -> list[tuple[str, float, tup
     for item in items:
         add_candidate(item['raw'], item['conf'], item['bbox'])
 
-    # Combine adjacent same-line alpha token + digit token.
+    # Combine adjacent same-line split tokens.
     for i, left in enumerate(items):
         for j, right in enumerate(items):
             if i == j:
@@ -396,9 +430,11 @@ def extract_plate_candidates_from_ocr(ocr_results) -> list[tuple[str, float, tup
             if not same_line:
                 continue
 
-            alpha_ok = left['raw'].isalpha() and 2 <= len(left['raw']) <= 4
-            digit_ok = right['raw'].isdigit() and 3 <= len(right['raw']) <= 4
-            if not (alpha_ok and digit_ok):
+            alpha_left = left['raw'].isalpha() and 2 <= len(left['raw']) <= 4
+            digit_right = right['raw'].isdigit() and 3 <= len(right['raw']) <= 4
+            digit_left = left['raw'].isdigit() and 3 <= len(left['raw']) <= 4
+            alpha_right = right['raw'].isalpha() and 2 <= len(right['raw']) <= 4
+            if not ((alpha_left and digit_right) or (digit_left and alpha_right)):
                 continue
 
             x1 = min(left['bbox'][0], right['bbox'][0])
@@ -449,7 +485,33 @@ class RoboflowDetector:
         log.info(f"Loading Roboflow model: {model_id}")
         log.info("First run downloads and caches the model (~30 sec). Next runs are instant.")
         self._model = get_model(model_id=model_id, api_key=api_key)
+        self._infer_calls = 0
+        self._zero_box_calls = 0
+        self._last_variant = 'none'
+        self._no_box_streak = 0
         log.info("Roboflow model ready. Accuracy: 98.8% mAP on license plates.")
+
+    def _infer_variant(
+        self,
+        image: np.ndarray,
+        scale_back: float,
+        parse_predictions,
+        variant_label: str,
+    ) -> list[tuple[int, int, int, int]]:
+        self._infer_calls += 1
+        results = self._model.infer(image, confidence=DETECTION_CONFIDENCE)
+        boxes = parse_predictions(results, scale_back=scale_back)
+        if boxes:
+            self._last_variant = variant_label
+        return boxes
+
+    def get_debug_stats(self) -> dict[str, object]:
+        return {
+            'infer_calls': self._infer_calls,
+            'zero_box_calls': self._zero_box_calls,
+            'no_box_streak': self._no_box_streak,
+            'last_variant': self._last_variant,
+        }
 
     def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int]]:
         """Returns list of (x1, y1, x2, y2) bounding boxes for detected plates."""
@@ -490,22 +552,42 @@ class RoboflowDetector:
             return parsed
 
         try:
-            results = self._model.infer(frame, confidence=DETECTION_CONFIDENCE)
-            boxes = parse_predictions(results, scale_back=1.0)
+            boxes = self._infer_variant(frame, 1.0, parse_predictions, 'bgr')
+
+            # Some RTSP decoders produce color layouts that behave better after explicit BGR->RGB conversion.
+            if not boxes and frame.ndim == 3 and frame.shape[2] == 3:
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                boxes = self._infer_variant(rgb_frame, 1.0, parse_predictions, 'rgb')
 
             # For CCTV feeds where plates are tiny in the full frame, retry on upscaled image.
+            # Run this on no-box streaks to keep throughput stable while still probing tiny plates.
             if not boxes:
+                self._no_box_streak += 1
                 h, w = frame.shape[:2]
                 max_dim = max(h, w)
-                if max_dim < 1600:
+                should_try_upscale = self._no_box_streak % 3 == 0
+                if should_try_upscale and max_dim < 1600:
                     scale = min(2.0, 1600.0 / max(1.0, float(max_dim)))
                     upscaled = cv2.resize(
                         frame,
                         (int(w * scale), int(h * scale)),
                         interpolation=cv2.INTER_CUBIC,
                     )
-                    results_up = self._model.infer(upscaled, confidence=DETECTION_CONFIDENCE)
-                    boxes = parse_predictions(results_up, scale_back=1.0 / scale)
+                    boxes = self._infer_variant(upscaled, 1.0 / scale, parse_predictions, 'upscaled-bgr')
+
+                    if not boxes and upscaled.ndim == 3 and upscaled.shape[2] == 3:
+                        upscaled_rgb = cv2.cvtColor(upscaled, cv2.COLOR_BGR2RGB)
+                        boxes = self._infer_variant(
+                            upscaled_rgb,
+                            1.0 / scale,
+                            parse_predictions,
+                            'upscaled-rgb',
+                        )
+            else:
+                self._no_box_streak = 0
+
+            if not boxes:
+                self._zero_box_calls += 1
         except Exception as e:
             log.warning(f"Roboflow detection error: {e}")
         return boxes
@@ -537,11 +619,21 @@ class YOLODetector:
 
         log.info(f"Loading YOLO model: {model_path}")
         self._model = YOLO(model_path)
+        self._infer_calls = 0
         log.info("YOLO model loaded.")
+
+    def get_debug_stats(self) -> dict[str, object]:
+        return {
+            'infer_calls': self._infer_calls,
+            'zero_box_calls': None,
+            'no_box_streak': None,
+            'last_variant': 'yolo',
+        }
 
     def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int]]:
         boxes = []
         try:
+            self._infer_calls += 1
             results = self._model(frame, conf=DETECTION_CONFIDENCE, verbose=False)
             for result in results:
                 if result.boxes is None:
@@ -570,6 +662,7 @@ class ANPREngine:
         yolo_model_path: str = DEFAULT_YOLO_MODEL,
         debounce_seconds: int = DEBOUNCE_SECONDS,
         frame_skip: int = 2,
+        rtsp_drain_grabs: int = 2,
     ):
         self.rtsp_url = rtsp_url
         self.ingest_url = ingest_url
@@ -577,10 +670,23 @@ class ANPREngine:
         self.camera_role = requested_role if requested_role in VALID_CAMERA_ROLES else 'UNKNOWN'
         self.debounce_seconds = debounce_seconds
         self.frame_skip = max(1, int(frame_skip))
+        self.rtsp_drain_grabs = max(0, int(rtsp_drain_grabs))
         self._last_logged: dict[str, float] = {}
         self._vote_history: dict[str, list[tuple[float, float]]] = defaultdict(list)
         self._frames_no_box = 0
         self._processed_frames = 0
+        self._frames_read = 0
+        self._read_failures = 0
+        self._invalid_frames = 0
+        self._detector_frames = 0
+        self._detector_box_frames = 0
+        self._detector_box_count = 0
+        self._ocr_candidates = 0
+        self._accepted_plates = 0
+        self._dropped_by_confidence = 0
+        self._dropped_by_debounce = 0
+        self._active_source = str(rtsp_url)
+        self._last_diag_ts = time.time()
 
         # Initialize plate detector
         if mode == 'roboflow':
@@ -600,6 +706,41 @@ class ANPREngine:
         log.info("Loading EasyOCR (first run downloads ~200 MB, then cached locally)...")
         self.ocr = easyocr.Reader(['en'], gpu=use_gpu)
         log.info("EasyOCR ready.")
+
+    def _maybe_log_diagnostics(self, force: bool = False):
+        now = time.time()
+        if not force and (now - self._last_diag_ts) < DIAGNOSTIC_INTERVAL_SECONDS:
+            return
+
+        detector_debug = {}
+        if hasattr(self.detector, 'get_debug_stats'):
+            try:
+                detector_debug = self.detector.get_debug_stats() or {}
+            except Exception:
+                detector_debug = {}
+
+        log.info(
+            "[DIAG] role=%s source=%s frames_read=%d processed=%d read_fail=%d invalid=%d "
+            "detector_frames=%d detector_box_frames=%d detector_boxes=%d ocr_candidates=%d "
+            "accepted_plates=%d dropped_confidence=%d dropped_debounce=%d rf_calls=%s rf_zero_box=%s rf_variant=%s",
+            self.camera_role,
+            self._active_source,
+            self._frames_read,
+            self._processed_frames,
+            self._read_failures,
+            self._invalid_frames,
+            self._detector_frames,
+            self._detector_box_frames,
+            self._detector_box_count,
+            self._ocr_candidates,
+            self._accepted_plates,
+            self._dropped_by_confidence,
+            self._dropped_by_debounce,
+            detector_debug.get('infer_calls', '?'),
+            detector_debug.get('zero_box_calls', '?'),
+            detector_debug.get('last_variant', '?'),
+        )
+        self._last_diag_ts = now
 
     def _is_debounced(self, plate: str) -> bool:
         return (time.time() - self._last_logged.get(plate, 0)) < self.debounce_seconds
@@ -682,12 +823,15 @@ class ANPREngine:
     def _process_frame(self, frame: np.ndarray):
         """Detect plates in this frame, read text, post to Django if valid."""
         self._processed_frames += 1
+        self._detector_frames += 1
         h, w = frame.shape[:2]
         pad = 10
 
         boxes = self.detector.detect(frame)
         if boxes:
             self._frames_no_box = 0
+            self._detector_box_frames += 1
+            self._detector_box_count += len(boxes)
             for (bx1, by1, bx2, by2) in boxes:
                 # Draw raw detector output so operator can see detector activity.
                 cv2.rectangle(frame, (max(0, bx1), max(0, by1)), (min(w, bx2), min(h, by2)), (0, 215, 255), 1)
@@ -709,6 +853,7 @@ class ANPREngine:
 
             posted = False
             frame_seen: set[str] = set()
+            best_conf_by_plate: dict[str, float] = {}
             for candidate in build_ocr_variants(plate_crop):
                 if posted:
                     break
@@ -719,6 +864,7 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, _) in extract_plate_candidates_from_ocr(ocr_results):
+                    self._ocr_candidates += 1
                     plate = normalize_plate_variant_noise(plate)
                     if plate in frame_seen:
                         continue
@@ -727,26 +873,41 @@ class ANPREngine:
                     if not is_strict_plate(plate):
                         continue
                     if confidence < MIN_OCR_CONFIDENCE:
+                        self._dropped_by_confidence += 1
                         continue
 
-                    log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
+                    previous = best_conf_by_plate.get(plate)
+                    if previous is None or confidence > previous:
+                        best_conf_by_plate[plate] = confidence
 
-                    if self._is_debounced(plate):
-                        log.info(f"Skipping '{plate}' -- debounced ({self.debounce_seconds}s).")
-                        posted = True
-                        break
+            ranked_candidates = sorted(
+                best_conf_by_plate.items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+            for plate, confidence in ranked_candidates:
+                if not self._has_vote_consensus(plate, confidence, DETECTOR_MIN_VOTE_CONFIDENCE):
+                    continue
 
-                    # Draw box + plate text on preview window
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(frame, plate, (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
 
-                    snapshot_b64 = self._build_snapshot_b64(frame)
+                if self._is_debounced(plate):
+                    log.info(f"Skipping '{plate}' -- debounced ({self.debounce_seconds}s).")
+                    self._dropped_by_debounce += 1
+                    continue
 
-                    if self._post_to_django(plate, snapshot_b64=snapshot_b64):
-                        self._record_logged(plate)
-                    posted = True
-                    break
+                # Draw box + plate text on preview window
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, plate, (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+                snapshot_b64 = self._build_snapshot_b64(frame)
+
+                if self._post_to_django(plate, snapshot_b64=snapshot_b64):
+                    self._record_logged(plate)
+                    self._accepted_plates += 1
+                posted = True
+                break
 
         # Fallback: if detector found no box, run OCR on whole frame every few processed frames.
         # This keeps CPU manageable while recovering from weak detector outputs.
@@ -761,6 +922,7 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, bbox_xyxy) in extract_plate_candidates_from_ocr(ocr_results):
+                    self._ocr_candidates += 1
                     plate = normalize_plate_variant_noise(plate)
                     if plate in frame_seen:
                         continue
@@ -769,12 +931,14 @@ class ANPREngine:
                     if not is_strict_plate(plate):
                         continue
                     if confidence < FALLBACK_MIN_OCR_CONFIDENCE:
+                        self._dropped_by_confidence += 1
                         continue
                     if not self._has_vote_consensus(plate, confidence, FALLBACK_MIN_OCR_CONFIDENCE):
                         continue
 
                     if self._is_debounced(plate):
                         log.info("Fallback OCR plate '%s' skipped (debounced).", plate)
+                        self._dropped_by_debounce += 1
                         return
 
                     log.info("Fallback OCR hit: '%s' (conf: %.2f)", plate, confidence)
@@ -802,6 +966,7 @@ class ANPREngine:
                     snapshot_b64 = self._build_snapshot_b64(frame)
                     if self._post_to_django(plate, snapshot_b64=snapshot_b64):
                         self._record_logged(plate)
+                        self._accepted_plates += 1
                     return
 
     def run(self, show_preview: bool = True):
@@ -810,7 +975,10 @@ class ANPREngine:
         is_rtsp = isinstance(source, str) and '://' in source
 
         if is_rtsp:
-            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|max_delay;500000|stimeout;5000000'
+            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
+                'rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|'
+                'max_delay;500000|stimeout;7000000|reorder_queue_size;0'
+            )
             source = _normalize_rtsp_url(str(source))
             rtsp_candidates = _rtsp_candidates(str(source))
         else:
@@ -823,19 +991,50 @@ class ANPREngine:
             log.info(f"Connecting to RTSP stream: {source}")
 
         def _open_capture(src):
-            cap_local = cv2.VideoCapture(src, cv2.CAP_FFMPEG) if is_rtsp else cv2.VideoCapture(src)
-            cap_local.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            try:
-                cap_local.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
-                cap_local.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
-            except Exception:
-                pass
-            return cap_local
+            backend_attempts = [
+                ('FFMPEG', lambda: cv2.VideoCapture(src, cv2.CAP_FFMPEG)),
+            ] if is_rtsp else []
+            backend_attempts.append(('DEFAULT', lambda: cv2.VideoCapture(src)))
+
+            for backend_name, factory in backend_attempts:
+                cap_local = factory()
+                try:
+                    cap_local.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                except Exception:
+                    pass
+
+                open_timeout_prop = getattr(cv2, 'CAP_PROP_OPEN_TIMEOUT_MSEC', None)
+                read_timeout_prop = getattr(cv2, 'CAP_PROP_READ_TIMEOUT_MSEC', None)
+                try:
+                    if open_timeout_prop is not None:
+                        cap_local.set(open_timeout_prop, 8000)
+                    if read_timeout_prop is not None:
+                        cap_local.set(read_timeout_prop, 8000)
+                except Exception:
+                    pass
+
+                if cap_local.isOpened():
+                    width = int(cap_local.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+                    height = int(cap_local.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+                    fps = float(cap_local.get(cv2.CAP_PROP_FPS) or 0.0)
+                    log.info(
+                        "Opened source using backend=%s (%sx%s @ %.2f fps)",
+                        backend_name,
+                        width,
+                        height,
+                        fps,
+                    )
+                    return cap_local
+
+                cap_local.release()
+
+            return cv2.VideoCapture()
 
         cap = None
         active_source = source
         for candidate in rtsp_candidates:
             active_source = candidate
+            self._active_source = str(candidate)
             log.info("Trying camera source: %s", candidate)
             cap = _open_capture(candidate)
             if cap.isOpened():
@@ -857,23 +1056,36 @@ class ANPREngine:
 
         frame_interval = self.frame_skip
         frame_count = 0
+        consecutive_read_fails = 0
+        consecutive_invalid_frames = 0
 
         try:
             while True:
                 if is_rtsp:
                     # Drop stale buffered frames to keep OCR close to real-time.
-                    for _ in range(2):
+                    for _ in range(self.rtsp_drain_grabs):
                         cap.grab()
 
                 ret, frame = cap.read()
                 if not ret:
-                    log.warning("Lost camera feed. Retrying in 5 seconds...")
-                    time.sleep(5)
+                    self._read_failures += 1
+                    consecutive_read_fails += 1
+                    if consecutive_read_fails < MAX_CONSECUTIVE_READ_FAILS:
+                        time.sleep(0.08)
+                        self._maybe_log_diagnostics()
+                        continue
+
+                    log.warning(
+                        "Lost camera feed after %d failed reads. Reconnecting...",
+                        consecutive_read_fails,
+                    )
                     cap.release()
+                    time.sleep(0.8)
 
                     reopened = False
                     for candidate in rtsp_candidates:
                         active_source = candidate
+                        self._active_source = str(candidate)
                         log.info("Reconnecting with source: %s", candidate)
                         cap = _open_capture(candidate)
                         if cap.isOpened():
@@ -883,11 +1095,43 @@ class ANPREngine:
 
                     if not reopened:
                         log.warning("All camera source candidates failed; keeping retry loop active.")
+                    consecutive_read_fails = 0
+                    self._maybe_log_diagnostics()
                     continue
+
+                consecutive_read_fails = 0
+                self._frames_read += 1
+
+                is_valid, frame_info = validate_decoded_frame(frame)
+                if not is_valid:
+                    self._invalid_frames += 1
+                    consecutive_invalid_frames += 1
+                    log.warning("Invalid decoded frame (%s)", frame_info)
+
+                    if consecutive_invalid_frames >= MAX_CONSECUTIVE_INVALID_FRAMES:
+                        log.warning(
+                            "Too many consecutive invalid frames (%d). Reinitializing source %s",
+                            consecutive_invalid_frames,
+                            active_source,
+                        )
+                        cap.release()
+                        cap = _open_capture(active_source)
+                        consecutive_invalid_frames = 0
+
+                    self._maybe_log_diagnostics()
+                    continue
+
+                consecutive_invalid_frames = 0
+
+                if frame.ndim == 2:
+                    # Some decoders can return grayscale frames; normalize to BGR for detector/OCR.
+                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
 
                 frame_count += 1
                 if frame_count % frame_interval == 0:
                     self._process_frame(frame)
+
+                self._maybe_log_diagnostics()
 
                 if show_preview:
                     cv2.imshow('BantayPlaka ANPR  [Q = quit]', frame)
@@ -898,6 +1142,7 @@ class ANPREngine:
             log.info("Stopped by user (Ctrl+C).")
         finally:
             cap.release()
+            self._maybe_log_diagnostics(force=True)
             if show_preview:
                 cv2.destroyAllWindows()
             log.info("ANPR engine stopped.")
@@ -939,6 +1184,8 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         help=f'Seconds before same plate can be logged again. Default: {DEBOUNCE_SECONDS}')
     parser.add_argument('--frame-skip', type=int, default=2,
         help='Process every Nth frame. Lower is faster detection but higher CPU/GPU usage. Default: 2')
+    parser.add_argument('--rtsp-drain-grabs', type=int, default=2,
+        help='How many buffered RTSP frames to grab/drop before each read. Higher lowers latency but can reduce decode stability. Default: 2')
 
     args = parser.parse_args()
 
@@ -951,6 +1198,7 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         yolo_model_path=args.model,
         debounce_seconds=args.debounce,
         frame_skip=args.frame_skip,
+        rtsp_drain_grabs=args.rtsp_drain_grabs,
     )
     engine.run(show_preview=not args.no_preview)
 

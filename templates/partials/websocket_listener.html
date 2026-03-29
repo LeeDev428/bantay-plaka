@@ -6,7 +6,6 @@
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
   const tbody = document.getElementById('live-log-body');
-  const freezeUntilByRole = Object.create(null);
 
   function showBlacklistAlert(data) {
     const old = document.getElementById('blacklist-alert-banner');
@@ -69,18 +68,17 @@
     const meta = document.getElementById(`${prefix}-feed-meta`);
 
     if (!img || !meta) return;
-    if (img.dataset.liveStream === 'true' || img.dataset.liveSnapshot) {
-      // In live mode, briefly show the detection snapshot (with bbox/label) then resume polling.
-      img.src = `${data.snapshot_url}?t=${Date.now()}`;
-      freezeUntilByRole[role] = Date.now() + 3500;
-      meta.textContent = `Plate ${data.plate_number} - ${data.timestamp}`;
-      return;
-    }
-
     img.src = `${data.snapshot_url}?t=${Date.now()}`;
     img.classList.remove('hidden');
     if (empty) empty.classList.add('hidden');
-    meta.textContent = `Plate ${data.plate_number} - ${data.timestamp}`;
+    meta.textContent = `Latest detection: Plate ${data.plate_number} - ${data.timestamp}`;
+
+    if (img.dataset.liveSnapshot === role) {
+      // After first successful detection, keep this card on latest detection snapshots.
+      img.removeAttribute('data-live-snapshot');
+      delete img.dataset.liveSnapshot;
+      img.dataset.liveStream = 'false';
+    }
   }
 
   socket.onmessage = function (e) {
@@ -146,8 +144,8 @@
       let busy = false;
       let failures = 0;
       setInterval(() => {
+        if (img.dataset.liveSnapshot !== role) return;
         if (busy) return;
-        if (freezeUntilByRole[role] && Date.now() < freezeUntilByRole[role]) return;
         busy = true;
         const probe = new Image();
         probe.onload = () => {

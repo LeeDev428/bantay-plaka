@@ -21,12 +21,14 @@ from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log, broadcast_blacklist_alert
 from apps.logs.views import resolve_plate
 from apps.visitors.models import BlacklistEntry
+from django.utils import timezone
 
 
 _FRAME_CACHE: dict[str, tuple[bytes, float]] = {}
 _FRAME_CACHE_LOCK = threading.Lock()
 _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
+MIN_GLOBAL_PLATE_RELOG_SECONDS = 8
 
 
 def _open_capture_fast(rtsp_url: str):
@@ -413,6 +415,26 @@ def ingest_plate(request):
 
         if not plate:
             return JsonResponse({'error': 'plate_number required'}, status=400)
+
+        last_camera_log = (
+            VehicleLog.objects
+            .filter(source=VehicleLog.SOURCE_CAMERA, plate_number__iexact=plate)
+            .order_by('-timestamp')
+            .first()
+        )
+        if last_camera_log is not None:
+            age_sec = (timezone.now() - last_camera_log.timestamp).total_seconds()
+            if age_sec < MIN_GLOBAL_PLATE_RELOG_SECONDS:
+                return JsonResponse(
+                    {
+                        'ok': True,
+                        'skipped': True,
+                        'reason': 'debounced',
+                        'log_id': last_camera_log.pk,
+                        'status': last_camera_log.status,
+                        'camera_role': last_camera_log.camera_role,
+                    }
+                )
 
         if BlacklistEntry.objects.filter(plate_number__iexact=plate, is_active=True).exists():
             broadcast_blacklist_alert(plate)

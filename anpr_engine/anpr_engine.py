@@ -41,6 +41,7 @@ NOTE: TIME_IN / TIME_OUT is auto-determined by Django.
 
 import argparse
 import base64
+from collections import defaultdict
 import logging
 import os
 import re
@@ -81,7 +82,15 @@ DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 DEBOUNCE_SECONDS = 30
 
 # Minimum OCR confidence to accept a plate reading (0.0 - 1.0)
-MIN_OCR_CONFIDENCE = 0.2
+MIN_OCR_CONFIDENCE = 0.35
+
+# Full-frame fallback OCR is noisier, so keep a higher confidence bar.
+FALLBACK_MIN_OCR_CONFIDENCE = 0.55
+
+# Require short temporal agreement before posting a new plate to reduce OCR jitter.
+VOTE_WINDOW_SECONDS = 2.0
+MIN_VOTE_COUNT = 2
+HIGH_CONF_SINGLE_SHOT = 0.88
 
 # Detection confidence threshold for both Roboflow and YOLO modes
 DETECTION_CONFIDENCE = 0.25
@@ -117,6 +126,11 @@ _LETTER_LIKE_MAP = {
     '8': 'B',
 }
 
+_PLATE_PATTERNS = (
+    re.compile(r'^[A-Z]{2,4}\d{3,4}$'),
+    re.compile(r'^\d{3,4}[A-Z]{2,4}$'),
+)
+
 # ---------------------------------------------------------------------------
 # Plate text cleaning
 # ---------------------------------------------------------------------------
@@ -128,57 +142,82 @@ def clean_plate_text(raw_text: str) -> str | None:
             AB 1234  (motorcycle: 2 letters + space + 4 digits)
     Returns None if the text looks like garbage.
     """
-    cleaned = ''.join(c for c in raw_text.upper() if c.isalnum() or c in {' ', '-'})
-    cleaned = ' '.join(cleaned.split())
-    cleaned = cleaned.replace('-', ' ')
-
-    if len(cleaned) < 5:
+    compact = ''.join(c for c in str(raw_text).upper() if c.isalnum())
+    if len(compact) < 5:
         return None
 
-    # Insert space if missing (e.g. "ABC1234" -> "ABC 1234")
-    if ' ' not in cleaned:
-        letters = ''.join(c for c in cleaned if c.isalpha())
-        digits = ''.join(c for c in cleaned if c.isdigit())
-        if letters and digits:
-            cleaned = f'{letters} {digits}'
-        else:
-            compact = ''.join(c for c in cleaned if c.isalnum())
-            if 5 <= len(compact) <= 8 and any(c.isalpha() for c in compact) and any(c.isdigit() for c in compact):
-                return compact
-            return None
+    def format_compact(value: str) -> str | None:
+        if _PLATE_PATTERNS[0].fullmatch(value):
+            split_at = next((i for i, ch in enumerate(value) if ch.isdigit()), len(value))
+            return f"{value[:split_at]} {value[split_at:]}"
+        if _PLATE_PATTERNS[1].fullmatch(value):
+            split_at = next((i for i, ch in enumerate(value) if ch.isalpha()), len(value))
+            return f"{value[:split_at]} {value[split_at:]}"
+        return None
 
-    compact = ''.join(c for c in cleaned if c.isalnum())
+    direct = format_compact(compact)
+    if direct:
+        return direct
 
-    # Fix common OCR confusions between letters/digits.
-    # Example: ABCI23 -> ABC123, A8C123 -> ABC123
-    if 5 <= len(compact) <= 8:
-        for letters_len in range(2, 5):
-            digits_len = len(compact) - letters_len
-            if digits_len < 3 or digits_len > 4:
+    # Try all bounded slices to remove one noisy prefix/suffix OCR character.
+    slices: list[str] = []
+    n = len(compact)
+    for size in range(8, 4, -1):
+        if size > n:
+            continue
+        for start in range(0, n - size + 1):
+            slices.append(compact[start:start + size])
+
+    best_value: str | None = None
+    best_score: tuple[int, int] | None = None
+
+    def try_orientation(value: str, left_is_letters: bool):
+        nonlocal best_value, best_score
+        length = len(value)
+        left_range = range(2, 5) if left_is_letters else range(3, 5)
+        for left_len in left_range:
+            right_len = length - left_len
+            if left_is_letters and not (3 <= right_len <= 4):
+                continue
+            if (not left_is_letters) and not (2 <= right_len <= 4):
                 continue
 
-            left = compact[:letters_len]
-            right = compact[letters_len:]
-            fixed_left = ''.join(_LETTER_LIKE_MAP.get(c, c) for c in left)
-            fixed_right = ''.join(_DIGIT_LIKE_MAP.get(c, c) for c in right)
+            left = value[:left_len]
+            right = value[left_len:]
 
-            if fixed_left.isalpha() and fixed_right.isdigit():
-                return f'{fixed_left} {fixed_right}'
+            if left_is_letters:
+                fixed_left = ''.join(_LETTER_LIKE_MAP.get(c, c) for c in left)
+                fixed_right = ''.join(_DIGIT_LIKE_MAP.get(c, c) for c in right)
+                valid = fixed_left.isalpha() and fixed_right.isdigit()
+                candidate_compact = fixed_left + fixed_right
+            else:
+                fixed_left = ''.join(_DIGIT_LIKE_MAP.get(c, c) for c in left)
+                fixed_right = ''.join(_LETTER_LIKE_MAP.get(c, c) for c in right)
+                valid = fixed_left.isdigit() and fixed_right.isalpha()
+                candidate_compact = fixed_left + fixed_right
 
-    # Common PH patterns: ABC1234, AB1234, ABC123
-    if re.fullmatch(r'[A-Z]{2,4}\d{3,4}', compact):
-        letters = ''.join(c for c in compact if c.isalpha())
-        digits = ''.join(c for c in compact if c.isdigit())
-        return f'{letters} {digits}'
+            if not valid:
+                continue
 
-    letters_count = sum(1 for c in compact if c.isalpha())
-    digits_count = sum(1 for c in compact if c.isdigit())
+            formatted = format_compact(candidate_compact)
+            if not formatted:
+                continue
 
-    # Safe fallback for OCR noise (e.g., A8C12B4), bounded to practical plate lengths.
-    if 5 <= len(compact) <= 8 and 2 <= letters_count <= 4 and 3 <= digits_count <= 4:
-        return compact
+            substitutions = sum(1 for a, b in zip(left + right, candidate_compact) if a != b)
+            score = (substitutions, -len(candidate_compact))
+            if best_score is None or score < best_score:
+                best_score = score
+                best_value = formatted
 
-    return None
+    for value in slices:
+        try_orientation(value, left_is_letters=True)
+        try_orientation(value, left_is_letters=False)
+
+    return best_value
+
+
+def is_strict_plate(plate: str) -> bool:
+    return bool(re.fullmatch(r'(?:[A-Z]{2,4} \d{3,4}|\d{3,4} [A-Z]{2,4})', plate))
 
 
 def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
@@ -453,6 +492,7 @@ class ANPREngine:
         self.debounce_seconds = debounce_seconds
         self.frame_skip = max(1, int(frame_skip))
         self._last_logged: dict[str, float] = {}
+        self._vote_history: dict[str, list[tuple[float, float]]] = defaultdict(list)
         self._frames_no_box = 0
         self._processed_frames = 0
 
@@ -480,6 +520,20 @@ class ANPREngine:
 
     def _record_logged(self, plate: str):
         self._last_logged[plate] = time.time()
+
+    def _has_vote_consensus(self, plate: str, confidence: float, min_conf: float) -> bool:
+        now = time.time()
+        votes = self._vote_history[plate]
+        votes.append((now, float(confidence)))
+        votes[:] = [(ts, conf) for (ts, conf) in votes if (now - ts) <= VOTE_WINDOW_SECONDS]
+
+        if confidence >= HIGH_CONF_SINGLE_SHOT:
+            return True
+        if len(votes) < MIN_VOTE_COUNT:
+            return False
+
+        avg_conf = sum(conf for _, conf in votes) / len(votes)
+        return avg_conf >= min_conf
 
     def _build_snapshot_b64(self, frame: np.ndarray) -> str:
         snapshot_b64 = ''
@@ -568,6 +622,7 @@ class ANPREngine:
                 continue
 
             posted = False
+            frame_seen: set[str] = set()
             for candidate in build_ocr_variants(plate_crop):
                 if posted:
                     break
@@ -578,9 +633,15 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, _) in extract_plate_candidates_from_ocr(ocr_results):
-                    strict_pattern = bool(re.fullmatch(r'[A-Z]{2,4} \d{3,4}', plate))
-                    min_conf = 0.04 if strict_pattern else MIN_OCR_CONFIDENCE
-                    if confidence < min_conf:
+                    if plate in frame_seen:
+                        continue
+                    frame_seen.add(plate)
+
+                    if not is_strict_plate(plate):
+                        continue
+                    if confidence < MIN_OCR_CONFIDENCE:
+                        continue
+                    if not self._has_vote_consensus(plate, confidence, MIN_OCR_CONFIDENCE):
                         continue
 
                     log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
@@ -606,6 +667,7 @@ class ANPREngine:
         # This keeps CPU manageable while recovering from weak detector outputs.
         if not boxes and self._processed_frames % 3 == 0:
             frame_variants = build_ocr_variants(frame)
+            frame_seen: set[str] = set()
             for candidate in frame_variants:
                 ocr_results = self.ocr.readtext(
                     candidate,
@@ -614,9 +676,15 @@ class ANPREngine:
                     paragraph=False,
                 )
                 for (plate, confidence, bbox_xyxy) in extract_plate_candidates_from_ocr(ocr_results):
-                    strict_pattern = bool(re.fullmatch(r'[A-Z]{2,4} \d{3,4}', plate))
-                    min_conf = 0.04 if strict_pattern else max(0.08, MIN_OCR_CONFIDENCE - 0.10)
-                    if confidence < min_conf:
+                    if plate in frame_seen:
+                        continue
+                    frame_seen.add(plate)
+
+                    if not is_strict_plate(plate):
+                        continue
+                    if confidence < FALLBACK_MIN_OCR_CONFIDENCE:
+                        continue
+                    if not self._has_vote_consensus(plate, confidence, FALLBACK_MIN_OCR_CONFIDENCE):
                         continue
 
                     if self._is_debounced(plate):

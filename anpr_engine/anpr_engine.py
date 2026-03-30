@@ -823,9 +823,22 @@ class ANPREngine:
         self._active_source = str(rtsp_url)
         self._last_diag_ts = time.time()
 
-        # Initialize plate detector
+        # Initialize plate detector. On restricted Windows clients, Roboflow model
+        # package loading can fail due to symlink privileges; fallback keeps webcam
+        # preview and pipeline running.
         if mode == 'roboflow':
-            self.detector = RoboflowDetector(rf_model_id, ROBOFLOW_API_KEY)
+            try:
+                self.detector = RoboflowDetector(rf_model_id, ROBOFLOW_API_KEY)
+            except BaseException as exc:
+                if isinstance(exc, KeyboardInterrupt):
+                    raise
+                log.error("Roboflow detector failed to initialize: %s", exc)
+                log.warning("Falling back to YOLO detector for compatibility.")
+                try:
+                    self.detector = YOLODetector(yolo_model_path)
+                except BaseException as yolo_exc:
+                    log.error("YOLO fallback failed to initialize: %s", yolo_exc)
+                    sys.exit(1)
         elif mode == 'yolo':
             self.detector = YOLODetector(yolo_model_path)
         else:

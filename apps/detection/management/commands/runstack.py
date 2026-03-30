@@ -102,6 +102,7 @@ class Command(BaseCommand):
                 py,
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', webcam_index,
+                '--mode', 'yolo',
                 '--frame-skip', '1',
             ]
             if strict_roles:

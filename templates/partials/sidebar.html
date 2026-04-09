@@ -55,7 +55,16 @@
     {% if user.is_resident %}
     <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">Resident</p>
     <a href="{% url 'resident_dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'resident_dashboard' %}active{% endif %}">
-      <i class="fa fa-id-card w-5 text-center"></i> My Profile
+      <i class="fa fa-gauge-high w-5 text-center"></i> Dashboard
+    </a>
+    <a href="{% url 'resident_vehicles' %}" class="sidebar-link {% if request.resolver_match.url_name == 'resident_vehicles' %}active{% endif %}">
+      <i class="fa fa-car-side w-5 text-center"></i> My Vehicles
+    </a>
+    <a href="{% url 'resident_logs' %}" class="sidebar-link {% if request.resolver_match.url_name == 'resident_logs' %}active{% endif %}">
+      <i class="fa fa-right-left w-5 text-center"></i> In and Out Logs
+    </a>
+    <a href="{% url 'resident_profile' %}" class="sidebar-link {% if request.resolver_match.url_name == 'resident_profile' %}active{% endif %}">
+      <i class="fa fa-id-card w-5 text-center"></i> Profile
     </a>
     {% endif %}
   </nav>

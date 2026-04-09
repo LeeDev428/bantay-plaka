@@ -36,7 +36,7 @@ class VehicleLog(models.Model):
     ]
 
     plate_number = models.CharField(max_length=20, db_index=True)
-    entry_type = models.CharField(max_length=10, choices=ENTRY_TYPE_CHOICES, default=TYPE_UNKNOWN)
+    entry_type = models.CharField(max_length=10, choices=ENTRY_TYPE_CHOICES, default=TYPE_VISITOR)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
     source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default=SOURCE_CAMERA)
     camera_role = models.CharField(
@@ -68,8 +68,8 @@ class VehicleLog(models.Model):
         if self.entry_type == self.TYPE_RESIDENT:
             return self.resident_name or self.plate_number
         if self.entry_type == self.TYPE_VISITOR:
-            return self.visitor_name or 'Visitor'
-        return 'Unknown'
+            return self.visitor_name or self.plate_number
+        return self.visitor_name or self.resident_name or self.plate_number
 
     @property
     def local_time(self):

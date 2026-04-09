@@ -5,13 +5,13 @@
 {% block content %}
 <!-- Page Header -->
 <div class="mb-6">
-  <h1 class="text-2xl font-bold text-slate-800">Dashboard</h1>
-  <p class="text-slate-500 text-sm mt-0.5">System overview and real-time gate activity</p>
+  <h1 class="text-2xl font-bold text-slate-800">Admin Command Center</h1>
+  <p class="text-slate-500 text-sm mt-0.5">Overview of residents, guards, approvals, and gate activity.</p>
 </div>
 
 <!-- Stats -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  <div class="stat-card">
+  <a href="{% url 'resident_list' %}" class="stat-card block">
     <div class="flex items-center justify-between">
       <div>
         <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Residents</p>
@@ -21,8 +21,41 @@
         <i class="fa fa-house-user text-blue-600"></i>
       </div>
     </div>
-  </div>
-  <div class="stat-card">
+  </a>
+  <a href="{% url 'resident_list' %}" class="stat-card block">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Pending Approval</p>
+        <p class="text-2xl font-bold {% if pending_residents %}text-amber-600{% else %}text-emerald-600{% endif %} mt-1">{{ pending_residents }}</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+        <i class="fa fa-hourglass-half text-amber-600"></i>
+      </div>
+    </div>
+  </a>
+  <a href="{% url 'log_list' %}?status=TIME_IN" class="stat-card block">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Today Time In</p>
+        <p class="text-2xl font-bold text-blue-700 mt-1">{{ today_in }}</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+        <i class="fa fa-arrow-right-to-bracket text-blue-600"></i>
+      </div>
+    </div>
+  </a>
+  <a href="{% url 'log_list' %}?status=TIME_OUT" class="stat-card block">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Today Time Out</p>
+        <p class="text-2xl font-bold text-red-600 mt-1">{{ today_out }}</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+        <i class="fa fa-arrow-right-from-bracket text-red-600"></i>
+      </div>
+    </div>
+  </a>
+  <a href="{% url 'resident_list' %}" class="stat-card block">
     <div class="flex items-center justify-between">
       <div>
         <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Vehicles</p>
@@ -32,8 +65,8 @@
         <i class="fa fa-car text-emerald-600"></i>
       </div>
     </div>
-  </div>
-  <div class="stat-card">
+  </a>
+  <a href="{% url 'user_management' %}" class="stat-card block">
     <div class="flex items-center justify-between">
       <div>
         <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Active Guards</p>
@@ -43,97 +76,13 @@
         <i class="fa fa-user-shield text-violet-600"></i>
       </div>
     </div>
-  </div>
-  <div class="stat-card">
-    <div class="flex items-center justify-between">
-      <div>
-        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Camera</p>
-        {% if camera_stale %}
-          <p class="text-lg font-bold text-red-600 mt-1">STALE</p>
-          <p class="text-[11px] text-slate-500 mt-0.5">
-            {% if last_camera_log_local %}
-              Last log {{ last_camera_log_local|date:"h:i:s A" }}
-            {% else %}
-              No camera detections yet
-            {% endif %}
-          </p>
-          <p class="text-[11px] text-amber-700 mt-0.5">Start start-2cams.bat (ENTRY/EXIT ANPR workers).</p>
-        {% else %}
-          <p class="text-lg font-bold text-emerald-600 mt-1">LIVE</p>
-          <p class="text-[11px] text-slate-500 mt-0.5">Last log {{ last_camera_log_local|date:"h:i:s A" }}</p>
-        {% endif %}
-      </div>
-      <div class="w-10 h-10 rounded-lg {% if camera_stale %}bg-red-100{% else %}bg-emerald-100{% endif %} flex items-center justify-center">
-        <i class="fa fa-video {% if camera_stale %}text-red-600{% else %}text-emerald-600{% endif %}"></i>
-      </div>
-    </div>
-  </div>
+  </a>
 </div>
 
-<!-- Live Detection Feed -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-  <div class="page-card overflow-hidden">
-    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-      <h2 class="font-semibold text-slate-800">Entry Camera Feed</h2>
-      <span class="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">TIME_IN</span>
-    </div>
-    <div class="p-4">
-      <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
-        {% if has_entry_camera_stream %}
-          <img id="entry-feed-image" data-live-snapshot="ENTRY_CAM" src="{% url 'camera_frame' 'ENTRY_CAM' %}?t={{ now_ts }}" alt="Entry camera live feed" class="w-full h-full object-cover" />
-        {% elif entry_feed and entry_feed.snapshot %}
-          <img id="entry-feed-image" src="{{ entry_feed.snapshot.url }}" alt="Entry camera detection" class="w-full h-full object-cover" />
-        {% else %}
-          <img id="entry-feed-image" src="" alt="Entry camera detection" class="w-full h-full object-cover hidden" />
-          <p id="entry-feed-empty" class="text-slate-500 text-sm">No entry detections yet.</p>
-        {% endif %}
-      </div>
-      <p id="entry-feed-meta" class="text-xs text-slate-500 mt-2">
-        {% if entry_feed %}
-          Latest detection: Plate {{ entry_feed.plate_number }} - {{ entry_feed.local_time|date:"M d, Y h:i:s A" }}
-        {% else %}
-          Waiting for ENTRY_CAM detections...
-        {% endif %}
-      </p>
-    </div>
-  </div>
-  <div class="page-card overflow-hidden">
-    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-      <h2 class="font-semibold text-slate-800">Exit Camera Feed</h2>
-      <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">TIME_OUT</span>
-    </div>
-    <div class="p-4">
-      <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
-        {% if has_exit_camera_stream %}
-          <img id="exit-feed-image" data-live-snapshot="EXIT_CAM" src="{% url 'camera_frame' 'EXIT_CAM' %}?t={{ now_ts }}" alt="Exit camera live feed" class="w-full h-full object-cover" />
-        {% elif exit_feed and exit_feed.snapshot %}
-          <img id="exit-feed-image" src="{{ exit_feed.snapshot.url }}" alt="Exit camera detection" class="w-full h-full object-cover" />
-        {% else %}
-          <img id="exit-feed-image" src="" alt="Exit camera detection" class="w-full h-full object-cover hidden" />
-          <p id="exit-feed-empty" class="text-slate-500 text-sm">No exit detections yet.</p>
-        {% endif %}
-      </div>
-      <p id="exit-feed-meta" class="text-xs text-slate-500 mt-2">
-        {% if exit_feed %}
-          Latest detection: Plate {{ exit_feed.plate_number }} - {{ exit_feed.local_time|date:"M d, Y h:i:s A" }}
-        {% else %}
-          Waiting for EXIT_CAM detections...
-        {% endif %}
-      </p>
-    </div>
-  </div>
-</div>
-
-<!-- Live Gate Log -->
+<!-- Recent Gate Log -->
 <div class="page-card">
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-    <div class="flex items-center gap-2">
-      <span class="relative flex h-2.5 w-2.5">
-        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-      </span>
-      <h2 class="font-semibold text-slate-800">Live Gate Log</h2>
-    </div>
+    <h2 class="font-semibold text-slate-800">Latest Vehicle Logs</h2>
     <a href="{% url 'log_list' %}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">View All &rarr;</a>
   </div>
   <div class="overflow-x-auto">
@@ -143,16 +92,17 @@
           <th class="font-semibold">Plate</th>
           <th class="font-semibold">Name</th>
           <th class="font-semibold">Type</th>
+          <th class="font-semibold">Blacklist</th>
           <th class="font-semibold">Status</th>
           <th class="font-semibold">Source</th>
           <th class="font-semibold">Time</th>
         </tr>
       </thead>
-      <tbody id="live-log-body">
+      <tbody>
         {% for log in recent_logs %}
           {% include 'partials/log_row.html' with log=log %}
         {% empty %}
-          <tr><td colspan="6" class="text-center text-slate-400 py-12">No gate activity recorded yet.</td></tr>
+          <tr><td colspan="7" class="text-center text-slate-400 py-12">No gate activity recorded yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -161,5 +111,4 @@
 {% endblock %}
 
 {% block extra_scripts %}
-{% include 'partials/websocket_listener.html' %}
 {% endblock %}

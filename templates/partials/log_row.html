@@ -5,10 +5,16 @@
   <td>
     {% if log.entry_type == 'RESIDENT' %}
       <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>
-    {% elif log.entry_type == 'VISITOR' %}
-      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>
     {% else %}
-      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Unknown</span>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>
+    {% endif %}
+  </td>
+  <td>
+    {% if log.blacklist_tag %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{{ log.blacklist_tag|title }}</span>
+      {% if log.blacklist_remarks %}<p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="{{ log.blacklist_remarks }}">{{ log.blacklist_remarks }}</p>{% endif %}
+    {% else %}
+      <span class="text-xs text-slate-400">-</span>
     {% endif %}
   </td>
   <td>

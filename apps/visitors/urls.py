@@ -6,4 +6,6 @@ urlpatterns = [
     path('log/', views.visitor_log_entry, name='visitor_log_entry'),
     path('blacklist/', views.blacklist_list, name='blacklist_list'),
     path('blacklist/<int:pk>/toggle/', views.blacklist_toggle, name='blacklist_toggle'),
+    path('blacklist/<int:pk>/edit/', views.blacklist_edit, name='blacklist_edit'),
+    path('blacklist/<int:pk>/cancel/', views.blacklist_cancel, name='blacklist_cancel'),
 ]

@@ -111,7 +111,7 @@
 
     const blacklistCell = data.blacklist_tag
       ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">${safeTag}</span>${data.blacklist_remarks ? `<p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="${safeRemarks}">${safeRemarks}</p>` : ''}`
-      : '<span class="text-xs text-slate-400">-</span>';
+      : '<span class="text-xs text-slate-400">No remarks</span>';
 
     const statusBadge = data.status === 'TIME_IN'
       ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><i class="fa fa-arrow-right text-[9px]"></i> IN</span>'

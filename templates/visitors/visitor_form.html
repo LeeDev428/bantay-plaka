@@ -10,21 +10,93 @@
   </div>
 
   <div class="page-card p-6">
-    <form method="post" novalidate>
+    <form method="post" novalidate id="visitor-form">
       {% csrf_token %}
-      {% for field in form %}
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-slate-700 mb-1.5">
-            {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
-          </label>
-          {{ field }}
-          {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Status <span class="text-red-400">*</span></label>
+        {{ form.status }}
+        {% if form.status.errors %}<p class="text-red-500 text-xs mt-1">{{ form.status.errors.0 }}</p>{% endif %}
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">First Name <span class="text-red-400">*</span></label>
+          {{ form.first_name }}
+          {% if form.first_name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.first_name.errors.0 }}</p>{% endif %}
         </div>
-      {% endfor %}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Last Name <span class="text-red-400">*</span></label>
+          {{ form.last_name }}
+          {% if form.last_name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.last_name.errors.0 }}</p>{% endif %}
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Contact Number <span class="text-red-400">*</span></label>
+        {{ form.contact_number }}
+        {% if form.contact_number.errors %}<p class="text-red-500 text-xs mt-1">{{ form.contact_number.errors.0 }}</p>{% endif %}
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Purpose <span class="text-red-400">*</span></label>
+        {{ form.purpose }}
+        {% if form.purpose.errors %}<p class="text-red-500 text-xs mt-1">{{ form.purpose.errors.0 }}</p>{% endif %}
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Host Name <span class="text-red-400">*</span></label>
+        {{ form.host_name }}
+        {% if form.host_name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.host_name.errors.0 }}</p>{% endif %}
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Plate Number <span class="text-red-400">*</span></label>
+        {{ form.plate_number }}
+        {% if form.plate_number.errors %}<p class="text-red-500 text-xs mt-1">{{ form.plate_number.errors.0 }}</p>{% endif %}
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Vehicle Type <span class="text-red-400">*</span></label>
+        {{ form.vehicle_type }}
+        {% if form.vehicle_type.errors %}<p class="text-red-500 text-xs mt-1">{{ form.vehicle_type.errors.0 }}</p>{% endif %}
+      </div>
+
+      <div class="mb-4" id="vehicle-type-other-group">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Specify Vehicle Type <span class="text-red-400">*</span></label>
+        {{ form.vehicle_type_other }}
+        {% if form.vehicle_type_other.errors %}<p class="text-red-500 text-xs mt-1">{{ form.vehicle_type_other.errors.0 }}</p>{% endif %}
+      </div>
+
       <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white w-full mt-4">
         <i class="fa fa-user-plus mr-1"></i> Log Visitor Time In
       </button>
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const typeInput = document.getElementById('id_vehicle_type');
+  const otherGroup = document.getElementById('vehicle-type-other-group');
+  const otherInput = document.getElementById('id_vehicle_type_other');
+
+  function syncVehicleTypeOther() {
+    if (!typeInput || !otherGroup || !otherInput) return;
+    const isOther = typeInput.value === 'OTHER';
+    otherGroup.classList.toggle('hidden', !isOther);
+    otherInput.required = isOther;
+    if (!isOther) {
+      otherInput.value = '';
+    }
+  }
+
+  if (typeInput) {
+    typeInput.addEventListener('change', syncVehicleTypeOther);
+  }
+  syncVehicleTypeOther();
+})();
+</script>
 {% endblock %}

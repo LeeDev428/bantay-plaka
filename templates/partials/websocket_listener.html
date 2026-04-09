@@ -103,7 +103,7 @@
       ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>'
       : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>';
 
-    const safeTag = escapeHtml((data.blacklist_tag || '').replace('_', ' '));
+    const safeTag = escapeHtml(data.blacklist_tag_display || (data.blacklist_tag || '').replace('_', ' '));
     const safeRemarks = escapeHtml(data.blacklist_remarks || '');
     const safePlate = escapeHtml(data.plate_number || '');
     const safeDisplayName = escapeHtml(data.display_name || '');

@@ -29,8 +29,21 @@
 
   <div class="lg:col-span-2">
     <div class="page-card">
-      <div class="p-5 border-b border-slate-100">
+      <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h2 class="font-semibold text-slate-800">Blacklist Entries</h2>
+        <form method="get" class="flex gap-2 w-full sm:w-auto">
+          <input
+            type="text"
+            name="q"
+            value="{{ q|default:'' }}"
+            placeholder="Search plate, reason, remarks"
+            class="input input-bordered input-sm w-full sm:w-72"
+          >
+          <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">Search</button>
+          {% if q %}
+            <a href="{% url 'blacklist_list' %}" class="btn btn-sm btn-ghost">Clear</a>
+          {% endif %}
+        </form>
       </div>
       <div class="overflow-x-auto">
         <table class="table table-sm">
@@ -65,14 +78,35 @@
               <td class="text-xs text-slate-500">{{ entry.created_by.get_full_name|default:'—' }}</td>
               <td class="text-xs text-slate-400">{{ entry.created_at|date:"M d, Y h:i A" }}</td>
               <td>
-                <form method="post" action="{% url 'blacklist_toggle' entry.pk %}">
-                  {% csrf_token %}
-                  {% if entry.is_active %}
-                  <button type="submit" class="btn btn-xs bg-slate-100 hover:bg-slate-200 border-0 text-slate-700">Deactivate</button>
-                  {% else %}
-                  <button type="submit" class="btn btn-xs bg-emerald-100 hover:bg-emerald-200 border-0 text-emerald-700">Activate</button>
-                  {% endif %}
-                </form>
+                <div class="flex flex-wrap gap-1">
+                  <form method="post" action="{% url 'blacklist_toggle' entry.pk %}">
+                    {% csrf_token %}
+                    {% if entry.is_active %}
+                      <button type="submit" class="btn btn-xs bg-slate-100 hover:bg-slate-200 border-0 text-slate-700">Deactivate</button>
+                    {% else %}
+                      <button type="submit" class="btn btn-xs bg-emerald-100 hover:bg-emerald-200 border-0 text-emerald-700">Activate</button>
+                    {% endif %}
+                  </form>
+
+                  <button
+                    type="button"
+                    class="btn btn-xs bg-blue-100 hover:bg-blue-200 border-0 text-blue-700"
+                    data-edit-blacklist
+                    data-edit-url="{% url 'blacklist_edit' entry.pk %}"
+                    data-plate="{{ entry.plate_number }}"
+                    data-tag="{{ entry.tag }}"
+                    data-reason="{{ entry.reason|escapejs }}"
+                    data-remarks="{{ entry.remarks|escapejs }}"
+                  >
+                    Edit
+                  </button>
+
+                  <form method="post" action="{% url 'blacklist_cancel' entry.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-xs bg-amber-100 hover:bg-amber-200 border-0 text-amber-700">Cancel</button>
+                  </form>
+                </div>
               </td>
             </tr>
             {% empty %}
@@ -81,7 +115,116 @@
           </tbody>
         </table>
       </div>
+
+      {% if entries.paginator.num_pages > 1 %}
+        <div class="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p class="text-xs text-slate-500">
+            Showing page {{ entries.number }} of {{ entries.paginator.num_pages }}
+          </p>
+          <div class="join">
+            {% if entries.has_previous %}
+              <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ entries.previous_page_number }}">Prev</a>
+            {% else %}
+              <button class="join-item btn btn-sm btn-disabled">Prev</button>
+            {% endif %}
+
+            <button class="join-item btn btn-sm btn-active">{{ entries.number }}</button>
+
+            {% if entries.has_next %}
+              <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ entries.next_page_number }}">Next</a>
+            {% else %}
+              <button class="join-item btn btn-sm btn-disabled">Next</button>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
     </div>
   </div>
 </div>
+
+<div id="blacklist-edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeBlacklistEditModal()"></div>
+  <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h3 class="text-lg font-bold text-slate-800">Edit Blacklist Entry</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeBlacklistEditModal()">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+    <form id="blacklist-edit-form" method="post" class="px-6 py-5 space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Plate Number</label>
+        <input id="edit-plate" name="plate_number" class="input input-bordered w-full uppercase" maxlength="20" required>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Tag</label>
+        <select id="edit-tag" name="tag" class="select select-bordered w-full" required>
+          <option value="WATCHLIST">Watchlist</option>
+          <option value="HIGH_RISK">High Risk</option>
+          <option value="TEMP_BLOCK">Temporary Block</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Reason</label>
+        <input id="edit-reason" name="reason" class="input input-bordered w-full" maxlength="255">
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Remarks</label>
+        <textarea id="edit-remarks" name="remarks" class="textarea textarea-bordered w-full" rows="3"></textarea>
+      </div>
+
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeBlacklistEditModal()">Close</button>
+        <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const modal = document.getElementById('blacklist-edit-modal');
+  const form = document.getElementById('blacklist-edit-form');
+  const plate = document.getElementById('edit-plate');
+  const tag = document.getElementById('edit-tag');
+  const reason = document.getElementById('edit-reason');
+  const remarks = document.getElementById('edit-remarks');
+  const triggers = document.querySelectorAll('[data-edit-blacklist]');
+
+  window.closeBlacklistEditModal = function closeBlacklistEditModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  };
+
+  function openModalWithData(button) {
+    if (!modal || !form) return;
+    form.action = button.dataset.editUrl;
+    plate.value = button.dataset.plate || '';
+    tag.value = button.dataset.tag || 'WATCHLIST';
+    reason.value = button.dataset.reason || '';
+    remarks.value = button.dataset.remarks || '';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  triggers.forEach((button) => {
+    button.addEventListener('click', () => openModalWithData(button));
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      window.closeBlacklistEditModal();
+    }
+  });
+})();
+</script>
 {% endblock %}

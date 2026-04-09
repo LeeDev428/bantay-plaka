@@ -4,6 +4,8 @@ from django.contrib import messages
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
+from django.db.models import Q
+from django.core.paginator import Paginator
 import datetime
 from datetime import timedelta
 
@@ -136,8 +138,23 @@ def admin_dashboard(request):
 
 @admin_required
 def user_management(request):
-    users = User.objects.exclude(pk=request.user.pk).order_by('role', 'last_name')
-    return render(request, 'dashboard/admin/user_management.html', {'users': users})
+    q = request.GET.get('q', '').strip()
+    users_qs = User.objects.exclude(pk=request.user.pk).order_by('role', 'last_name')
+    if q:
+        users_qs = users_qs.filter(
+            Q(username__icontains=q)
+            | Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
+            | Q(contact_number__icontains=q)
+        )
+    paginator = Paginator(users_qs, 10)
+    users = paginator.get_page(request.GET.get('page', 1))
+    return render(request, 'dashboard/admin/user_management.html', {
+        'users': users,
+        'q': q,
+        'create_form': UserCreateForm(),
+        'edit_form_template': UserEditForm(),
+    })
 
 
 @admin_required
@@ -217,9 +234,92 @@ def resident_dashboard(request):
     for vehicle in vehicles:
         vehicle.blacklist_entry = bl_map.get((vehicle.plate_number or '').upper())
 
+    logs_qs = VehicleLog.objects.filter(plate_number__in=plates).order_by('-timestamp')
+    logs = logs_qs[:10]
+
+    if active_blacklist:
+        resident_status = 'BLACKLISTED'
+        resident_status_reason = active_blacklist[0].remarks or active_blacklist[0].reason or 'Resident has a blacklisted vehicle.'
+    elif resident.is_approved:
+        resident_status = 'APPROVED'
+        resident_status_reason = 'Approved by admin.'
+    elif resident.approved_by_id:
+        resident_status = 'NOT_APPROVED'
+        resident_status_reason = resident.approval_reason or 'Registration rejected by admin.'
+    else:
+        resident_status = 'PENDING'
+        resident_status_reason = resident.approval_reason or 'Waiting for admin approval.'
+
     context = {
         'resident': resident,
         'vehicles': vehicles,
+        'logs': logs,
         'active_blacklist': active_blacklist,
+        'resident_status': resident_status,
+        'resident_status_reason': resident_status_reason,
+        'now_local': timezone.localtime(),
     }
     return render(request, 'dashboard/resident/index.html', context)
+
+
+@login_required
+def resident_vehicles(request):
+    if not request.user.is_resident():
+        return redirect('dashboard')
+
+    resident = get_object_or_404(Resident.objects.prefetch_related('vehicles'), user=request.user)
+    vehicles = resident.vehicles.all().order_by('plate_number')
+    context = {
+        'resident': resident,
+        'vehicles': vehicles,
+        'now_local': timezone.localtime(),
+    }
+    return render(request, 'dashboard/resident/vehicles.html', context)
+
+
+@login_required
+def resident_logs(request):
+    if not request.user.is_resident():
+        return redirect('dashboard')
+
+    resident = get_object_or_404(Resident.objects.prefetch_related('vehicles'), user=request.user)
+    plates = list(resident.vehicles.values_list('plate_number', flat=True))
+    logs_qs = VehicleLog.objects.filter(plate_number__in=plates).order_by('-timestamp')
+    paginator = Paginator(logs_qs, 10)
+    logs = paginator.get_page(request.GET.get('page', 1))
+    context = {
+        'resident': resident,
+        'logs': logs,
+        'now_local': timezone.localtime(),
+    }
+    return render(request, 'dashboard/resident/logs.html', context)
+
+
+@login_required
+def resident_profile(request):
+    if not request.user.is_resident():
+        return redirect('dashboard')
+
+    resident = get_object_or_404(Resident, user=request.user)
+    plates = list(resident.vehicles.values_list('plate_number', flat=True))
+    active_blacklist = BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
+    if active_blacklist.exists():
+        resident_status = 'BLACKLISTED'
+        resident_status_reason = active_blacklist.first().remarks or active_blacklist.first().reason or 'Resident has a blacklisted vehicle.'
+    elif resident.is_approved:
+        resident_status = 'APPROVED'
+        resident_status_reason = 'Approved by admin.'
+    elif resident.approved_by_id:
+        resident_status = 'NOT_APPROVED'
+        resident_status_reason = resident.approval_reason or 'Registration rejected by admin.'
+    else:
+        resident_status = 'PENDING'
+        resident_status_reason = resident.approval_reason or 'Waiting for admin approval.'
+
+    context = {
+        'resident': resident,
+        'resident_status': resident_status,
+        'resident_status_reason': resident_status_reason,
+        'now_local': timezone.localtime(),
+    }
+    return render(request, 'dashboard/resident/profile.html', context)

@@ -205,11 +205,18 @@ def resident_dashboard(request):
         messages.error(request, 'Resident profile not found. Please contact admin.')
         return redirect('logout')
 
-    plates = [v.plate_number for v in resident.vehicles.all() if v.plate_number]
-    active_blacklist = BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
+    vehicles = list(resident.vehicles.all())
+    plates = [v.plate_number for v in vehicles if v.plate_number]
+    active_blacklist = list(
+        BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
+    )
+    bl_map = {entry.plate_number.upper(): entry for entry in active_blacklist}
+    for vehicle in vehicles:
+        vehicle.blacklist_entry = bl_map.get((vehicle.plate_number or '').upper())
+
     context = {
         'resident': resident,
-        'vehicles': resident.vehicles.all(),
+        'vehicles': vehicles,
         'active_blacklist': active_blacklist,
     }
     return render(request, 'dashboard/resident/index.html', context)

@@ -1,6 +1,10 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
+from django.db import transaction
+from django.utils import timezone
+
 from apps.accounts.models import User
+from apps.residents.models import Resident
 
 
 class LoginForm(AuthenticationForm):
@@ -17,6 +21,128 @@ class LoginForm(AuthenticationForm):
             'placeholder': 'Password',
         })
     )
+
+
+class ResidentSignupForm(forms.Form):
+    username = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Username'}),
+    )
+    password1 = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Password'}),
+        label='Password',
+    )
+    password2 = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Confirm password'}),
+        label='Confirm Password',
+    )
+    first_name = forms.CharField(
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+    )
+    middle_name = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+    )
+    last_name = forms.CharField(
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+    )
+    suffix = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Jr, Sr, III'}),
+    )
+    sex = forms.ChoiceField(
+        choices=[('', '-- Select --')] + Resident.SEX_CHOICES,
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
+    )
+    birth_date = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
+    )
+    contact_number = forms.CharField(
+        max_length=20,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+    )
+    street_number = forms.CharField(
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'House/Unit number'}),
+    )
+    street_name = forms.CharField(
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Street name'}),
+    )
+    address = forms.CharField(
+        max_length=255,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Complete address'}),
+    )
+    valid_id_type = forms.CharField(
+        max_length=80,
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Government ID type'}),
+    )
+    valid_id_image = forms.ImageField(required=False)
+
+    def clean_username(self):
+        username = self.cleaned_data['username'].strip()
+        if User.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError('Username is already taken.')
+        return username
+
+    def clean_contact_number(self):
+        return self.cleaned_data['contact_number'].strip()
+
+    def clean(self):
+        cleaned = super().clean()
+        password1 = cleaned.get('password1')
+        password2 = cleaned.get('password2')
+        if password1 and password2 and password1 != password2:
+            self.add_error('password2', 'Passwords do not match.')
+
+        birth_date = cleaned.get('birth_date')
+        if birth_date:
+            today = timezone.localdate()
+            age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+            if age < 0:
+                self.add_error('birth_date', 'Birth date cannot be in the future.')
+            else:
+                cleaned['computed_age'] = age
+        return cleaned
+
+    @transaction.atomic
+    def save(self):
+        user = User(
+            username=self.cleaned_data['username'],
+            first_name=self.cleaned_data['first_name'],
+            last_name=self.cleaned_data['last_name'],
+            role=User.ROLE_RESIDENT,
+            contact_number=self.cleaned_data['contact_number'],
+            is_active=False,
+        )
+        user.set_password(self.cleaned_data['password1'])
+        user.save()
+
+        resident = Resident.objects.create(
+            user=user,
+            first_name=self.cleaned_data['first_name'],
+            middle_name=self.cleaned_data.get('middle_name', ''),
+            last_name=self.cleaned_data['last_name'],
+            suffix=self.cleaned_data.get('suffix', ''),
+            sex=self.cleaned_data.get('sex', ''),
+            birth_date=self.cleaned_data.get('birth_date'),
+            age=self.cleaned_data.get('computed_age'),
+            contact_number=self.cleaned_data['contact_number'],
+            address=self.cleaned_data['address'],
+            street_number=self.cleaned_data.get('street_number', ''),
+            street_name=self.cleaned_data.get('street_name', ''),
+            valid_id_type=self.cleaned_data.get('valid_id_type', ''),
+            valid_id_image=self.cleaned_data.get('valid_id_image'),
+            is_approved=False,
+            registered_by=None,
+        )
+        return user, resident
 
 
 class UserCreateForm(forms.ModelForm):

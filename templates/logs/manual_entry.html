@@ -60,10 +60,8 @@
               <td>
                 {% if log.entry_type == 'RESIDENT' %}
                   <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>
-                {% elif log.entry_type == 'VISITOR' %}
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>
                 {% else %}
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Unknown</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>
                 {% endif %}
               </td>
               <td>
@@ -87,8 +85,4 @@
     </div>
   </div>
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
-{% include 'partials/websocket_listener.html' %}
 {% endblock %}

@@ -23,6 +23,7 @@
           <th class="font-semibold">Name</th>
           <th class="font-semibold">Address</th>
           <th class="font-semibold">Contact</th>
+          <th class="font-semibold">Status</th>
           <th class="font-semibold">Vehicles</th>
           {% if user.is_admin %}<th class="font-semibold">Actions</th>{% endif %}
         </tr>
@@ -31,8 +32,20 @@
         {% for resident in residents %}
         <tr class="hover:bg-slate-50 transition-colors">
           <td class="font-medium text-slate-800">{{ resident.full_name }}</td>
-          <td class="text-sm text-slate-500">{{ resident.address }}</td>
+          <td class="text-sm text-slate-500">
+            {{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address }}
+          </td>
           <td class="text-sm text-slate-500">{{ resident.contact_number|default:'—' }}</td>
+          <td>
+            {% if resident.is_approved %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Approved</span>
+            {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pending</span>
+            {% endif %}
+            {% if resident.user %}
+              <p class="text-[11px] text-slate-400 mt-1">@{{ resident.user.username }}</p>
+            {% endif %}
+          </td>
           <td>
             {% for v in resident.vehicles.all %}
               <div class="flex items-center gap-2 mb-1">
@@ -58,7 +71,21 @@
           </td>
           {% if user.is_admin %}
           <td>
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1 flex-wrap">
+              {% if resident.user %}
+              <form method="post" action="{% url 'resident_approve' resident.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-emerald-600" title="Approve and activate resident account">
+                  <i class="fa fa-user-check text-xs"></i>
+                </button>
+              </form>
+              <form method="post" action="{% url 'resident_reject' resident.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Set as pending/inactive">
+                  <i class="fa fa-hourglass-half text-xs"></i>
+                </button>
+              </form>
+              {% endif %}
               <a href="{% url 'resident_edit' resident.pk %}" class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600" title="Edit">
                 <i class="fa fa-pen text-xs"></i>
               </a>
@@ -73,7 +100,7 @@
           {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="text-center text-slate-400 py-12">No residents registered yet.</td></tr>
+        <tr><td colspan="6" class="text-center text-slate-400 py-12">No residents registered yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

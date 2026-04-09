@@ -37,7 +37,9 @@
           <thead>
             <tr class="bg-slate-50 text-xs uppercase text-slate-500">
               <th class="font-semibold">Plate</th>
+              <th class="font-semibold">Tag</th>
               <th class="font-semibold">Reason</th>
+              <th class="font-semibold">Remarks</th>
               <th class="font-semibold">Status</th>
               <th class="font-semibold">Created By</th>
               <th class="font-semibold">Created At</th>
@@ -48,7 +50,11 @@
             {% for entry in entries %}
             <tr class="hover:bg-slate-50 transition-colors">
               <td class="font-mono font-semibold text-slate-800">{{ entry.plate_number }}</td>
+              <td>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">{{ entry.get_tag_display }}</span>
+              </td>
               <td class="text-sm text-slate-600">{{ entry.reason|default:'—' }}</td>
+              <td class="text-xs text-slate-500 max-w-xs whitespace-pre-wrap">{{ entry.remarks|default:'—' }}</td>
               <td>
                 {% if entry.is_active %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Active</span>
@@ -70,7 +76,7 @@
               </td>
             </tr>
             {% empty %}
-            <tr><td colspan="6" class="text-center text-slate-400 py-12">No blacklist entries yet.</td></tr>
+            <tr><td colspan="8" class="text-center text-slate-400 py-12">No blacklist entries yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

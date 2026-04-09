@@ -10,6 +10,7 @@ class Visitor(models.Model):
     host_name = models.CharField(max_length=200, blank=True, help_text='Name of resident being visited')
     plate_number = models.CharField(max_length=20, blank=True, db_index=True)
     vehicle_type = models.CharField(max_length=15, blank=True)
+    vehicle_type_other = models.CharField(max_length=120, blank=True)
     logged_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name='logged_visitors'
     )

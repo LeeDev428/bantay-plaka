@@ -9,13 +9,31 @@
     <p class="text-slate-500 text-sm mt-0.5">Registered subdivision residents and their vehicles</p>
   </div>
   {% if user.is_admin %}
-  <a href="{% url 'resident_create' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+  <button type="button" id="open-resident-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
     <i class="fa fa-plus mr-1"></i> Register Resident
-  </a>
+  </button>
   {% endif %}
 </div>
 
 <div class="page-card">
+  <div class="p-4 border-b border-slate-100">
+    <form method="get" class="flex flex-col sm:flex-row gap-2">
+      <input
+        type="text"
+        name="q"
+        value="{{ q|default:'' }}"
+        placeholder="Search resident name, address, plate"
+        class="input input-bordered w-full"
+      >
+      <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+        <i class="fa fa-search mr-1"></i> Search
+      </button>
+      {% if q %}
+        <a href="{% url 'resident_list' %}" class="btn btn-sm btn-ghost">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
   <div class="overflow-x-auto">
     <table class="table table-sm">
       <thead>
@@ -39,11 +57,16 @@
           <td>
             {% if resident.is_approved %}
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Approved</span>
+            {% elif resident.approved_by %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Not Approved</span>
             {% else %}
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pending</span>
             {% endif %}
             {% if resident.user %}
               <p class="text-[11px] text-slate-400 mt-1">@{{ resident.user.username }}</p>
+            {% endif %}
+            {% if resident.approval_reason and not resident.is_approved %}
+              <p class="text-[11px] text-red-500 mt-1 max-w-48">{{ resident.approval_reason }}</p>
             {% endif %}
           </td>
           <td>
@@ -64,9 +87,15 @@
               <span class="text-xs text-slate-400 italic">No vehicles</span>
             {% endfor %}
             {% if user.is_admin %}
-            <a href="{% url 'vehicle_create' resident.pk %}" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1"
+              data-open-vehicle-modal
+              data-resident-id="{{ resident.pk }}"
+              data-resident-name="{{ resident.full_name }}"
+            >
               <i class="fa fa-plus text-[10px]"></i> Add
-            </a>
+            </button>
             {% endif %}
           </td>
           {% if user.is_admin %}
@@ -81,6 +110,7 @@
               </form>
               <form method="post" action="{% url 'resident_reject' resident.pk %}" class="inline">
                 {% csrf_token %}
+                <input type="hidden" name="reason" value="">
                 <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Set as pending/inactive">
                   <i class="fa fa-hourglass-half text-xs"></i>
                 </button>
@@ -105,5 +135,155 @@
       </tbody>
     </table>
   </div>
+
+  {% if residents.paginator.num_pages > 1 %}
+    <div class="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <p class="text-xs text-slate-500">
+        Showing page {{ residents.number }} of {{ residents.paginator.num_pages }}
+      </p>
+      <div class="join">
+        {% if residents.has_previous %}
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ residents.previous_page_number }}">Prev</a>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled">Prev</button>
+        {% endif %}
+
+        <button class="join-item btn btn-sm btn-active">{{ residents.number }}</button>
+
+        {% if residents.has_next %}
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ residents.next_page_number }}">Next</a>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled">Next</button>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 </div>
+
+{% if user.is_admin %}
+<div id="resident-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeResidentModal()"></div>
+  <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h3 class="text-lg font-bold text-slate-800">Register Resident</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeResidentModal()">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="px-6 py-5 space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_resident">
+      {% for field in resident_form %}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeResidentModal()">Cancel</button>
+        <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Resident</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="vehicle-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeVehicleModal()"></div>
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">Add Vehicle</h3>
+        <p id="vehicle-modal-resident" class="text-xs text-slate-500"></p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeVehicleModal()">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+    <form method="post" class="px-6 py-5 space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_vehicle">
+      <input type="hidden" name="resident_pk" id="vehicle-resident-pk" value="">
+      {% for field in vehicle_form %}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeVehicleModal()">Cancel</button>
+        <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Vehicle</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const residentModal = document.getElementById('resident-modal');
+  const vehicleModal = document.getElementById('vehicle-modal');
+  const openResidentBtn = document.getElementById('open-resident-modal');
+  const openVehicleBtns = document.querySelectorAll('[data-open-vehicle-modal]');
+  const vehicleResidentPk = document.getElementById('vehicle-resident-pk');
+  const vehicleResidentLabel = document.getElementById('vehicle-modal-resident');
+  const rejectForms = document.querySelectorAll('form[action*="/residents/"][action$="/reject/"]');
+
+  window.closeResidentModal = function closeResidentModal() {
+    if (!residentModal) return;
+    residentModal.classList.add('hidden');
+    residentModal.classList.remove('flex');
+  };
+
+  window.closeVehicleModal = function closeVehicleModal() {
+    if (!vehicleModal) return;
+    vehicleModal.classList.add('hidden');
+    vehicleModal.classList.remove('flex');
+  };
+
+  if (openResidentBtn && residentModal) {
+    openResidentBtn.addEventListener('click', () => {
+      residentModal.classList.remove('hidden');
+      residentModal.classList.add('flex');
+    });
+  }
+
+  openVehicleBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!vehicleModal || !vehicleResidentPk || !vehicleResidentLabel) return;
+      vehicleResidentPk.value = btn.dataset.residentId || '';
+      vehicleResidentLabel.textContent = 'Resident: ' + (btn.dataset.residentName || '');
+      vehicleModal.classList.remove('hidden');
+      vehicleModal.classList.add('flex');
+    });
+  });
+
+  rejectForms.forEach((form) => {
+    const hiddenReason = form.querySelector('input[name="reason"]');
+    const button = form.querySelector('button[type="submit"]');
+    if (!button || !hiddenReason) return;
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      const reason = window.prompt('Reason for setting resident as pending/inactive:', 'Registration requirements were not satisfied.');
+      if (reason === null) return;
+      hiddenReason.value = reason.trim() || 'Registration requirements were not satisfied.';
+      form.submit();
+    });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      window.closeResidentModal();
+      window.closeVehicleModal();
+    }
+  });
+})();
+</script>
 {% endblock %}

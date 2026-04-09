@@ -12,9 +12,9 @@
   <td>
     {% if log.blacklist_tag %}
       <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{{ log.blacklist_tag_display|default:log.blacklist_tag }}</span>
-      {% if log.blacklist_remarks %}<p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="{{ log.blacklist_remarks }}">{{ log.blacklist_remarks }}</p>{% endif %}
+      <p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="{{ log.blacklist_remarks|default:log.blacklist_reason }}">{{ log.blacklist_remarks|default:log.blacklist_reason|default:'Blacklisted plate detected.' }}</p>
     {% else %}
-      <span class="text-xs text-slate-400">-</span>
+      <span class="text-xs text-slate-400">No remarks</span>
     {% endif %}
   </td>
   <td>

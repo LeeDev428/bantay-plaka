@@ -5,7 +5,7 @@ from apps.logs.models import VehicleLog
 class ManualLogForm(forms.ModelForm):
     class Meta:
         model = VehicleLog
-        fields = ['plate_number', 'entry_type', 'status', 'visitor_name']
+        fields = ['plate_number', 'entry_type', 'status', 'resident_name', 'visitor_name']
         widgets = {
             'plate_number': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full uppercase',
@@ -14,6 +14,10 @@ class ManualLogForm(forms.ModelForm):
             }),
             'entry_type': forms.Select(attrs={'class': 'select select-bordered w-full'}),
             'status': forms.Select(attrs={'class': 'select select-bordered w-full'}),
+            'resident_name': forms.TextInput(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': 'Resident full name',
+            }),
             'visitor_name': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full',
                 'placeholder': 'Visitor name (if visitor)',
@@ -29,11 +33,23 @@ class ManualLogForm(forms.ModelForm):
             (VehicleLog.TYPE_RESIDENT, 'Resident'),
             (VehicleLog.TYPE_VISITOR, 'Visitor'),
         ]
+        self.fields['status'].choices = [
+            (VehicleLog.STATUS_IN, 'In'),
+            (VehicleLog.STATUS_OUT, 'Out'),
+        ]
+        self.fields['status'].label = 'Status'
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get('entry_type') == VehicleLog.TYPE_RESIDENT:
+        entry_type = cleaned.get('entry_type')
+        if entry_type == VehicleLog.TYPE_RESIDENT:
             cleaned['visitor_name'] = ''
+            if not (cleaned.get('resident_name') or '').strip():
+                self.add_error('resident_name', 'Resident name is required for resident entry type.')
+        elif entry_type == VehicleLog.TYPE_VISITOR:
+            cleaned['resident_name'] = ''
+            if not (cleaned.get('visitor_name') or '').strip():
+                self.add_error('visitor_name', 'Visitor name is required for visitor entry type.')
         return cleaned
 
 
@@ -66,6 +82,10 @@ class LogEditForm(forms.ModelForm):
         self.fields['entry_type'].choices = [
             (VehicleLog.TYPE_RESIDENT, 'Resident'),
             (VehicleLog.TYPE_VISITOR, 'Visitor'),
+        ]
+        self.fields['status'].choices = [
+            (VehicleLog.STATUS_IN, 'In'),
+            (VehicleLog.STATUS_OUT, 'Out'),
         ]
 
     def clean(self):

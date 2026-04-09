@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Profile{% endblock %}
+{% block breadcrumb %}Resident &raquo; Profile{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold text-slate-800">Profile</h1>
+  <p class="text-slate-500 text-sm mt-0.5">Your account information and approval status.</p>
+</div>
+
+<div class="grid lg:grid-cols-3 gap-5">
+  <div class="lg:col-span-1 page-card p-5">
+    <h2 class="font-semibold text-slate-800 mb-3">Status</h2>
+    {% if resident_status == 'APPROVED' %}
+      <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">Approved</span>
+    {% elif resident_status == 'BLACKLISTED' %}
+      <span class="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">Blacklisted</span>
+    {% elif resident_status == 'NOT_APPROVED' %}
+      <span class="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Not Approved</span>
+    {% else %}
+      <span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold">Pending</span>
+    {% endif %}
+
+    <p class="text-sm text-slate-600 mt-3">{{ resident_status_reason }}</p>
+    <p class="text-xs text-slate-400 mt-2">Updated {{ now_local|date:"M d, Y h:i A" }}</p>
+  </div>
+
+  <div class="lg:col-span-2 page-card p-5">
+    <h2 class="font-semibold text-slate-800 mb-4">Resident Information</h2>
+    <div class="grid md:grid-cols-2 gap-4 text-sm text-slate-700">
+      <p><span class="text-slate-500">Full Name:</span> {{ resident.full_name }}</p>
+      <p><span class="text-slate-500">Sex:</span> {{ resident.get_sex_display|default:'Not set' }}</p>
+      <p><span class="text-slate-500">Birth Date:</span> {{ resident.birth_date|date:"F d, Y"|default:'Not set' }}</p>
+      <p><span class="text-slate-500">Age:</span> {{ resident.age|default:'Not set' }}</p>
+      <p><span class="text-slate-500">Contact Number:</span> {{ resident.contact_number|default:'Not set' }}</p>
+      <p><span class="text-slate-500">Valid ID Type:</span> {{ resident.valid_id_type|default:'Not set' }}</p>
+      <p class="md:col-span-2"><span class="text-slate-500">Address:</span> {{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address }}</p>
+    </div>
+
+    {% if resident.valid_id_image %}
+      <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-2 mt-5 text-sm font-semibold text-blue-700 hover:text-blue-800">
+        <i class="fa fa-image"></i> View Uploaded ID
+      </a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

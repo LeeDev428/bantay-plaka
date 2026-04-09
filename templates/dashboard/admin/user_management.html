@@ -74,6 +74,7 @@
                 title="Edit"
                 data-open-user-edit
                 data-edit-url="{% url 'user_edit' u.pk %}"
+                data-email="{{ u.email|escapejs }}"
                 data-first-name="{{ u.first_name|escapejs }}"
                 data-last-name="{{ u.last_name|escapejs }}"
                 data-contact="{{ u.contact_number|escapejs }}"
@@ -160,6 +161,11 @@
       {% csrf_token %}
 
       <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Email <span class="text-red-400">*</span></label>
+        <input id="edit-email" type="email" name="email" class="input input-bordered w-full" required>
+      </div>
+
+      <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">First Name <span class="text-red-400">*</span></label>
         <input id="edit-first-name" name="first_name" class="input input-bordered w-full" required>
       </div>
@@ -208,6 +214,7 @@
   const editButtons = document.querySelectorAll('[data-open-user-edit]');
 
   const editForm = document.getElementById('user-edit-form');
+  const editEmail = document.getElementById('edit-email');
   const editFirstName = document.getElementById('edit-first-name');
   const editLastName = document.getElementById('edit-last-name');
   const editContact = document.getElementById('edit-contact');
@@ -237,6 +244,7 @@
     btn.addEventListener('click', () => {
       if (!editModal || !editForm) return;
       editForm.action = btn.dataset.editUrl || '';
+      editEmail.value = btn.dataset.email || '';
       editFirstName.value = btn.dataset.firstName || '';
       editLastName.value = btn.dataset.lastName || '';
       editContact.value = btn.dataset.contact || '';

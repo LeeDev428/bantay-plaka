@@ -14,7 +14,7 @@ def resident_list(request):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    residents = Resident.objects.prefetch_related('vehicles').order_by('last_name', 'first_name')
+    residents = Resident.objects.prefetch_related('vehicles').order_by('is_approved', 'last_name', 'first_name')
     return render(request, 'residents/resident_list.html', {'residents': residents})
 
 

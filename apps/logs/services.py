@@ -12,6 +12,8 @@ def get_active_blacklist_map(plates):
     if not normalized:
         return {}
 
+    tag_labels = dict(BlacklistEntry.TAG_CHOICES)
+
     entries = (
         BlacklistEntry.objects
         .filter(plate_number__in=normalized, is_active=True)
@@ -20,6 +22,7 @@ def get_active_blacklist_map(plates):
     return {
         e['plate_number'].upper(): {
             'tag': e.get('tag', ''),
+            'tag_display': tag_labels.get(e.get('tag', ''), e.get('tag', '')),
             'reason': e.get('reason', ''),
             'remarks': e.get('remarks', ''),
         }
@@ -33,6 +36,7 @@ def attach_blacklist_metadata(logs):
     for log in logs_list:
         info = bl_map.get((log.plate_number or '').upper())
         log.blacklist_tag = info.get('tag', '') if info else ''
+        log.blacklist_tag_display = info.get('tag_display', '') if info else ''
         log.blacklist_reason = info.get('reason', '') if info else ''
         log.blacklist_remarks = info.get('remarks', '') if info else ''
     return logs_list
@@ -57,6 +61,7 @@ def broadcast_log(vehicle_log: VehicleLog):
                 'snapshot_url': vehicle_log.snapshot.url if vehicle_log.snapshot else '',
                 'display_name': vehicle_log.get_display_name(),
                 'blacklist_tag': bl_info.get('tag', ''),
+                'blacklist_tag_display': bl_info.get('tag_display', ''),
                 'blacklist_remarks': bl_info.get('remarks', ''),
                 'timestamp': local_ts.strftime('%b %d, %Y %I:%M:%S %p'),
             },

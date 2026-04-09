@@ -41,6 +41,9 @@
             {% if form.password.errors %}
               <p class="text-red-500 text-xs mt-1">{{ form.password.errors.0 }}</p>
             {% endif %}
+            <div class="mt-2 text-right">
+              <a href="{% url 'password_reset' %}" class="text-xs font-semibold text-blue-700 hover:text-blue-800">Forgot Password?</a>
+            </div>
           </div>
 
           {% if form.non_field_errors %}

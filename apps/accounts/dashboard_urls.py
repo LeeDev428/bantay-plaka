@@ -13,4 +13,7 @@ urlpatterns = [
     path('guard/', views.guard_dashboard, name='guard_dashboard'),
     # Resident
     path('resident/', views.resident_dashboard, name='resident_dashboard'),
+    path('resident/vehicles/', views.resident_vehicles, name='resident_vehicles'),
+    path('resident/logs/', views.resident_logs, name='resident_logs'),
+    path('resident/profile/', views.resident_profile, name='resident_profile'),
 ]

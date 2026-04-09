@@ -120,8 +120,9 @@ def admin_dashboard(request):
     day_start = timezone.make_aware(datetime.datetime.combine(today, datetime.time.min))
     day_end = day_start + timedelta(days=1)
 
-    recent_logs = VehicleLog.objects.select_related('logged_by').all()[:10]
-    attach_blacklist_metadata(recent_logs)
+    recent_logs = attach_blacklist_metadata(
+        VehicleLog.objects.select_related('logged_by').all()[:10]
+    )
 
     context = {
         'total_residents': Resident.objects.count(),
@@ -183,8 +184,9 @@ def user_toggle_active(request, pk):
 
 @login_required
 def guard_dashboard(request):
-    recent_logs = VehicleLog.objects.select_related('logged_by').all()[:10]
-    attach_blacklist_metadata(recent_logs)
+    recent_logs = attach_blacklist_metadata(
+        VehicleLog.objects.select_related('logged_by').all()[:10]
+    )
     context = {'recent_logs': recent_logs}
     context.update(_camera_feed_context())
     return render(request, 'dashboard/guard/index.html', context)

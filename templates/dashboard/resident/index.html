@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Resident Dashboard{% endblock %}
+{% block breadcrumb %}Dashboard &raquo; Resident Profile{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">Resident Dashboard</h1>
+    <p class="text-sm text-slate-500 mt-0.5">Welcome, {{ resident.full_name }}.</p>
+  </div>
+  {% if resident.is_approved %}
+    <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">Account Approved</span>
+  {% else %}
+    <span class="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Pending Approval</span>
+  {% endif %}
+</div>
+
+<div class="grid lg:grid-cols-3 gap-4 mb-6">
+  <div class="stat-card">
+    <p class="text-xs uppercase text-slate-500">Registered Vehicles</p>
+    <p class="text-3xl font-bold text-slate-800 mt-1">{{ vehicles|length }}</p>
+  </div>
+  <div class="stat-card">
+    <p class="text-xs uppercase text-slate-500">Blacklisted Vehicles</p>
+    <p class="text-3xl font-bold text-red-600 mt-1">{{ active_blacklist|length }}</p>
+  </div>
+  <div class="stat-card">
+    <p class="text-xs uppercase text-slate-500">Contact Number</p>
+    <p class="text-lg font-semibold text-slate-800 mt-2">{{ resident.contact_number|default:'Not set' }}</p>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-5">
+  <div class="page-card p-5">
+    <h2 class="font-semibold text-slate-800 mb-4">Profile Information</h2>
+    <div class="space-y-2 text-sm">
+      <p><span class="text-slate-500">Full Name:</span> <span class="font-medium text-slate-800">{{ resident.full_name }}</span></p>
+      <p><span class="text-slate-500">Sex:</span> <span class="font-medium text-slate-800">{{ resident.get_sex_display|default:'Not set' }}</span></p>
+      <p><span class="text-slate-500">Birth Date:</span> <span class="font-medium text-slate-800">{{ resident.birth_date|date:"F d, Y"|default:'Not set' }}</span></p>
+      <p><span class="text-slate-500">Age:</span> <span class="font-medium text-slate-800">{{ resident.age|default:'Not set' }}</span></p>
+      <p><span class="text-slate-500">Address:</span> <span class="font-medium text-slate-800">{{ resident.street_number }} {{ resident.street_name }} {{ resident.address }}</span></p>
+      <p><span class="text-slate-500">Valid ID:</span> <span class="font-medium text-slate-800">{{ resident.valid_id_type|default:'Not set' }}</span></p>
+      {% if resident.valid_id_image %}
+        <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-2 text-blue-700 font-semibold text-sm mt-2">
+          <i class="fa fa-image"></i> View Uploaded ID
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="page-card p-5">
+    <h2 class="font-semibold text-slate-800 mb-4">Vehicles and Blacklist Status</h2>
+    <div class="space-y-3">
+      {% for vehicle in vehicles %}
+        <div class="border border-slate-100 rounded-lg p-3">
+          <p class="font-mono font-semibold text-slate-800">{{ vehicle.plate_number }}</p>
+          <p class="text-xs text-slate-500 mt-1">{{ vehicle.vehicle_type }}{% if vehicle.color %} - {{ vehicle.color }}{% endif %}{% if vehicle.make or vehicle.model %} - {{ vehicle.make }} {{ vehicle.model }}{% endif %}</p>
+          {% if vehicle.blacklist_entry %}
+            <div class="mt-2 inline-flex items-center px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-semibold">Blacklisted: {{ vehicle.blacklist_entry.get_tag_display }}</div>
+            {% if vehicle.blacklist_entry.remarks %}<p class="text-xs text-red-600 mt-1">{{ vehicle.blacklist_entry.remarks }}</p>{% endif %}
+          {% else %}
+            <p class="text-xs text-emerald-600 mt-2 font-semibold">No active blacklist record.</p>
+          {% endif %}
+        </div>
+      {% empty %}
+        <p class="text-sm text-slate-500">No vehicles registered yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

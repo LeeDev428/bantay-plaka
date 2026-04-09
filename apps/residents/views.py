@@ -2,6 +2,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
+from django.core.paginator import Paginator
+from django.db.models import Q
 
 from apps.accounts.views import admin_required
 from apps.residents.models import Resident, Vehicle
@@ -14,8 +16,55 @@ def resident_list(request):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    residents = Resident.objects.prefetch_related('vehicles').order_by('is_approved', 'last_name', 'first_name')
-    return render(request, 'residents/resident_list.html', {'residents': residents})
+    q = request.GET.get('q', '').strip()
+    resident_form = ResidentForm(prefix='resident')
+    vehicle_form = VehicleForm(prefix='vehicle')
+
+    if request.method == 'POST' and request.user.is_admin():
+        action = request.POST.get('action', '').strip()
+        if action == 'create_resident':
+            resident_form = ResidentForm(request.POST, request.FILES, prefix='resident')
+            if resident_form.is_valid():
+                resident = resident_form.save(commit=False)
+                resident.registered_by = request.user
+                resident.is_approved = True
+                resident.approved_by = request.user
+                resident.approved_at = timezone.now()
+                resident.approval_reason = ''
+                resident.save()
+                messages.success(request, f'{resident.full_name} registered successfully.')
+                return redirect('resident_list')
+            messages.error(request, 'Failed to register resident. Please check the required fields.')
+
+        if action == 'create_vehicle':
+            vehicle_form = VehicleForm(request.POST, prefix='vehicle')
+            resident_pk = request.POST.get('resident_pk')
+            resident = get_object_or_404(Resident, pk=resident_pk) if resident_pk else None
+            if resident and vehicle_form.is_valid():
+                vehicle = vehicle_form.save(commit=False)
+                vehicle.resident = resident
+                vehicle.save()
+                messages.success(request, f'Vehicle {vehicle.plate_number} registered.')
+                return redirect('resident_list')
+            messages.error(request, 'Failed to register vehicle. Please complete all required fields.')
+
+    residents_qs = Resident.objects.select_related('user').prefetch_related('vehicles').order_by('is_approved', 'last_name', 'first_name')
+    if q:
+        residents_qs = residents_qs.filter(
+            Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
+            | Q(address__icontains=q)
+            | Q(vehicles__plate_number__icontains=q)
+        ).distinct()
+
+    paginator = Paginator(residents_qs, 10)
+    residents = paginator.get_page(request.GET.get('page', 1))
+    return render(request, 'residents/resident_list.html', {
+        'residents': residents,
+        'q': q,
+        'resident_form': resident_form,
+        'vehicle_form': vehicle_form,
+    })
 
 
 @admin_required
@@ -28,6 +77,7 @@ def resident_create(request):
             resident.is_approved = True
             resident.approved_by = request.user
             resident.approved_at = timezone.now()
+            resident.approval_reason = ''
             resident.save()
             messages.success(request, f'{resident.full_name} registered successfully.')
             return redirect('resident_list')
@@ -66,7 +116,8 @@ def resident_approve(request, pk):
         resident.is_approved = True
         resident.approved_by = request.user
         resident.approved_at = timezone.now()
-        resident.save(update_fields=['is_approved', 'approved_by', 'approved_at', 'updated_at'])
+        resident.approval_reason = ''
+        resident.save(update_fields=['is_approved', 'approved_by', 'approved_at', 'approval_reason', 'updated_at'])
         if resident.user:
             resident.user.is_active = True
             resident.user.save(update_fields=['is_active'])
@@ -79,9 +130,10 @@ def resident_reject(request, pk):
     resident = get_object_or_404(Resident.objects.select_related('user'), pk=pk)
     if request.method == 'POST':
         resident.is_approved = False
-        resident.approved_by = None
-        resident.approved_at = None
-        resident.save(update_fields=['is_approved', 'approved_by', 'approved_at', 'updated_at'])
+        resident.approved_by = request.user
+        resident.approved_at = timezone.now()
+        resident.approval_reason = (request.POST.get('reason') or '').strip() or 'Registration requirements were not satisfied.'
+        resident.save(update_fields=['is_approved', 'approved_by', 'approved_at', 'approval_reason', 'updated_at'])
         if resident.user:
             resident.user.is_active = False
             resident.user.save(update_fields=['is_active'])

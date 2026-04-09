@@ -54,10 +54,11 @@ def manual_entry(request):
             resolved = resolve_plate(log.plate_number)
             if resolved['entry_type'] == VehicleLog.TYPE_RESIDENT:
                 log.entry_type = VehicleLog.TYPE_RESIDENT
-                log.resident_name = resolved['resident_name']
+                log.resident_name = log.resident_name or resolved['resident_name']
                 log.visitor_name = ''
             elif log.entry_type == VehicleLog.TYPE_RESIDENT:
                 log.entry_type = VehicleLog.TYPE_VISITOR
+                log.resident_name = ''
 
             log.save()
             broadcast_log(log)
@@ -109,7 +110,7 @@ def log_list(request):
         except ValueError:
             pass
 
-    paginator = Paginator(logs_qs, 25)
+    paginator = Paginator(logs_qs, 10)
     page = request.GET.get('page', 1)
     logs = paginator.get_page(page)
     attach_blacklist_metadata(logs.object_list)

@@ -28,8 +28,19 @@ class Visitor(models.Model):
 
 
 class BlacklistEntry(models.Model):
+    TAG_WATCHLIST = 'WATCHLIST'
+    TAG_HIGH_RISK = 'HIGH_RISK'
+    TAG_TEMP_BLOCK = 'TEMP_BLOCK'
+    TAG_CHOICES = [
+        (TAG_WATCHLIST, 'Watchlist'),
+        (TAG_HIGH_RISK, 'High Risk'),
+        (TAG_TEMP_BLOCK, 'Temporary Block'),
+    ]
+
     plate_number = models.CharField(max_length=20, unique=True, db_index=True)
+    tag = models.CharField(max_length=20, choices=TAG_CHOICES, default=TAG_WATCHLIST)
     reason = models.CharField(max_length=255, blank=True)
+    remarks = models.TextField(blank=True)
     is_active = models.BooleanField(default=True, db_index=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_blacklist_entries'

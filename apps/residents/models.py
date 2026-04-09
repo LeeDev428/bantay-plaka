@@ -41,6 +41,7 @@ class Resident(models.Model):
         related_name='approved_residents',
     )
     approved_at = models.DateTimeField(null=True, blank=True)
+    approval_reason = models.CharField(max_length=255, blank=True)
     registered_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name='registered_residents'
     )

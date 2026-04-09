@@ -14,6 +14,24 @@
 </div>
 
 <div class="page-card">
+  <div class="p-4 border-b border-slate-100">
+    <form method="get" class="flex flex-col sm:flex-row gap-2">
+      <input
+        type="text"
+        name="q"
+        value="{{ q|default:'' }}"
+        placeholder="Search name, plate, host, purpose"
+        class="input input-bordered w-full"
+      >
+      <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+        <i class="fa fa-search mr-1"></i> Search
+      </button>
+      {% if q %}
+        <a href="{% url 'visitor_list' %}" class="btn btn-sm btn-ghost">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
   <div class="overflow-x-auto">
     <table class="table table-sm">
       <thead>
@@ -42,5 +60,28 @@
       </tbody>
     </table>
   </div>
+
+  {% if visitors.paginator.num_pages > 1 %}
+    <div class="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <p class="text-xs text-slate-500">
+        Showing page {{ visitors.number }} of {{ visitors.paginator.num_pages }}
+      </p>
+      <div class="join">
+        {% if visitors.has_previous %}
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ visitors.previous_page_number }}">Prev</a>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled">Prev</button>
+        {% endif %}
+
+        <button class="join-item btn btn-sm btn-active">{{ visitors.number }}</button>
+
+        {% if visitors.has_next %}
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ visitors.next_page_number }}">Next</a>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled">Next</button>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

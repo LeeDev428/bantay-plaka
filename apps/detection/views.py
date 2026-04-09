@@ -444,8 +444,13 @@ def ingest_plate(request):
                     }
                 )
 
-        if BlacklistEntry.objects.filter(plate_number__iexact=plate, is_active=True).exists():
-            broadcast_blacklist_alert(plate)
+        blacklist_entry = BlacklistEntry.objects.filter(plate_number__iexact=plate, is_active=True).first()
+        if blacklist_entry:
+            broadcast_blacklist_alert(
+                plate,
+                tag=getattr(blacklist_entry, 'tag', ''),
+                remarks=(getattr(blacklist_entry, 'remarks', '') or getattr(blacklist_entry, 'reason', '')),
+            )
             return JsonResponse({'ok': False, 'blocked': True, 'error': 'Plate is blacklisted'}, status=403)
 
         status = _next_status_for_plate(plate, camera_role)

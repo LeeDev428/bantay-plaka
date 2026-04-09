@@ -4,11 +4,15 @@ from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Subquery, OuterRef
+from django.core.paginator import Paginator
 from django.http import HttpResponse
+from django.contrib import messages
+from django.shortcuts import redirect
 from django.shortcuts import render
 from django.utils import timezone
 
 from apps.logs.models import VehicleLog
+from apps.logs.services import get_active_blacklist_map
 
 
 def _day_range(date):
@@ -21,6 +25,10 @@ def _day_range(date):
 
 @login_required
 def report_dashboard(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
     today = timezone.localdate()
     today_start, today_end = _day_range(today)
     today_logs = VehicleLog.objects.filter(timestamp__gte=today_start, timestamp__lt=today_end)
@@ -28,19 +36,26 @@ def report_dashboard(request):
     today_out = today_logs.filter(status=VehicleLog.STATUS_OUT).count()
     today_unique = today_logs.values('plate_number').distinct().count()
 
-    # Currently inside: plates whose most recent log is TIME_IN
+    # Visitors currently inside: latest log is TIME_IN and latest type is VISITOR.
     latest_status = (
         VehicleLog.objects
         .filter(plate_number=OuterRef('plate_number'))
         .order_by('-timestamp')
         .values('status')[:1]
     )
+    latest_type = (
+        VehicleLog.objects
+        .filter(plate_number=OuterRef('plate_number'))
+        .order_by('-timestamp')
+        .values('entry_type')[:1]
+    )
     currently_inside = (
         VehicleLog.objects
         .values('plate_number')
         .distinct()
         .annotate(last_status=Subquery(latest_status))
-        .filter(last_status=VehicleLog.STATUS_IN)
+        .annotate(last_type=Subquery(latest_type))
+        .filter(last_status=VehicleLog.STATUS_IN, last_type=VehicleLog.TYPE_VISITOR)
         .count()
     )
 
@@ -57,31 +72,55 @@ def report_dashboard(request):
             'time_out': day_qs.filter(status=VehicleLog.STATUS_OUT).count(),
         })
 
-    # Top vehicles this week
-    week_start = today - timedelta(days=today.weekday())
-    week_start_dt, _ = _day_range(week_start)
-    top_vehicles = (
+    # Top vehicles with filters and pagination
+    top_window_q = request.GET.get('top_window', 'WEEK').upper()
+    top_entry_type_q = request.GET.get('top_entry_type', 'ALL').upper()
+    if top_window_q == 'MONTH':
+        period_start = today - timedelta(days=30)
+    else:
+        top_window_q = 'WEEK'
+        period_start = today - timedelta(days=today.weekday())
+    period_start_dt, _ = _day_range(period_start)
+
+    top_vehicles_qs = (
         VehicleLog.objects
-        .filter(timestamp__gte=week_start_dt)
+        .filter(timestamp__gte=period_start_dt)
         .values('plate_number', 'entry_type')
         .annotate(visits=Count('id'))
-        .order_by('-visits')[:10]
+        .order_by('-visits', 'plate_number')
     )
+    if top_entry_type_q in {VehicleLog.TYPE_RESIDENT, VehicleLog.TYPE_VISITOR}:
+        top_vehicles_qs = top_vehicles_qs.filter(entry_type=top_entry_type_q)
+    else:
+        top_entry_type_q = 'ALL'
+
+    top_paginator = Paginator(top_vehicles_qs, 8)
+    top_page_number = request.GET.get('top_page', 1)
+    top_vehicles = top_paginator.get_page(top_page_number)
+    top_rank_offset = (top_vehicles.number - 1) * top_paginator.per_page
 
     context = {
         'today': today,
+        'today_iso': today.isoformat(),
         'today_in': today_in,
         'today_out': today_out,
         'today_unique': today_unique,
         'currently_inside': currently_inside,
         'daily_data': daily_data,
         'top_vehicles': top_vehicles,
+        'top_rank_offset': top_rank_offset,
+        'top_window_q': top_window_q,
+        'top_entry_type_q': top_entry_type_q,
     }
     return render(request, 'reports/dashboard.html', context)
 
 
 @login_required
 def export_csv(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
     date_from = request.GET.get('from', '')
     date_to = request.GET.get('to', '')
     logs = VehicleLog.objects.select_related('logged_by').order_by('-timestamp')
@@ -109,11 +148,14 @@ def export_csv(request):
     writer = csv.writer(response)
     writer.writerow([
         'Plate Number', 'Camera Role', 'Entry Type', 'Status', 'Source',
-        'Resident/Visitor Name', 'Logged By', 'Timestamp (Asia/Manila)',
+        'Resident/Visitor Name', 'Blacklist Tag', 'Blacklist Remarks', 'Logged By', 'Timestamp (Asia/Manila)',
     ])
+
+    bl_map = get_active_blacklist_map([log.plate_number for log in logs])
 
     for log in logs:
         local_ts = timezone.localtime(log.timestamp)
+        bl_info = bl_map.get((log.plate_number or '').upper(), {})
         writer.writerow([
             log.plate_number,
             log.camera_role,
@@ -121,6 +163,8 @@ def export_csv(request):
             log.status,
             log.source,
             log.resident_name or log.visitor_name or '',
+            bl_info.get('tag', ''),
+            bl_info.get('remarks', ''),
             log.logged_by.get_full_name() if log.logged_by else 'System',
             local_ts.strftime('%Y-%m-%d %H:%M:%S'),
         ])

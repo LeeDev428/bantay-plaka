@@ -6,6 +6,8 @@ urlpatterns = [
     path('create/', views.resident_create, name='resident_create'),
     path('<int:pk>/edit/', views.resident_edit, name='resident_edit'),
     path('<int:pk>/delete/', views.resident_delete, name='resident_delete'),
+    path('<int:pk>/approve/', views.resident_approve, name='resident_approve'),
+    path('<int:pk>/reject/', views.resident_reject, name='resident_reject'),
     path('<int:resident_pk>/vehicles/add/', views.vehicle_create, name='vehicle_create'),
     path('vehicles/<int:pk>/delete/', views.vehicle_delete, name='vehicle_delete'),
 ]

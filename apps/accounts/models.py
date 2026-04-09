@@ -5,9 +5,11 @@ from django.db import models
 class User(AbstractUser):
     ROLE_ADMIN = 'ADMIN'
     ROLE_GUARD = 'GUARD'
+    ROLE_RESIDENT = 'RESIDENT'
     ROLE_CHOICES = [
         (ROLE_ADMIN, 'Admin'),
         (ROLE_GUARD, 'Security Guard'),
+        (ROLE_RESIDENT, 'Resident'),
     ]
 
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=ROLE_GUARD)
@@ -24,6 +26,9 @@ class User(AbstractUser):
 
     def is_guard(self):
         return self.role == self.ROLE_GUARD
+
+    def is_resident(self):
+        return self.role == self.ROLE_RESIDENT
 
     def __str__(self):
         return f'{self.get_full_name()} ({self.role})'

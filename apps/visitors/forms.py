@@ -29,17 +29,25 @@ class VisitorForm(forms.ModelForm):
 class BlacklistEntryForm(forms.ModelForm):
     class Meta:
         model = BlacklistEntry
-        fields = ['plate_number', 'reason']
+        fields = ['plate_number', 'tag', 'reason', 'remarks']
         widgets = {
             'plate_number': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full uppercase',
                 'placeholder': 'e.g. ABC 1234',
                 'maxlength': 20,
             }),
+            'tag': forms.Select(attrs={
+                'class': 'select select-bordered w-full',
+            }),
             'reason': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full',
                 'placeholder': 'Reason (optional)',
                 'maxlength': 255,
+            }),
+            'remarks': forms.Textarea(attrs={
+                'class': 'textarea textarea-bordered w-full',
+                'placeholder': 'Detailed remarks (optional)',
+                'rows': 3,
             }),
         }
 

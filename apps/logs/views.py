@@ -2,13 +2,14 @@ import datetime
 
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
 from django.utils import timezone
 
 from apps.logs.models import VehicleLog
 from apps.logs.forms import ManualLogForm, LogEditForm
-from apps.logs.services import broadcast_log
+from apps.logs.services import broadcast_log, attach_blacklist_metadata
 from apps.residents.models import Vehicle
 from apps.visitors.models import BlacklistEntry
 
@@ -32,6 +33,10 @@ def resolve_plate(plate_number: str) -> dict:
 
 @login_required
 def manual_entry(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
     form = ManualLogForm()
     if request.method == 'POST':
         form = ManualLogForm(request.POST)
@@ -50,6 +55,9 @@ def manual_entry(request):
             if resolved['entry_type'] == VehicleLog.TYPE_RESIDENT:
                 log.entry_type = VehicleLog.TYPE_RESIDENT
                 log.resident_name = resolved['resident_name']
+                log.visitor_name = ''
+            elif log.entry_type == VehicleLog.TYPE_RESIDENT:
+                log.entry_type = VehicleLog.TYPE_VISITOR
 
             log.save()
             broadcast_log(log)
@@ -57,6 +65,7 @@ def manual_entry(request):
             return redirect('manual_entry')
 
     recent_logs = VehicleLog.objects.filter(source=VehicleLog.SOURCE_MANUAL).order_by('-timestamp')[:20]
+    recent_logs = attach_blacklist_metadata(recent_logs)
     return render(request, 'logs/manual_entry.html', {
         'form': form,
         'recent_logs': recent_logs,
@@ -65,17 +74,31 @@ def manual_entry(request):
 
 @login_required
 def log_list(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
     logs_qs = VehicleLog.objects.select_related('logged_by').order_by('-timestamp')
 
     # filters
+    q = request.GET.get('q', '').strip()
     plate_q = request.GET.get('plate', '').strip()
     entry_type_q = request.GET.get('entry_type', '').strip()
+    status_q = request.GET.get('status', '').strip()
     date_q = request.GET.get('date', '').strip()
 
+    if q:
+        logs_qs = logs_qs.filter(
+            Q(plate_number__icontains=q)
+            | Q(resident_name__icontains=q)
+            | Q(visitor_name__icontains=q)
+        )
     if plate_q:
         logs_qs = logs_qs.filter(plate_number__icontains=plate_q)
     if entry_type_q:
         logs_qs = logs_qs.filter(entry_type=entry_type_q)
+    if status_q:
+        logs_qs = logs_qs.filter(status=status_q)
     if date_q:
         try:
             tz = timezone.get_current_timezone()
@@ -89,22 +112,34 @@ def log_list(request):
     paginator = Paginator(logs_qs, 25)
     page = request.GET.get('page', 1)
     logs = paginator.get_page(page)
+    attach_blacklist_metadata(logs.object_list)
 
     return render(request, 'logs/log_list.html', {
         'logs': logs,
+        'q': q,
         'plate_q': plate_q,
         'entry_type_q': entry_type_q,
+        'status_q': status_q,
         'date_q': date_q,
     })
 
 
 @login_required
 def log_edit(request, pk):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
     log = get_object_or_404(VehicleLog, pk=pk)
     if request.method == 'POST':
         form = LogEditForm(request.POST, instance=log)
         if form.is_valid():
-            form.save()
+            updated_log = form.save(commit=False)
+            if updated_log.entry_type == VehicleLog.TYPE_RESIDENT:
+                updated_log.visitor_name = ''
+            else:
+                updated_log.resident_name = ''
+            updated_log.save()
             messages.success(request, f'Log #{pk} updated successfully.')
         else:
             messages.error(request, 'Failed to update log. Please check the fields.')
@@ -113,6 +148,10 @@ def log_edit(request, pk):
 
 @login_required
 def log_delete(request, pk):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
     log = get_object_or_404(VehicleLog, pk=pk)
     if request.method == 'POST':
         log.delete()

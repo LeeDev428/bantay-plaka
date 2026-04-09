@@ -58,6 +58,15 @@ def report_dashboard(request):
         .filter(last_status=VehicleLog.STATUS_IN, last_type=VehicleLog.TYPE_VISITOR)
         .count()
     )
+    currently_inside_items = list(
+        VehicleLog.objects
+        .values('plate_number')
+        .distinct()
+        .annotate(last_status=Subquery(latest_status))
+        .annotate(last_type=Subquery(latest_type))
+        .filter(last_status=VehicleLog.STATUS_IN, last_type=VehicleLog.TYPE_VISITOR)
+        .order_by('plate_number')
+    )
 
     # 7-day daily breakdown — use UTC ranges so no CONVERT_TZ needed
     daily_data = []
@@ -106,6 +115,7 @@ def report_dashboard(request):
         'today_out': today_out,
         'today_unique': today_unique,
         'currently_inside': currently_inside,
+        'currently_inside_items': currently_inside_items,
         'daily_data': daily_data,
         'top_vehicles': top_vehicles,
         'top_rank_offset': top_rank_offset,

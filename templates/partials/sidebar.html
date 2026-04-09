@@ -14,9 +14,11 @@
     <a href="{% url 'dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'guard_dashboard' %}active{% endif %}">
       <i class="fa fa-gauge-high w-5 text-center"></i> Dashboard
     </a>
-    <a href="{% url 'log_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'log_list' %}active{% endif %}">
-      <i class="fa fa-clock-rotate-left w-5 text-center"></i> Vehicle Logs
-    </a>
+    {% if not user.is_resident %}
+      <a href="{% url 'log_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'log_list' %}active{% endif %}">
+        <i class="fa fa-clock-rotate-left w-5 text-center"></i> Vehicle Logs
+      </a>
+    {% endif %}
     {% if not user.is_resident %}
       <a href="{% url 'report_dashboard' %}" class="sidebar-link {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
         <i class="fa fa-chart-column w-5 text-center"></i> Reports

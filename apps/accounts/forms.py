@@ -28,6 +28,9 @@ class ResidentSignupForm(forms.Form):
         max_length=150,
         widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Username'}),
     )
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Email address'}),
+    )
     password1 = forms.CharField(
         widget=forms.PasswordInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Password'}),
         label='Password',
@@ -94,6 +97,12 @@ class ResidentSignupForm(forms.Form):
             raise forms.ValidationError('Username is already taken.')
         return username
 
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('Email address is already in use.')
+        return email
+
     def clean_contact_number(self):
         return self.cleaned_data['contact_number'].strip()
 
@@ -118,6 +127,7 @@ class ResidentSignupForm(forms.Form):
     def save(self):
         user = User(
             username=self.cleaned_data['username'],
+            email=self.cleaned_data['email'],
             first_name=self.cleaned_data['first_name'],
             last_name=self.cleaned_data['last_name'],
             role=User.ROLE_RESIDENT,
@@ -156,14 +166,25 @@ class UserCreateForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['username', 'first_name', 'last_name', 'contact_number', 'role', 'password']
+        fields = ['username', 'email', 'first_name', 'last_name', 'contact_number', 'role', 'password']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+            'email': forms.EmailInput(attrs={'class': 'input input-bordered w-full'}),
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'last_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'contact_number': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'role': forms.Select(attrs={'class': 'select select-bordered w-full'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['email'].required = True
+
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('Email address is already in use.')
+        return email
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -176,10 +197,24 @@ class UserCreateForm(forms.ModelForm):
 class UserEditForm(forms.ModelForm):
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'contact_number', 'role', 'is_active']
+        fields = ['email', 'first_name', 'last_name', 'contact_number', 'role', 'is_active']
         widgets = {
+            'email': forms.EmailInput(attrs={'class': 'input input-bordered w-full'}),
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'last_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'contact_number': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'role': forms.Select(attrs={'class': 'select select-bordered w-full'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['email'].required = True
+
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip().lower()
+        qs = User.objects.filter(email__iexact=email)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError('Email address is already in use.')
+        return email

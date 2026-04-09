@@ -23,6 +23,19 @@ class ManualLogForm(forms.ModelForm):
     def clean_plate_number(self):
         return self.cleaned_data['plate_number'].upper().strip()
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['entry_type'].choices = [
+            (VehicleLog.TYPE_RESIDENT, 'Resident'),
+            (VehicleLog.TYPE_VISITOR, 'Visitor'),
+        ]
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('entry_type') == VehicleLog.TYPE_RESIDENT:
+            cleaned['visitor_name'] = ''
+        return cleaned
+
 
 class LogEditForm(forms.ModelForm):
     class Meta:
@@ -47,3 +60,23 @@ class LogEditForm(forms.ModelForm):
 
     def clean_plate_number(self):
         return self.cleaned_data['plate_number'].upper().strip()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['entry_type'].choices = [
+            (VehicleLog.TYPE_RESIDENT, 'Resident'),
+            (VehicleLog.TYPE_VISITOR, 'Visitor'),
+        ]
+
+    def clean(self):
+        cleaned = super().clean()
+        entry_type = cleaned.get('entry_type')
+        if entry_type == VehicleLog.TYPE_RESIDENT:
+            cleaned['visitor_name'] = ''
+            if not cleaned.get('resident_name'):
+                self.add_error('resident_name', 'Resident name is required for resident logs.')
+        elif entry_type == VehicleLog.TYPE_VISITOR:
+            cleaned['resident_name'] = ''
+            if not cleaned.get('visitor_name'):
+                self.add_error('visitor_name', 'Visitor name is required for visitor logs.')
+        return cleaned

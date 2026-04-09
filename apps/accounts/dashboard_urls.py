@@ -11,4 +11,6 @@ urlpatterns = [
     path('admin/users/<int:pk>/toggle/', views.user_toggle_active, name='user_toggle_active'),
     # Guard
     path('guard/', views.guard_dashboard, name='guard_dashboard'),
+    # Resident
+    path('resident/', views.resident_dashboard, name='resident_dashboard'),
 ]

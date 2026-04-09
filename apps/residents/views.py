@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
 
 from apps.accounts.views import admin_required
 from apps.residents.models import Resident, Vehicle
@@ -9,6 +10,10 @@ from apps.residents.forms import ResidentForm, VehicleForm
 
 @login_required
 def resident_list(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
     residents = Resident.objects.prefetch_related('vehicles').order_by('last_name', 'first_name')
     return render(request, 'residents/resident_list.html', {'residents': residents})
 
@@ -16,10 +21,13 @@ def resident_list(request):
 @admin_required
 def resident_create(request):
     if request.method == 'POST':
-        form = ResidentForm(request.POST)
+        form = ResidentForm(request.POST, request.FILES)
         if form.is_valid():
             resident = form.save(commit=False)
             resident.registered_by = request.user
+            resident.is_approved = True
+            resident.approved_by = request.user
+            resident.approved_at = timezone.now()
             resident.save()
             messages.success(request, f'{resident.full_name} registered successfully.')
             return redirect('resident_list')
@@ -32,7 +40,7 @@ def resident_create(request):
 def resident_edit(request, pk):
     resident = get_object_or_404(Resident, pk=pk)
     if request.method == 'POST':
-        form = ResidentForm(request.POST, instance=resident)
+        form = ResidentForm(request.POST, request.FILES, instance=resident)
         if form.is_valid():
             form.save()
             messages.success(request, 'Resident updated.')
@@ -48,6 +56,36 @@ def resident_delete(request, pk):
     if request.method == 'POST':
         resident.delete()
         messages.success(request, 'Resident removed.')
+    return redirect('resident_list')
+
+
+@admin_required
+def resident_approve(request, pk):
+    resident = get_object_or_404(Resident.objects.select_related('user'), pk=pk)
+    if request.method == 'POST':
+        resident.is_approved = True
+        resident.approved_by = request.user
+        resident.approved_at = timezone.now()
+        resident.save(update_fields=['is_approved', 'approved_by', 'approved_at', 'updated_at'])
+        if resident.user:
+            resident.user.is_active = True
+            resident.user.save(update_fields=['is_active'])
+        messages.success(request, f'{resident.full_name} has been approved.')
+    return redirect('resident_list')
+
+
+@admin_required
+def resident_reject(request, pk):
+    resident = get_object_or_404(Resident.objects.select_related('user'), pk=pk)
+    if request.method == 'POST':
+        resident.is_approved = False
+        resident.approved_by = None
+        resident.approved_at = None
+        resident.save(update_fields=['is_approved', 'approved_by', 'approved_at', 'updated_at'])
+        if resident.user:
+            resident.user.is_active = False
+            resident.user.save(update_fields=['is_active'])
+        messages.success(request, f'{resident.full_name} has been marked as pending/inactive.')
     return redirect('resident_list')
 
 

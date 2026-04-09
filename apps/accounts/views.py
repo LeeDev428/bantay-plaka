@@ -143,6 +143,7 @@ def user_management(request):
     if q:
         users_qs = users_qs.filter(
             Q(username__icontains=q)
+            | Q(email__icontains=q)
             | Q(first_name__icontains=q)
             | Q(last_name__icontains=q)
             | Q(contact_number__icontains=q)

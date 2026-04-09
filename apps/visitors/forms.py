@@ -45,6 +45,11 @@ class VisitorForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['status'].choices = [
+            (VehicleLog.STATUS_IN, 'In'),
+            (VehicleLog.STATUS_OUT, 'Out'),
+        ]
+        self.fields['status'].label = 'Status'
         for field_name in ['first_name', 'last_name', 'contact_number', 'purpose', 'host_name', 'plate_number', 'vehicle_type', 'status']:
             self.fields[field_name].required = True
 

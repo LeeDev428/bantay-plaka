@@ -6,10 +6,15 @@ from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.decorators import method_decorator
 from django.utils import timezone
+import datetime
+from datetime import timedelta
 
-from apps.accounts.forms import LoginForm, UserCreateForm, UserEditForm
+from apps.accounts.forms import LoginForm, UserCreateForm, UserEditForm, ResidentSignupForm
 from apps.accounts.models import User
 from apps.logs.models import VehicleLog
+from apps.logs.services import attach_blacklist_metadata
+from apps.residents.models import Resident, Vehicle
+from apps.visitors.models import BlacklistEntry
 
 
 def _camera_feed_context() -> dict:
@@ -69,10 +74,30 @@ class BantayPlakaLogoutView(LogoutView):
     next_page = '/login/'
 
 
+def resident_register(request):
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    form = ResidentSignupForm()
+    if request.method == 'POST':
+        form = ResidentSignupForm(request.POST, request.FILES)
+        if form.is_valid():
+            _, resident = form.save()
+            messages.success(
+                request,
+                f'Registration submitted for {resident.full_name}. Please wait for admin approval before login.'
+            )
+            return redirect('login')
+
+    return render(request, 'residents/register.html', {'form': form})
+
+
 @login_required
 def dashboard_redirect(request):
     if request.user.is_admin():
         return redirect('admin_dashboard')
+    if request.user.is_resident():
+        return redirect('resident_dashboard')
     return redirect('guard_dashboard')
 
 
@@ -91,14 +116,22 @@ def admin_required(view_func):
 
 @admin_required
 def admin_dashboard(request):
-    from apps.residents.models import Resident, Vehicle
+    today = timezone.localdate()
+    day_start = timezone.make_aware(datetime.datetime.combine(today, datetime.time.min))
+    day_end = day_start + timedelta(days=1)
+
+    recent_logs = VehicleLog.objects.select_related('logged_by').all()[:10]
+    attach_blacklist_metadata(recent_logs)
+
     context = {
         'total_residents': Resident.objects.count(),
         'total_vehicles': Vehicle.objects.count(),
         'total_guards': User.objects.filter(role=User.ROLE_GUARD, is_active=True).count(),
-        'recent_logs': VehicleLog.objects.select_related('logged_by').all()[:10],
+        'pending_residents': Resident.objects.filter(is_approved=False).count(),
+        'today_in': VehicleLog.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end, status=VehicleLog.STATUS_IN).count(),
+        'today_out': VehicleLog.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end, status=VehicleLog.STATUS_OUT).count(),
+        'recent_logs': recent_logs,
     }
-    context.update(_camera_feed_context())
     return render(request, 'dashboard/admin/index.html', context)
 
 
@@ -151,6 +184,32 @@ def user_toggle_active(request, pk):
 @login_required
 def guard_dashboard(request):
     recent_logs = VehicleLog.objects.select_related('logged_by').all()[:10]
+    attach_blacklist_metadata(recent_logs)
     context = {'recent_logs': recent_logs}
     context.update(_camera_feed_context())
     return render(request, 'dashboard/guard/index.html', context)
+
+
+@login_required
+def resident_dashboard(request):
+    if not request.user.is_resident():
+        return redirect('dashboard')
+
+    resident = (
+        Resident.objects
+        .prefetch_related('vehicles')
+        .filter(user=request.user)
+        .first()
+    )
+    if not resident:
+        messages.error(request, 'Resident profile not found. Please contact admin.')
+        return redirect('logout')
+
+    plates = [v.plate_number for v in resident.vehicles.all() if v.plate_number]
+    active_blacklist = BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
+    context = {
+        'resident': resident,
+        'vehicles': resident.vehicles.all(),
+        'active_blacklist': active_blacklist,
+    }
+    return render(request, 'dashboard/resident/index.html', context)

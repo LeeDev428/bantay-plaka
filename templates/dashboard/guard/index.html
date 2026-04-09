@@ -108,6 +108,7 @@
           <th class="font-semibold">Plate</th>
           <th class="font-semibold">Name</th>
           <th class="font-semibold">Type</th>
+          <th class="font-semibold">Blacklist</th>
           <th class="font-semibold">Status</th>
           <th class="font-semibold">Source</th>
           <th class="font-semibold">Time</th>
@@ -117,7 +118,7 @@
         {% for log in recent_logs %}
           {% include 'partials/log_row.html' with log=log %}
         {% empty %}
-          <tr><td colspan="6" class="text-center text-slate-400 py-12">No gate activity recorded yet.</td></tr>
+          <tr><td colspan="7" class="text-center text-slate-400 py-12">No gate activity recorded yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -64,9 +64,10 @@ def broadcast_log(vehicle_log: VehicleLog):
     )
 
 
-def broadcast_blacklist_alert(plate_number: str):
+def broadcast_blacklist_alert(plate_number: str, tag: str = '', remarks: str = ''):
     """Push a high-visibility alert when a blacklisted plate is detected."""
     channel_layer = get_channel_layer()
+    details = f' [{tag}]' if tag else ''
     async_to_sync(channel_layer.group_send)(
         'vehicle_logs',
         {
@@ -75,7 +76,12 @@ def broadcast_blacklist_alert(plate_number: str):
                 'event_type': 'blacklist_alert',
                 'plate_number': plate_number,
                 'title': 'Blacklisted Vehicle Detected',
-                'message': f'Plate {plate_number} is in blacklist. Please cooperate and proceed to the guard for verification and proper action.',
+                'message': (
+                    f'Plate {plate_number}{details} is in blacklist. '
+                    f'{remarks or "Please cooperate and proceed to the guard for verification and proper action."}'
+                ),
+                'tag': tag,
+                'remarks': remarks,
             },
         }
     )

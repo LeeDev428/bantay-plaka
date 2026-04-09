@@ -83,7 +83,10 @@ class ResidentSignupForm(forms.Form):
         max_length=80,
         widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Government ID type'}),
     )
-    valid_id_image = forms.ImageField(required=False)
+    valid_id_image = forms.ImageField(
+        required=False,
+        widget=forms.ClearableFileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
+    )
 
     def clean_username(self):
         username = self.cleaned_data['username'].strip()

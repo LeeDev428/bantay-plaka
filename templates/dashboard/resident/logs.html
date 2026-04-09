@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}In and Out Logs{% endblock %}
+{% block breadcrumb %}Resident &raquo; In and Out Logs{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold text-slate-800">In and Out Logs</h1>
+  <p class="text-slate-500 text-sm mt-0.5">Latest gate movements for your registered vehicles.</p>
+</div>
+
+<div class="page-card">
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+          <th class="font-semibold">Plate</th>
+          <th class="font-semibold">Type</th>
+          <th class="font-semibold">Status</th>
+          <th class="font-semibold">Source</th>
+          <th class="font-semibold">Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</td>
+            <td class="text-xs text-slate-600">{{ log.get_entry_type_display }}</td>
+            <td>
+              {% if log.status == 'TIME_IN' %}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                  <i class="fa fa-arrow-right text-[9px]"></i> IN
+                </span>
+              {% else %}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                  <i class="fa fa-arrow-left text-[9px]"></i> OUT
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-xs text-slate-500">{{ log.get_source_display }}</td>
+            <td class="text-xs text-slate-400">{{ log.local_time|date:"M d, Y h:i A" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="text-center text-slate-400 py-10">No logs available yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if logs.paginator.num_pages > 1 %}
+    <div class="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <p class="text-xs text-slate-500">
+        Showing page {{ logs.number }} of {{ logs.paginator.num_pages }}
+      </p>
+      <div class="join">
+        {% if logs.has_previous %}
+          <a class="join-item btn btn-sm" href="?page={{ logs.previous_page_number }}">Prev</a>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled">Prev</button>
+        {% endif %}
+
+        <button class="join-item btn btn-sm btn-active">{{ logs.number }}</button>
+
+        {% if logs.has_next %}
+          <a class="join-item btn btn-sm" href="?page={{ logs.next_page_number }}">Next</a>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled">Next</button>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -107,7 +107,7 @@ EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = env.int('EMAIL_PORT', default=587)
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='grafrafraftorres28@gmail.com')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='czar eklw lofi lann')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='czar eklw lofi lann').replace(' ', '')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 
 # API key used by the ANPR engine script to authenticate POSTs to /detection/ingest/

@@ -4,8 +4,9 @@ from apps.residents.models import Resident, Vehicle
 
 @admin.register(Resident)
 class ResidentAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'address', 'contact_number', 'created_at']
+    list_display = ['full_name', 'contact_number', 'is_approved', 'approved_at', 'created_at']
     search_fields = ['first_name', 'last_name', 'address']
+    list_filter = ['is_approved', 'sex']
 
 
 @admin.register(Vehicle)

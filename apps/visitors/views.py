@@ -1,6 +1,8 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
+from django.core.paginator import Paginator
+from django.db.models import Q
 
 from apps.visitors.models import Visitor, BlacklistEntry
 from apps.visitors.forms import VisitorForm, BlacklistEntryForm
@@ -34,10 +36,11 @@ def visitor_log_entry(request):
             visitor.save()
 
             # create vehicle log time-in
+            status = form.cleaned_data.get('status', VehicleLog.STATUS_IN)
             log = VehicleLog.objects.create(
                 plate_number=visitor.plate_number or 'N/A',
                 entry_type=VehicleLog.TYPE_VISITOR,
-                status=VehicleLog.STATUS_IN,
+                status=status,
                 source=VehicleLog.SOURCE_MANUAL,
                 visitor_name=visitor.full_name,
                 logged_by=request.user,
@@ -56,8 +59,20 @@ def visitor_list(request):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    visitors = Visitor.objects.select_related('logged_by').order_by('-created_at')[:50]
-    return render(request, 'visitors/visitor_list.html', {'visitors': visitors})
+    q = request.GET.get('q', '').strip()
+    visitors_qs = Visitor.objects.select_related('logged_by').order_by('-created_at')
+    if q:
+        visitors_qs = visitors_qs.filter(
+            Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
+            | Q(plate_number__icontains=q)
+            | Q(host_name__icontains=q)
+            | Q(purpose__icontains=q)
+        )
+
+    paginator = Paginator(visitors_qs, 10)
+    visitors = paginator.get_page(request.GET.get('page', 1))
+    return render(request, 'visitors/visitor_list.html', {'visitors': visitors, 'q': q})
 
 
 @login_required
@@ -70,6 +85,7 @@ def blacklist_list(request):
         messages.error(request, 'Access denied.')
         return redirect('dashboard')
 
+    q = request.GET.get('q', '').strip()
     form = BlacklistEntryForm()
     if request.method == 'POST':
         form = BlacklistEntryForm(request.POST)
@@ -95,10 +111,20 @@ def blacklist_list(request):
                 messages.success(request, f'Plate {entry.plate_number} is now active in blacklist.')
             return redirect('blacklist_list')
 
-    entries = BlacklistEntry.objects.select_related('created_by').all()[:100]
+    entries_qs = BlacklistEntry.objects.select_related('created_by').order_by('-updated_at')
+    if q:
+        entries_qs = entries_qs.filter(
+            Q(plate_number__icontains=q)
+            | Q(reason__icontains=q)
+            | Q(remarks__icontains=q)
+        )
+    paginator = Paginator(entries_qs, 10)
+    entries = paginator.get_page(request.GET.get('page', 1))
+
     return render(request, 'visitors/blacklist.html', {
         'form': form,
         'entries': entries,
+        'q': q,
     })
 
 
@@ -119,3 +145,42 @@ def blacklist_toggle(request, pk):
         state = 'activated' if entry.is_active else 'deactivated'
         messages.success(request, f'Blacklist entry for {entry.plate_number} {state}.')
     return redirect('blacklist_list')
+
+
+@login_required
+def blacklist_edit(request, pk):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    if not (request.user.is_admin() or request.user.is_guard()):
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    entry = get_object_or_404(BlacklistEntry, pk=pk)
+    if request.method == 'POST':
+        form = BlacklistEntryForm(request.POST, instance=entry)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Blacklist entry for {entry.plate_number} updated.')
+        else:
+            messages.error(request, 'Failed to update blacklist entry.')
+    return redirect(request.POST.get('next', 'blacklist_list'))
+
+
+@login_required
+def blacklist_cancel(request, pk):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    if not (request.user.is_admin() or request.user.is_guard()):
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    entry = get_object_or_404(BlacklistEntry, pk=pk)
+    if request.method == 'POST':
+        entry.is_active = False
+        entry.save(update_fields=['is_active', 'updated_at'])
+        messages.success(request, f'Blacklist for {entry.plate_number} cancelled.')
+    return redirect(request.POST.get('next', 'blacklist_list'))

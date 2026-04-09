@@ -64,5 +64,14 @@ class VehicleForm(forms.ModelForm):
             'color': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. White'}),
         }
 
+        labels = {
+            'make': 'Brand',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in ['plate_number', 'vehicle_type', 'make', 'model', 'color']:
+            self.fields[field_name].required = True
+
     def clean_plate_number(self):
         return self.cleaned_data['plate_number'].upper().strip()

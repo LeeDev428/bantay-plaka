@@ -182,6 +182,9 @@ def user_toggle_active(request, pk):
 
 @login_required
 def guard_dashboard(request):
+    if request.user.is_resident():
+        return redirect('resident_dashboard')
+
     recent_logs = attach_blacklist_metadata(
         VehicleLog.objects.select_related('logged_by').all()[:10]
     )

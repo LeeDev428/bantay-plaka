@@ -268,7 +268,15 @@ def resident_vehicles(request):
         return redirect('dashboard')
 
     resident = get_object_or_404(Resident.objects.prefetch_related('vehicles'), user=request.user)
-    vehicles = resident.vehicles.all().order_by('plate_number')
+    vehicles = list(resident.vehicles.all().order_by('plate_number'))
+    plates = [v.plate_number for v in vehicles if v.plate_number]
+    active_blacklist = list(
+        BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
+    )
+    bl_map = {entry.plate_number.upper(): entry for entry in active_blacklist}
+    for vehicle in vehicles:
+        vehicle.blacklist_entry = bl_map.get((vehicle.plate_number or '').upper())
+
     context = {
         'resident': resident,
         'vehicles': vehicles,

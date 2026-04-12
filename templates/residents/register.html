@@ -34,6 +34,12 @@
                     <i class="fa fa-eye"></i>
                   </button>
                 </div>
+              {% elif field.name == 'valid_id_image' %}
+                {{ field }}
+                <div id="valid-id-preview-wrapper" class="mt-3 hidden">
+                  <p class="text-xs font-medium text-slate-500 mb-1">Image Preview</p>
+                  <img id="valid-id-preview" src="#" alt="Valid ID preview" class="max-h-48 rounded-lg border border-slate-200 object-contain bg-slate-50 p-1" />
+                </div>
               {% else %}
                 {{ field }}
               {% endif %}
@@ -75,6 +81,34 @@
       }
     });
   });
+
+  const validIdInput = document.getElementById('id_valid_id_image');
+  const previewWrapper = document.getElementById('valid-id-preview-wrapper');
+  const previewImage = document.getElementById('valid-id-preview');
+
+  if (validIdInput && previewWrapper && previewImage) {
+    validIdInput.addEventListener('change', () => {
+      const file = validIdInput.files && validIdInput.files[0];
+      if (!file) {
+        previewImage.src = '#';
+        previewWrapper.classList.add('hidden');
+        return;
+      }
+
+      if (!file.type.startsWith('image/')) {
+        previewImage.src = '#';
+        previewWrapper.classList.add('hidden');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        previewImage.src = event.target && event.target.result ? event.target.result : '#';
+        previewWrapper.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 })();
 </script>
 {% endblock %}

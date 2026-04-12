@@ -33,13 +33,32 @@ class LoginForm(AuthenticationForm):
             self.user_cache = authenticate(self.request, username=username, password=password)
             if self.user_cache is None:
                 user_model = get_user_model()
-                pending_user = user_model._default_manager.filter(username__iexact=username).first()
-                if pending_user and pending_user.check_password(password) and not pending_user.is_active:
-                    raise ValidationError(
-                        'Your account is pending admin approval. Please wait for activation before logging in.',
-                        code='inactive',
-                    )
+                matched_user = user_model._default_manager.filter(username__iexact=username).first()
+                if matched_user and matched_user.check_password(password):
+                    if not matched_user.is_active:
+                        if matched_user.role == User.ROLE_RESIDENT:
+                            resident_profile = getattr(matched_user, 'resident_profile', None)
+                            # Self-heal inconsistent records: approved resident but inactive user.
+                            if resident_profile and resident_profile.is_approved:
+                                matched_user.is_active = True
+                                matched_user.save(update_fields=['is_active'])
+                                self.user_cache = authenticate(self.request, username=matched_user.username, password=password)
+                                if self.user_cache is not None:
+                                    self.confirm_login_allowed(self.user_cache)
+                                    return self.cleaned_data
+
+                            raise ValidationError(
+                                'Your account is pending admin approval. Please wait for activation before logging in.',
+                                code='inactive',
+                            )
+
+                        raise ValidationError(
+                            'Your account is inactive. Please contact the administrator.',
+                            code='inactive',
+                        )
+
                 raise self.get_invalid_login_error()
+
             self.confirm_login_allowed(self.user_cache)
 
         return self.cleaned_data

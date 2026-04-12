@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
@@ -29,7 +30,7 @@ class LoginForm(AuthenticationForm):
         password = self.cleaned_data.get('password')
 
         if username and password:
-            self.user_cache = self.authenticate(self.request, username=username, password=password)
+            self.user_cache = authenticate(self.request, username=username, password=password)
             if self.user_cache is None:
                 user_model = get_user_model()
                 pending_user = user_model._default_manager.filter(username__iexact=username).first()

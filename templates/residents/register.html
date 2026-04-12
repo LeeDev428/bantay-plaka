@@ -21,7 +21,22 @@
               <label class="block text-sm font-medium text-slate-700 mb-1.5">
                 {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
               </label>
-              {{ field }}
+              {% if field.name == 'password1' or field.name == 'password2' %}
+                <div class="relative">
+                  {{ field }}
+                  <button
+                    type="button"
+                    class="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600"
+                    data-password-toggle
+                    data-target="{{ field.id_for_label }}"
+                    aria-label="Toggle password visibility"
+                  >
+                    <i class="fa fa-eye"></i>
+                  </button>
+                </div>
+              {% else %}
+                {{ field }}
+              {% endif %}
               {% if field.help_text %}<p class="text-xs text-slate-400 mt-1">{{ field.help_text }}</p>{% endif %}
               {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
             </div>
@@ -38,4 +53,28 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const toggles = document.querySelectorAll('[data-password-toggle]');
+  toggles.forEach((toggle) => {
+    const targetId = toggle.dataset.target;
+    const input = document.getElementById(targetId);
+    const icon = toggle.querySelector('i');
+    if (!input) return;
+
+    input.classList.add('pr-10');
+    toggle.addEventListener('click', () => {
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      if (icon) {
+        icon.classList.toggle('fa-eye', showing);
+        icon.classList.toggle('fa-eye-slash', !showing);
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}

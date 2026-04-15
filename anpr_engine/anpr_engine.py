@@ -728,7 +728,7 @@ class YOLODetector:
     Use this only as a fallback (--mode yolo).
     """
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, device: str = 'cpu'):
         try:
             from ultralytics import YOLO
         except ImportError:
@@ -747,7 +747,15 @@ class YOLODetector:
 
         log.info(f"Loading YOLO model: {model_path}")
         self._model = YOLO(model_path)
+        self._device = device if device in {'cpu', 'cuda:0'} else 'cpu'
         self._infer_calls = 0
+        if self._device.startswith('cuda'):
+            try:
+                self._model.to(self._device)
+                log.info("YOLO device set to %s", self._device)
+            except Exception as exc:
+                log.warning("YOLO CUDA init failed (%s). Falling back to CPU.", exc)
+                self._device = 'cpu'
         log.info("YOLO model loaded.")
 
     def get_debug_stats(self) -> dict[str, object]:
@@ -756,13 +764,14 @@ class YOLODetector:
             'zero_box_calls': None,
             'no_box_streak': None,
             'last_variant': 'yolo',
+            'device': self._device,
         }
 
     def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int]]:
         boxes = []
         try:
             self._infer_calls += 1
-            results = self._model(frame, conf=DETECTION_CONFIDENCE, verbose=False)
+            results = self._model(frame, conf=DETECTION_CONFIDENCE, verbose=False, device=self._device)
             for result in results:
                 if result.boxes is None:
                     continue
@@ -770,7 +779,21 @@ class YOLODetector:
                     x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
                     boxes.append((x1, y1, x2, y2))
         except Exception as e:
-            log.warning(f"YOLO detection error: {e}")
+            if self._device.startswith('cuda'):
+                log.warning("YOLO CUDA inference failed (%s). Retrying on CPU.", e)
+                self._device = 'cpu'
+                try:
+                    results = self._model(frame, conf=DETECTION_CONFIDENCE, verbose=False, device='cpu')
+                    for result in results:
+                        if result.boxes is None:
+                            continue
+                        for box in result.boxes:
+                            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                            boxes.append((x1, y1, x2, y2))
+                except Exception as cpu_exc:
+                    log.warning(f"YOLO detection error: {cpu_exc}")
+            else:
+                log.warning(f"YOLO detection error: {e}")
         return boxes
 
 
@@ -786,6 +809,7 @@ class ANPREngine:
         ingest_url: str,
         mode: str = 'roboflow',
         camera_role: str = 'UNKNOWN',
+        device: str = DEFAULT_ANPR_DEVICE,
         rf_model_id: str = DEFAULT_RF_MODEL_ID,
         yolo_model_path: str = DEFAULT_YOLO_MODEL,
         debounce_seconds: int = DEBOUNCE_SECONDS,
@@ -797,6 +821,7 @@ class ANPREngine:
         self._is_rtsp_source = isinstance(rtsp_url, str) and '://' in rtsp_url
         requested_role = (camera_role or 'UNKNOWN').strip().upper()
         self.camera_role = requested_role if requested_role in VALID_CAMERA_ROLES else 'UNKNOWN'
+        self.runtime_device = _resolve_runtime_device(device)
         self.debounce_seconds = debounce_seconds
         self.frame_skip = max(1, int(frame_skip))
         self.rtsp_drain_grabs = max(0, int(rtsp_drain_grabs))
@@ -857,22 +882,22 @@ class ANPREngine:
                 log.error("Roboflow detector failed to initialize: %s", exc)
                 log.warning("Falling back to YOLO detector for compatibility.")
                 try:
-                    self.detector = YOLODetector(yolo_model_path)
+                    self.detector = YOLODetector(yolo_model_path, device=self.runtime_device)
                 except BaseException as yolo_exc:
                     log.error("YOLO fallback failed to initialize: %s", yolo_exc)
                     sys.exit(1)
         elif mode == 'yolo':
-            self.detector = YOLODetector(yolo_model_path)
+            self.detector = YOLODetector(yolo_model_path, device=self.runtime_device)
         else:
             log.error(f"Unknown mode '{mode}'. Use 'roboflow' or 'yolo'.")
             sys.exit(1)
 
         # EasyOCR reads the text from the cropped plate image
-        use_gpu = bool(torch and torch.cuda.is_available())
+        use_gpu = self.runtime_device.startswith('cuda')
         if use_gpu:
-            log.info("CUDA detected. EasyOCR GPU mode enabled.")
+            log.info("Runtime device: %s. EasyOCR GPU mode enabled.", self.runtime_device)
         else:
-            log.info("CUDA not available. EasyOCR CPU mode enabled.")
+            log.info("Runtime device: CPU. EasyOCR CPU mode enabled.")
         log.info("Loading EasyOCR (first run downloads ~200 MB, then cached locally)...")
         self.ocr = easyocr.Reader(['en'], gpu=use_gpu)
         log.info("EasyOCR ready.")
@@ -1443,6 +1468,8 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         help=f'Roboflow model ID (project-slug/version). Default: {DEFAULT_RF_MODEL_ID}')
     parser.add_argument('--model', default=DEFAULT_YOLO_MODEL,
         help='YOLO .pt file path (only for --mode yolo). Default: yolov8n.pt')
+    parser.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default=DEFAULT_ANPR_DEVICE,
+        help='Runtime device selection for OCR/YOLO. auto=prefer CUDA when available. Default: ANPR_DEVICE env or auto')
     parser.add_argument('--url', default=DEFAULT_INGEST_URL,
         help=f'Django ingest URL. Default: {DEFAULT_INGEST_URL}')
     parser.add_argument('--camera-role', choices=['ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'], default='UNKNOWN',
@@ -1463,6 +1490,7 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         ingest_url=args.url,
         mode=args.mode,
         camera_role=args.camera_role,
+        device=args.device,
         rf_model_id=args.model_id,
         yolo_model_path=args.model,
         debounce_seconds=args.debounce,

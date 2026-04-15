@@ -118,6 +118,12 @@ ANPR_API_KEY = env('ANPR_API_KEY', default='')
 ENTRY_CAMERA_RTSP = env('ENTRY_CAMERA_RTSP', default='')
 EXIT_CAMERA_RTSP = env('EXIT_CAMERA_RTSP', default='')
 
+# Camera feed tuning (guard dashboard live panels)
+CAMERA_FEED_MAX_WIDTH = max(480, min(1280, env.int('CAMERA_FEED_MAX_WIDTH', default=720)))
+CAMERA_FEED_JPEG_QUALITY = max(50, min(95, env.int('CAMERA_FEED_JPEG_QUALITY', default=72)))
+CAMERA_WORKER_FPS = max(8, min(30, env.int('CAMERA_WORKER_FPS', default=18)))
+CAMERA_FRAME_FRESH_SECONDS = max(0.5, min(5.0, env.float('CAMERA_FRAME_FRESH_SECONDS', default=1.2)))
+
 # Django Channels — in-memory for development
 CHANNEL_LAYERS = {
     'default': {

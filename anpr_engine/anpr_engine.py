@@ -98,6 +98,27 @@ def _env_bool(name: str, default: bool) -> bool:
         return default
     return raw in {'1', 'true', 'yes', 'on'}
 
+
+def _resolve_runtime_device(requested: str) -> str:
+    """Resolve runtime device safely: 'auto' -> cuda when available, else cpu."""
+    choice = (requested or 'auto').strip().lower()
+    if choice not in {'auto', 'cpu', 'cuda'}:
+        choice = 'auto'
+
+    cuda_ready = bool(torch and torch.cuda.is_available() and torch.version.cuda)
+
+    if choice == 'cpu':
+        return 'cpu'
+
+    if choice == 'cuda':
+        if cuda_ready:
+            return 'cuda:0'
+        log.warning("CUDA was explicitly requested but is unavailable. Falling back to CPU.")
+        return 'cpu'
+
+    # auto
+    return 'cuda:0' if cuda_ready else 'cpu'
+
 # Key used to authenticate with your Django app's /detection/ingest/ endpoint
 DJANGO_API_KEY = os.getenv('ANPR_API_KEY', '')
 
@@ -148,6 +169,7 @@ DEMO_FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_DEMO_FALLBACK_EVERY_N_FRAME
 
 # Detection confidence threshold for both Roboflow and YOLO modes
 DETECTION_CONFIDENCE = _env_float('ANPR_DETECTION_CONFIDENCE', 0.34)
+DEFAULT_ANPR_DEVICE = (os.getenv('ANPR_DEVICE', 'auto') or 'auto').strip().lower()
 VALID_CAMERA_ROLES = {'ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'}
 
 # Runtime diagnostics + RTSP resilience tuning.

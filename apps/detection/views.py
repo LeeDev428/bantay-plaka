@@ -30,9 +30,12 @@ _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
 MIN_GLOBAL_PLATE_RELOG_SECONDS = 4
 MAX_FRESH_CACHE_SECONDS = 1.5
-CAMERA_WORKER_MAX_WIDTH = 720
-CAMERA_WORKER_JPEG_QUALITY = 70
-CAMERA_STREAM_POLL_SLEEP_SECONDS = 0.03
+CAMERA_WORKER_MAX_WIDTH = max(480, int(getattr(settings, 'CAMERA_STREAM_MAX_WIDTH', 720) or 720))
+CAMERA_WORKER_JPEG_QUALITY = min(90, max(45, int(getattr(settings, 'CAMERA_STREAM_JPEG_QUALITY', 70) or 70)))
+CAMERA_STREAM_POLL_SLEEP_SECONDS = max(
+    0.01,
+    float(getattr(settings, 'CAMERA_STREAM_POLL_SLEEP_SECONDS', 0.03) or 0.03),
+)
 
 
 def _open_capture_fast(rtsp_url: str):

@@ -45,12 +45,33 @@ class Command(BaseCommand):
             dest='strict_roles',
             help='Disable strict camera-role mapping.',
         )
+        parser.add_argument(
+            '--device',
+            choices=['auto', 'cpu', 'cuda'],
+            default=(getattr(settings, 'ANPR_DEVICE', 'auto') or 'auto').strip().lower(),
+            help='Runtime device for ANPR workers. Default: ANPR_DEVICE from settings/.env',
+        )
+        parser.add_argument(
+            '--frame-skip',
+            type=int,
+            default=int(getattr(settings, 'ANPR_FRAME_SKIP', 2) or 2),
+            help='Process every Nth frame for ANPR workers. Default: ANPR_FRAME_SKIP or 2',
+        )
+        parser.add_argument(
+            '--rtsp-drain-grabs',
+            type=int,
+            default=int(getattr(settings, 'ANPR_RTSP_DRAIN_GRABS', 2) or 2),
+            help='Buffered RTSP frame grabs before read. Default: ANPR_RTSP_DRAIN_GRABS or 2',
+        )
         parser.set_defaults(strict_roles=True)
 
     def handle(self, *args, **options):
         webcam_mode = bool(options.get('webcam'))
         webcam_index = str(options.get('webcam_index') or '0').strip()
         strict_roles = bool(options.get('strict_roles'))
+        anpr_device = str(options.get('device') or 'auto').strip().lower()
+        frame_skip = max(1, int(options.get('frame_skip') or 2))
+        rtsp_drain_grabs = max(0, int(options.get('rtsp_drain_grabs') or 2))
 
         entry_rtsp = (getattr(settings, 'ENTRY_CAMERA_RTSP', '') or '').strip()
         exit_rtsp = (getattr(settings, 'EXIT_CAMERA_RTSP', '') or '').strip()
@@ -63,6 +84,12 @@ class Command(BaseCommand):
         host = options['host']
         port = str(options['port'])
         server_mode = options['server']
+
+        self.stdout.write(
+            self.style.NOTICE(
+                f'ANPR runtime: device={anpr_device}, frame_skip={frame_skip}, rtsp_drain_grabs={rtsp_drain_grabs}'
+            )
+        )
 
         base_dir = Path(settings.BASE_DIR)
         preferred_py = base_dir / 'venv' / 'Scripts' / 'python.exe'
@@ -103,7 +130,8 @@ class Command(BaseCommand):
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', webcam_index,
                 '--mode', 'yolo',
-                '--frame-skip', '1',
+                '--device', anpr_device,
+                '--frame-skip', str(frame_skip),
             ]
             if strict_roles:
                 entry_cmd.extend(['--camera-role', 'ENTRY_CAM'])
@@ -114,16 +142,18 @@ class Command(BaseCommand):
                 py,
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', _anpr_rtsp(entry_rtsp),
-                '--frame-skip', '1',
-                '--rtsp-drain-grabs', '3',
+                '--device', anpr_device,
+                '--frame-skip', str(frame_skip),
+                '--rtsp-drain-grabs', str(rtsp_drain_grabs),
                 '--no-preview',
             ]
             exit_cmd = [
                 py,
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', _anpr_rtsp(exit_rtsp),
-                '--frame-skip', '1',
-                '--rtsp-drain-grabs', '3',
+                '--device', anpr_device,
+                '--frame-skip', str(frame_skip),
+                '--rtsp-drain-grabs', str(rtsp_drain_grabs),
                 '--no-preview',
             ]
             if strict_roles:

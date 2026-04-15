@@ -163,7 +163,18 @@
       let busy = false;
       let failures = 0;
       let hadSuccess = false;
+
+      if (img.dataset.liveStream === 'true') {
+        img.addEventListener('error', () => {
+          img.dataset.liveStream = 'false';
+          if (meta) {
+            meta.textContent = `Switching ${role} to snapshot mode...`;
+          }
+        });
+      }
+
       setInterval(() => {
+        if (img.dataset.liveStream === 'true') return;
         if (img.dataset.liveSnapshot !== role) return;
         if (busy) return;
         busy = true;
@@ -191,7 +202,7 @@
           busy = false;
         };
         probe.src = `/detection/frame/${role}/?t=${Date.now()}`;
-      }, 80);
+      }, 140);
     });
   }
 

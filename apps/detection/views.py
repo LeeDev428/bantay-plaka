@@ -30,6 +30,9 @@ _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
 MIN_GLOBAL_PLATE_RELOG_SECONDS = 4
 MAX_FRESH_CACHE_SECONDS = 1.5
+CAMERA_WORKER_MAX_WIDTH = 720
+CAMERA_WORKER_JPEG_QUALITY = 70
+CAMERA_STREAM_POLL_SLEEP_SECONDS = 0.03
 
 
 def _open_capture_fast(rtsp_url: str):
@@ -204,7 +207,7 @@ def _cached_mjpeg_stream(camera_role: str, rtsp_url: str):
                     b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n'
                 )
 
-        time.sleep(0.06)
+        time.sleep(CAMERA_STREAM_POLL_SLEEP_SECONDS)
 
 
 def _camera_worker_loop(camera_role: str, rtsp_url: str):
@@ -227,8 +230,8 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             continue
 
-        # Drain buffered frames to keep feed close to real-time.
-        for _ in range(4):
+        # Drain a couple of buffered frames so UI stays close to real-time.
+        for _ in range(2):
             cap.grab()
 
         ok, frame = cap.read()
@@ -246,7 +249,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
 
         fail_count = 0
 
-        max_width = 560
+        max_width = CAMERA_WORKER_MAX_WIDTH
         if frame.shape[1] > max_width:
             scale = max_width / frame.shape[1]
             frame = cv2.resize(
@@ -255,12 +258,14 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
                 interpolation=cv2.INTER_AREA,
             )
 
-        encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 58])
+        encoded_ok, buffer = cv2.imencode(
+            '.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), CAMERA_WORKER_JPEG_QUALITY]
+        )
         if encoded_ok:
             with _FRAME_CACHE_LOCK:
                 _FRAME_CACHE[camera_role] = (buffer.tobytes(), time.time())
 
-        time.sleep(0.012)
+        time.sleep(0.008)
 
 
 def _no_cache_image_response(frame_bytes: bytes, stale: bool = False) -> HttpResponse:
@@ -366,10 +371,15 @@ def camera_preview(request, camera_role: str):
     if not rtsp_url:
         return JsonResponse({'error': f'RTSP URL not configured for {role}'}, status=400)
 
-    return StreamingHttpResponse(
+    response = StreamingHttpResponse(
         _cached_mjpeg_stream(role, rtsp_url),
         content_type='multipart/x-mixed-replace; boundary=frame',
     )
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    response['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @login_required

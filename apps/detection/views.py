@@ -29,15 +29,7 @@ _FRAME_CACHE_LOCK = threading.Lock()
 _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
 MIN_GLOBAL_PLATE_RELOG_SECONDS = 4
-MAX_FRESH_CACHE_SECONDS = float(getattr(settings, 'CAMERA_FRAME_FRESH_SECONDS', 1.2) or 1.2)
-MAX_FRESH_CACHE_SECONDS = min(max(MAX_FRESH_CACHE_SECONDS, 0.5), 5.0)
-CAMERA_STREAM_MAX_WIDTH = int(getattr(settings, 'CAMERA_FEED_MAX_WIDTH', 720) or 720)
-CAMERA_STREAM_MAX_WIDTH = min(max(CAMERA_STREAM_MAX_WIDTH, 480), 1280)
-CAMERA_STREAM_JPEG_QUALITY = int(getattr(settings, 'CAMERA_FEED_JPEG_QUALITY', 72) or 72)
-CAMERA_STREAM_JPEG_QUALITY = min(max(CAMERA_STREAM_JPEG_QUALITY, 50), 95)
-CAMERA_WORKER_FPS = int(getattr(settings, 'CAMERA_WORKER_FPS', 18) or 18)
-CAMERA_WORKER_FPS = min(max(CAMERA_WORKER_FPS, 8), 30)
-CAMERA_WORKER_SLEEP_SECONDS = 1.0 / float(CAMERA_WORKER_FPS)
+MAX_FRESH_CACHE_SECONDS = 1.5
 
 
 def _open_capture_fast(rtsp_url: str):
@@ -174,7 +166,7 @@ def _mjpeg_frame_stream(rtsp_url: str):
                 continue
             fail_count = 0
 
-            max_width = CAMERA_STREAM_MAX_WIDTH
+            max_width = 960
             if frame.shape[1] > max_width:
                 scale = max_width / frame.shape[1]
                 frame = cv2.resize(
@@ -183,7 +175,7 @@ def _mjpeg_frame_stream(rtsp_url: str):
                     interpolation=cv2.INTER_AREA,
                 )
 
-            encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), CAMERA_STREAM_JPEG_QUALITY])
+            encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
             if not encoded_ok:
                 continue
 
@@ -212,7 +204,7 @@ def _cached_mjpeg_stream(camera_role: str, rtsp_url: str):
                     b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n'
                 )
 
-        time.sleep(max(0.01, CAMERA_WORKER_SLEEP_SECONDS / 2.0))
+        time.sleep(0.06)
 
 
 def _camera_worker_loop(camera_role: str, rtsp_url: str):
@@ -254,7 +246,7 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
 
         fail_count = 0
 
-        max_width = CAMERA_STREAM_MAX_WIDTH
+        max_width = 560
         if frame.shape[1] > max_width:
             scale = max_width / frame.shape[1]
             frame = cv2.resize(
@@ -263,12 +255,12 @@ def _camera_worker_loop(camera_role: str, rtsp_url: str):
                 interpolation=cv2.INTER_AREA,
             )
 
-        encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), CAMERA_STREAM_JPEG_QUALITY])
+        encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 58])
         if encoded_ok:
             with _FRAME_CACHE_LOCK:
                 _FRAME_CACHE[camera_role] = (buffer.tobytes(), time.time())
 
-        time.sleep(CAMERA_WORKER_SLEEP_SECONDS)
+        time.sleep(0.012)
 
 
 def _no_cache_image_response(frame_bytes: bytes, stale: bool = False) -> HttpResponse:
@@ -317,7 +309,7 @@ def _read_single_frame(rtsp_url: str):
             if not ok or frame is None:
                 continue
 
-            max_width = CAMERA_STREAM_MAX_WIDTH
+            max_width = 960
             if frame.shape[1] > max_width:
                 scale = max_width / frame.shape[1]
                 frame = cv2.resize(
@@ -326,7 +318,7 @@ def _read_single_frame(rtsp_url: str):
                     interpolation=cv2.INTER_AREA,
                 )
 
-            encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), CAMERA_STREAM_JPEG_QUALITY])
+            encoded_ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
             if encoded_ok:
                 return buffer.tobytes()
         finally:

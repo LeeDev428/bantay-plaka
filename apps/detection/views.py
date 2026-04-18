@@ -13,7 +13,10 @@ import os
 import threading
 from urllib.parse import urlparse, unquote
 
-import cv2
+try:
+    import cv2
+except Exception:
+    cv2 = None
 import requests
 from requests.auth import HTTPDigestAuth, HTTPBasicAuth
 
@@ -36,6 +39,10 @@ CAMERA_STREAM_POLL_SLEEP_SECONDS = max(
     0.01,
     float(getattr(settings, 'CAMERA_STREAM_POLL_SLEEP_SECONDS', 0.03) or 0.03),
 )
+
+
+def _cv2_available() -> bool:
+    return cv2 is not None
 
 
 def _open_capture_fast(rtsp_url: str):
@@ -367,6 +374,9 @@ def _read_camera_http_snapshot(rtsp_url: str):
 
 @login_required
 def camera_preview(request, camera_role: str):
+    if not _cv2_available():
+        return JsonResponse({'error': 'Camera preview unavailable in this deployment (OpenCV missing).'}, status=503)
+
     role = _normalize_camera_role(camera_role)
     rtsp_url = _camera_rtsp_for_role(role)
     if role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
@@ -387,6 +397,9 @@ def camera_preview(request, camera_role: str):
 
 @login_required
 def camera_frame(request, camera_role: str):
+    if not _cv2_available():
+        return JsonResponse({'error': 'Camera frame unavailable in this deployment (OpenCV missing).'}, status=503)
+
     role = _normalize_camera_role(camera_role)
     rtsp_url = _camera_rtsp_for_role(role)
     if role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:

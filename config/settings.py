@@ -18,6 +18,13 @@ def _first_env(*names: str, default: str = '') -> str:
             return str(value).strip()
     return default
 
+
+def _as_bool_env(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {'1', 'true', 'yes', 'on'}
+
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-this-in-production')
 DEBUG = env('DEBUG')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['127.0.0.1', 'localhost', '.up.railway.app'])
@@ -74,19 +81,27 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': _first_env('DB_NAME', 'MYSQLDATABASE', 'MYSQL_DATABASE', default='bantay_plaka'),
-        'USER': _first_env('DB_USER', 'MYSQLUSER', 'MYSQL_USER', default='root'),
-        'PASSWORD': _first_env('DB_PASSWORD', 'MYSQLPASSWORD', 'MYSQL_PASSWORD', default=''),
-        'HOST': _first_env('DB_HOST', 'MYSQLHOST', 'MYSQL_HOST', default='127.0.0.1'),
-        'PORT': _first_env('DB_PORT', 'MYSQLPORT', 'MYSQL_PORT', default='3306'),
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-        },
+_db_url = _first_env('DATABASE_URL', 'MYSQL_URL', 'MYSQL_PRIVATE_URL', default='')
+if _db_url:
+    _db_default = environ.Env.db_url_config(_db_url)
+    _db_default.setdefault('ENGINE', 'django.db.backends.mysql')
+    _db_default.setdefault('OPTIONS', {})
+    _db_default['OPTIONS'].setdefault('charset', 'utf8mb4')
+    DATABASES = {'default': _db_default}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': _first_env('DB_NAME', 'MYSQLDATABASE', 'MYSQL_DATABASE', default='bantay_plaka'),
+            'USER': _first_env('DB_USER', 'MYSQLUSER', 'MYSQL_USER', default='root'),
+            'PASSWORD': _first_env('DB_PASSWORD', 'MYSQLPASSWORD', 'MYSQL_PASSWORD', default=''),
+            'HOST': _first_env('DB_HOST', 'MYSQLHOST', 'MYSQL_HOST', default='127.0.0.1'),
+            'PORT': _first_env('DB_PORT', 'MYSQLPORT', 'MYSQL_PORT', default='3306'),
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+            },
+        }
     }
-}
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -140,7 +155,9 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=3600)
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = False
-    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    # Keep health endpoints accessible to platform probes even when HTTPS redirect is enabled.
+    SECURE_REDIRECT_EXEMPT = [r'^healthz/?$', r'^login/?$']
+    SECURE_SSL_REDIRECT = _as_bool_env('SECURE_SSL_REDIRECT', default=False)
 
 # API key used by the ANPR engine script to authenticate POSTs to /detection/ingest/
 # Set this in .env as ANPR_API_KEY=<your-secret-key>

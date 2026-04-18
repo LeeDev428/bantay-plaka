@@ -3,9 +3,11 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+from django.http import HttpResponse
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+  path('healthz/', lambda request: HttpResponse('ok', content_type='text/plain')),
     path('', include('apps.accounts.urls')),
     path('dashboard/', include('apps.accounts.dashboard_urls')),
     path('residents/', include('apps.residents.urls')),

@@ -1,15 +1,26 @@
 import environ
 import os
 from pathlib import Path
+import pymysql
+
+pymysql.install_as_MySQLdb()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(DEBUG=(bool, True))
 environ.Env.read_env(BASE_DIR / '.env')
 
+
+def _first_env(*names: str, default: str = '') -> str:
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and str(value).strip() != '':
+            return str(value).strip()
+    return default
+
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-this-in-production')
 DEBUG = env('DEBUG')
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['127.0.0.1', 'localhost'])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['127.0.0.1', 'localhost', '.up.railway.app'])
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
 INSTALLED_APPS = [
@@ -66,11 +77,11 @@ ASGI_APPLICATION = 'config.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': env('DB_NAME', default='bantay_plaka'),
-        'USER': env('DB_USER', default='root'),
-        'PASSWORD': env('DB_PASSWORD', default=''),
-        'HOST': env('DB_HOST', default='127.0.0.1'),
-        'PORT': env('DB_PORT', default='3306'),
+        'NAME': _first_env('DB_NAME', 'MYSQLDATABASE', 'MYSQL_DATABASE', default='bantay_plaka'),
+        'USER': _first_env('DB_USER', 'MYSQLUSER', 'MYSQL_USER', default='root'),
+        'PASSWORD': _first_env('DB_PASSWORD', 'MYSQLPASSWORD', 'MYSQL_PASSWORD', default=''),
+        'HOST': _first_env('DB_HOST', 'MYSQLHOST', 'MYSQL_HOST', default='127.0.0.1'),
+        'PORT': _first_env('DB_PORT', 'MYSQLPORT', 'MYSQL_PORT', default='3306'),
         'OPTIONS': {
             'charset': 'utf8mb4',
         },
@@ -140,7 +151,7 @@ ENTRY_CAMERA_RTSP = env('ENTRY_CAMERA_RTSP', default='')
 EXIT_CAMERA_RTSP = env('EXIT_CAMERA_RTSP', default='')
 
 # Django Channels: Redis in cloud if REDIS_URL is configured; in-memory for local dev.
-REDIS_URL = env('REDIS_URL', default='').strip()
+REDIS_URL = _first_env('REDIS_URL', 'REDIS_PUBLIC_URL', 'RAILWAY_REDIS_URL', default='')
 if REDIS_URL:
     CHANNEL_LAYERS = {
         'default': {

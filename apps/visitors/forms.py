@@ -82,15 +82,35 @@ class BlacklistEntryForm(forms.ModelForm):
             }),
             'reason': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full',
-                'placeholder': 'Reason (optional)',
+                'placeholder': 'Reason',
                 'maxlength': 255,
             }),
             'remarks': forms.Textarea(attrs={
                 'class': 'textarea textarea-bordered w-full',
-                'placeholder': 'Detailed remarks (optional)',
+                'placeholder': 'Detailed notes',
                 'rows': 3,
             }),
         }
+        labels = {
+            'remarks': 'Notes',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['reason'].required = True
+        self.fields['remarks'].required = True
+
+    def clean_reason(self):
+        value = (self.cleaned_data.get('reason') or '').strip()
+        if not value:
+            raise forms.ValidationError('Reason is required.')
+        return value
+
+    def clean_remarks(self):
+        value = (self.cleaned_data.get('remarks') or '').strip()
+        if not value:
+            raise forms.ValidationError('Notes are required.')
+        return value
 
     def clean_plate_number(self):
         return self.cleaned_data['plate_number'].upper().strip()

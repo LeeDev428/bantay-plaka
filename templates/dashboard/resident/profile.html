@@ -38,9 +38,14 @@
     </div>
 
     {% if resident.valid_id_image %}
-      <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-2 mt-5 text-sm font-semibold text-blue-700 hover:text-blue-800">
-        <i class="fa fa-image"></i> View Uploaded ID
-      </a>
+      <div class="mt-5">
+        <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-800">
+          <i class="fa fa-image"></i> View Uploaded ID
+        </a>
+        <a href="{{ resident.valid_id_image.url }}" target="_blank" class="block mt-2 w-fit">
+          <img src="{{ resident.valid_id_image.url }}" alt="Resident valid ID" class="max-h-52 rounded border border-slate-200 object-contain" />
+        </a>
+      </div>
     {% endif %}
   </div>
 </div>

@@ -42,6 +42,7 @@
           <th class="font-semibold">Host</th>
           <th class="font-semibold">Logged By</th>
           <th class="font-semibold">Time</th>
+          <th class="font-semibold">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -53,9 +54,37 @@
           <td class="text-sm text-slate-500">{{ visitor.host_name|default:'—' }}</td>
           <td class="text-xs text-slate-500">{{ visitor.logged_by.get_full_name|default:'—' }}</td>
           <td class="text-xs text-slate-400">{{ visitor.created_at|date:"M d, Y h:i A" }}</td>
+          <td>
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600"
+                title="Edit"
+                data-open-visitor-edit
+                data-edit-url="{% url 'visitor_edit' visitor.pk %}"
+                data-first-name="{{ visitor.first_name|escapejs }}"
+                data-last-name="{{ visitor.last_name|escapejs }}"
+                data-contact="{{ visitor.contact_number|escapejs }}"
+                data-purpose="{{ visitor.purpose|escapejs }}"
+                data-host-name="{{ visitor.host_name|escapejs }}"
+                data-plate="{{ visitor.plate_number|escapejs }}"
+                data-vehicle-type="{{ visitor.vehicle_type|escapejs }}"
+                data-vehicle-type-other="{{ visitor.vehicle_type_other|escapejs }}"
+              >
+                <i class="fa fa-pen text-xs"></i>
+              </button>
+              <form method="post" action="{% url 'visitor_delete' visitor.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" onclick="return confirm('Delete visitor entry?')" title="Delete">
+                  <i class="fa fa-trash text-xs"></i>
+                </button>
+              </form>
+            </div>
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-center text-slate-400 py-12">No visitors logged.</td></tr>
+        <tr><td colspan="7" class="text-center text-slate-400 py-12">No visitors logged.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -84,4 +113,141 @@
     </div>
   {% endif %}
 </div>
+
+<div id="visitor-edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeVisitorEditModal()"></div>
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h3 class="text-lg font-bold text-slate-800">Edit Visitor</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeVisitorEditModal()">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+
+    <form id="visitor-edit-form" method="post" class="px-6 py-5 space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">First Name <span class="text-red-400">*</span></label>
+          <input id="edit-first-name" name="first_name" class="input input-bordered w-full" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Last Name <span class="text-red-400">*</span></label>
+          <input id="edit-last-name" name="last_name" class="input input-bordered w-full" required>
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Contact Number <span class="text-red-400">*</span></label>
+          <input id="edit-contact" name="contact_number" class="input input-bordered w-full" maxlength="11" inputmode="numeric" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Plate Number <span class="text-red-400">*</span></label>
+          <input id="edit-plate" name="plate_number" class="input input-bordered w-full uppercase" maxlength="20" required>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Purpose <span class="text-red-400">*</span></label>
+        <input id="edit-purpose" name="purpose" class="input input-bordered w-full" required>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Host Name <span class="text-red-400">*</span></label>
+        <input id="edit-host-name" name="host_name" class="input input-bordered w-full" required>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Vehicle Type <span class="text-red-400">*</span></label>
+        <select id="edit-vehicle-type" name="vehicle_type" class="select select-bordered w-full" required>
+          <option value="">-- Select --</option>
+          <option value="CAR">Car</option>
+          <option value="MOTORCYCLE">Motorcycle</option>
+          <option value="TRUCK">Truck</option>
+          <option value="VAN">Van</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+
+      <div id="edit-vehicle-type-other-wrap" class="hidden">
+        <label class="block text-sm font-medium text-slate-700 mb-1">Other Vehicle Type</label>
+        <input id="edit-vehicle-type-other" name="vehicle_type_other" class="input input-bordered w-full">
+      </div>
+
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeVisitorEditModal()">Cancel</button>
+        <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const modal = document.getElementById('visitor-edit-modal');
+  const form = document.getElementById('visitor-edit-form');
+  const triggers = document.querySelectorAll('[data-open-visitor-edit]');
+
+  const firstName = document.getElementById('edit-first-name');
+  const lastName = document.getElementById('edit-last-name');
+  const contact = document.getElementById('edit-contact');
+  const purpose = document.getElementById('edit-purpose');
+  const hostName = document.getElementById('edit-host-name');
+  const plate = document.getElementById('edit-plate');
+  const vehicleType = document.getElementById('edit-vehicle-type');
+  const vehicleTypeOtherWrap = document.getElementById('edit-vehicle-type-other-wrap');
+  const vehicleTypeOther = document.getElementById('edit-vehicle-type-other');
+
+  function syncVehicleTypeOther() {
+    const isOther = vehicleType && vehicleType.value === 'OTHER';
+    if (vehicleTypeOtherWrap) {
+      vehicleTypeOtherWrap.classList.toggle('hidden', !isOther);
+    }
+    if (!isOther && vehicleTypeOther) {
+      vehicleTypeOther.value = '';
+    }
+  }
+
+  window.closeVisitorEditModal = function closeVisitorEditModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  };
+
+  triggers.forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!modal || !form) return;
+
+      form.action = button.dataset.editUrl || '';
+      firstName.value = button.dataset.firstName || '';
+      lastName.value = button.dataset.lastName || '';
+      contact.value = button.dataset.contact || '';
+      purpose.value = button.dataset.purpose || '';
+      hostName.value = button.dataset.hostName || '';
+      plate.value = button.dataset.plate || '';
+      vehicleType.value = button.dataset.vehicleType || '';
+      vehicleTypeOther.value = button.dataset.vehicleTypeOther || '';
+      syncVehicleTypeOther();
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    });
+  });
+
+  if (vehicleType) {
+    vehicleType.addEventListener('change', syncVehicleTypeOther);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      window.closeVisitorEditModal();
+    }
+  });
+})();
+</script>
 {% endblock %}

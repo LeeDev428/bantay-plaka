@@ -10,4 +10,5 @@ urlpatterns = [
     path('<int:pk>/reject/', views.resident_reject, name='resident_reject'),
     path('<int:resident_pk>/vehicles/add/', views.vehicle_create, name='vehicle_create'),
     path('vehicles/<int:pk>/delete/', views.vehicle_delete, name='vehicle_delete'),
+    path('self/vehicles/add/', views.resident_vehicle_create_self, name='resident_vehicle_create_self'),
 ]

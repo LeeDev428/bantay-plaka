@@ -66,7 +66,7 @@
           <td class="text-sm text-slate-500">{{ resident.contact_number|default:'—' }}</td>
           <td>
             <p class="text-xs text-slate-600 font-medium">{{ resident.get_valid_id_type_display|default:'Not set' }}</p>
-            {% if resident.valid_id_image %}
+            {% if resident.has_valid_id_image %}
               <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-800 mt-1">
                 <i class="fa fa-up-right-from-square text-[10px]"></i> View Attached ID
               </a>
@@ -74,7 +74,7 @@
                 <img src="{{ resident.valid_id_image.url }}" alt="Resident valid ID" class="h-12 w-20 rounded border border-slate-200 object-cover" />
               </a>
             {% else %}
-              <p class="text-[11px] text-slate-400 mt-1">No uploaded ID.</p>
+              <p class="text-[11px] text-slate-400 mt-1">No uploaded ID or file unavailable.</p>
             {% endif %}
           </td>
           <td>

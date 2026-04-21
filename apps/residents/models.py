@@ -46,7 +46,7 @@ class Resident(models.Model):
     street_number = models.CharField(max_length=50, blank=True)
     street_name = models.CharField(max_length=150, blank=True)
     contact_number = models.CharField(max_length=20, blank=True)
-    valid_id_type = models.CharField(max_length=80, blank=True)
+    valid_id_type = models.CharField(max_length=80, choices=VALID_ID_TYPE_CHOICES, blank=True)
     valid_id_image = models.ImageField(upload_to='resident_ids/', null=True, blank=True)
     user = models.OneToOneField(
         User,

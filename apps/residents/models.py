@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.files.storage import default_storage
 from apps.accounts.models import User
 
 
@@ -83,6 +84,18 @@ class Resident(models.Model):
 
     def __str__(self):
         return self.full_name
+
+    @property
+    def has_valid_id_image(self):
+        if not self.valid_id_image:
+            return False
+        name = (self.valid_id_image.name or '').strip()
+        if not name:
+            return False
+        try:
+            return default_storage.exists(name)
+        except Exception:
+            return False
 
 
 class Vehicle(models.Model):

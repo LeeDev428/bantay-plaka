@@ -124,6 +124,9 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+(MEDIA_ROOT / 'resident_ids').mkdir(parents=True, exist_ok=True)
+(MEDIA_ROOT / 'snapshots').mkdir(parents=True, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -135,8 +138,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = env.int('EMAIL_PORT', default=587)
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
-EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='grafrafraftorres28@gmail.com')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='czar eklw lofi lann').replace(' ', '')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='bantayplaka@gmail.com')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='nisl vaek sjkh ihfw').replace(' ', '')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 
 # Cloud/runtime settings (safe defaults for local development)

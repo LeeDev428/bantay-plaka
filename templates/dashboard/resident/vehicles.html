@@ -66,7 +66,9 @@
           <p class="font-mono font-semibold text-slate-800 text-lg">{{ vehicle.plate_number }}</p>
           <p class="text-xs text-slate-500 mt-1">{{ vehicle.vehicle_type|default:'Vehicle' }}</p>
         </div>
-        {% if vehicle.blacklist_entry %}
+        {% if not vehicle.is_approved %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pending Approval</span>
+        {% elif vehicle.blacklist_entry %}
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Blacklisted</span>
         {% else %}
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Clear</span>

@@ -92,6 +92,7 @@
           <tr class="bg-slate-50 text-xs uppercase text-slate-500">
             <th class="font-semibold">Plate</th>
             <th class="font-semibold">Type</th>
+            <th class="font-semibold">Remarks</th>
             <th class="font-semibold">Status</th>
             <th class="font-semibold">Time</th>
           </tr>
@@ -108,6 +109,14 @@
                 {% endif %}
               </td>
               <td>
+                {% if log.blacklist_tag %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{{ log.blacklist_tag_display|default:'Blacklisted' }}</span>
+                  <p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="{{ log.blacklist_remarks|default:log.blacklist_reason }}">{{ log.blacklist_remarks|default:log.blacklist_reason|default:'Blacklisted plate detected.' }}</p>
+                {% else %}
+                  <span class="text-xs text-slate-400">No remarks</span>
+                {% endif %}
+              </td>
+              <td>
                 {% if log.status == 'TIME_IN' %}
                   <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                     <i class="fa fa-arrow-right text-[9px]"></i> IN
@@ -121,7 +130,7 @@
               <td class="text-xs text-slate-400">{{ log.local_time|date:"h:i A" }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="4" class="text-center text-slate-400 py-8">No manual entries yet.</td></tr>
+            <tr><td colspan="5" class="text-center text-slate-400 py-8">No manual entries yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>

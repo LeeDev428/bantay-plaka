@@ -40,8 +40,6 @@ class ManualLogForm(forms.ModelForm):
         entry_type = cleaned.get('entry_type')
         if entry_type == VehicleLog.TYPE_RESIDENT:
             cleaned['visitor_name'] = ''
-            if not (cleaned.get('resident_name') or '').strip():
-                self.add_error('resident_name', 'Resident name is required for resident entry type.')
         elif entry_type == VehicleLog.TYPE_VISITOR:
             cleaned['resident_name'] = ''
             cleaned['visitor_name'] = ''

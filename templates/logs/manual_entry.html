@@ -67,7 +67,7 @@
 
       <div class="mb-4" id="resident-name-group">
         <label class="block text-sm font-medium text-slate-700 mb-1.5">
-          {{ form.resident_name.label }} <span class="text-red-400">*</span>
+          {{ form.resident_name.label }}
         </label>
         {{ form.resident_name }}
         {% if form.resident_name.errors %}
@@ -161,7 +161,7 @@
     const isResident = selected === 'RESIDENT';
 
     residentGroup.classList.toggle('hidden', !isResident);
-    if (residentInput) residentInput.required = isResident;
+    if (residentInput) residentInput.required = false;
 
     paintToggle(entryInputs, '[data-entry-option]');
   }

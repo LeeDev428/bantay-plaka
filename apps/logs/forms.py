@@ -5,7 +5,7 @@ from apps.logs.models import VehicleLog
 class ManualLogForm(forms.ModelForm):
     class Meta:
         model = VehicleLog
-        fields = ['plate_number', 'entry_type', 'status', 'resident_name', 'visitor_name']
+        fields = ['plate_number', 'entry_type', 'status', 'resident_name']
         widgets = {
             'plate_number': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full uppercase',
@@ -17,10 +17,6 @@ class ManualLogForm(forms.ModelForm):
             'resident_name': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full',
                 'placeholder': 'Resident full name',
-            }),
-            'visitor_name': forms.TextInput(attrs={
-                'class': 'input input-bordered w-full',
-                'placeholder': 'Visitor name (if visitor)',
             }),
         }
 
@@ -48,8 +44,7 @@ class ManualLogForm(forms.ModelForm):
                 self.add_error('resident_name', 'Resident name is required for resident entry type.')
         elif entry_type == VehicleLog.TYPE_VISITOR:
             cleaned['resident_name'] = ''
-            if not (cleaned.get('visitor_name') or '').strip():
-                self.add_error('visitor_name', 'Visitor name is required for visitor entry type.')
+            cleaned['visitor_name'] = ''
         return cleaned
 
 

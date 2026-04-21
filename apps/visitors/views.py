@@ -5,7 +5,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 
 from apps.visitors.models import Visitor, BlacklistEntry
-from apps.visitors.forms import VisitorForm, BlacklistEntryForm
+from apps.visitors.forms import VisitorForm, BlacklistEntryForm, VisitorEditForm
 from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log
 
@@ -73,6 +73,37 @@ def visitor_list(request):
     paginator = Paginator(visitors_qs, 10)
     visitors = paginator.get_page(request.GET.get('page', 1))
     return render(request, 'visitors/visitor_list.html', {'visitors': visitors, 'q': q})
+
+
+@login_required
+def visitor_edit(request, pk):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    visitor = get_object_or_404(Visitor, pk=pk)
+    if request.method == 'POST':
+        form = VisitorEditForm(request.POST, instance=visitor)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Visitor {visitor.full_name} updated.')
+        else:
+            messages.error(request, 'Failed to update visitor entry.')
+
+    return redirect(request.POST.get('next', 'visitor_list'))
+
+
+@login_required
+def visitor_delete(request, pk):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    visitor = get_object_or_404(Visitor, pk=pk)
+    if request.method == 'POST':
+        visitor.delete()
+        messages.success(request, 'Visitor entry deleted.')
+    return redirect(request.POST.get('next', 'visitor_list'))
 
 
 @login_required

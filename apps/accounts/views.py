@@ -85,7 +85,10 @@ def resident_register(request):
             _, resident = form.save()
             messages.success(
                 request,
-                f'Registration submitted for {resident.full_name}. Please wait for admin approval before login.'
+                (
+                    f'Registration submitted for {resident.full_name}. '
+                    'Please wait for admin approval before login and present your OR/CR requirements to HOA admin.'
+                )
             )
             return redirect('login')
 
@@ -139,7 +142,10 @@ def admin_dashboard(request):
 @admin_required
 def user_management(request):
     q = request.GET.get('q', '').strip()
+    role = request.GET.get('role', '').strip().upper()
     users_qs = User.objects.exclude(pk=request.user.pk).order_by('role', 'last_name')
+    if role in {User.ROLE_ADMIN, User.ROLE_GUARD, User.ROLE_RESIDENT}:
+        users_qs = users_qs.filter(role=role)
     if q:
         users_qs = users_qs.filter(
             Q(username__icontains=q)
@@ -153,6 +159,7 @@ def user_management(request):
     return render(request, 'dashboard/admin/user_management.html', {
         'users': users,
         'q': q,
+        'role': role,
         'create_form': UserCreateForm(),
         'edit_form_template': UserEditForm(),
     })

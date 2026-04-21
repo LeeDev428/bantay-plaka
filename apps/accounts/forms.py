@@ -84,6 +84,17 @@ class LoginForm(AuthenticationForm):
 
                 raise self.get_invalid_login_error()
 
+            if self.user_cache.role == User.ROLE_RESIDENT:
+                resident_profile = getattr(self.user_cache, 'resident_profile', None)
+                if resident_profile and not resident_profile.is_approved:
+                    if self.user_cache.is_active:
+                        self.user_cache.is_active = False
+                        self.user_cache.save(update_fields=['is_active'])
+                    raise ValidationError(
+                        'Your account is pending admin approval. Please wait for activation before logging in.',
+                        code='inactive',
+                    )
+
             self.confirm_login_allowed(self.user_cache)
 
         return self.cleaned_data
@@ -160,7 +171,7 @@ class ResidentSignupForm(forms.Form):
         widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
     )
     valid_id_image = forms.ImageField(
-        required=False,
+        required=True,
         widget=forms.ClearableFileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
     )
 

@@ -94,8 +94,8 @@ def blacklist_list(request):
                 plate_number=form.cleaned_data['plate_number'],
                 defaults={
                     'tag': form.cleaned_data.get('tag', BlacklistEntry.TAG_WATCHLIST),
-                    'reason': form.cleaned_data.get('reason', ''),
-                    'remarks': form.cleaned_data.get('remarks', ''),
+                    'reason': form.cleaned_data['reason'],
+                    'remarks': form.cleaned_data['remarks'],
                     'is_active': True,
                     'created_by': request.user,
                 }
@@ -104,8 +104,8 @@ def blacklist_list(request):
                 messages.success(request, f'Plate {entry.plate_number} added to blacklist.')
             else:
                 entry.tag = form.cleaned_data.get('tag', entry.tag)
-                entry.reason = form.cleaned_data.get('reason', entry.reason)
-                entry.remarks = form.cleaned_data.get('remarks', entry.remarks)
+                entry.reason = form.cleaned_data['reason']
+                entry.remarks = form.cleaned_data['remarks']
                 entry.is_active = True
                 entry.save(update_fields=['tag', 'reason', 'remarks', 'is_active', 'updated_at'])
                 messages.success(request, f'Plate {entry.plate_number} is now active in blacklist.')
@@ -144,7 +144,7 @@ def blacklist_toggle(request, pk):
         entry.save(update_fields=['is_active', 'updated_at'])
         state = 'activated' if entry.is_active else 'deactivated'
         messages.success(request, f'Blacklist entry for {entry.plate_number} {state}.')
-    return redirect('blacklist_list')
+    return redirect(request.POST.get('next', 'blacklist_list'))
 
 
 @login_required

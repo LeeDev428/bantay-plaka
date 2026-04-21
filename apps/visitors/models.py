@@ -40,8 +40,8 @@ class BlacklistEntry(models.Model):
 
     plate_number = models.CharField(max_length=20, unique=True, db_index=True)
     tag = models.CharField(max_length=20, choices=TAG_CHOICES, default=TAG_WATCHLIST)
-    reason = models.CharField(max_length=255, blank=True)
-    remarks = models.TextField(blank=True)
+    reason = models.CharField(max_length=255)
+    remarks = models.TextField()
     is_active = models.BooleanField(default=True, db_index=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_blacklist_entries'

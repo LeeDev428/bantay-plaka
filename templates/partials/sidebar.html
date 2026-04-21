@@ -47,6 +47,9 @@
     <a href="{% url 'resident_list' %}" class="sidebar-link {% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-house-user w-5 text-center"></i> Residents
     </a>
+    <a href="{% url 'vehicle_approval_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'vehicle_approval_list' %}active{% endif %}">
+      <i class="fa fa-car w-5 text-center"></i> Vehicle Approvals
+    </a>
     <a href="{% url 'user_management' %}" class="sidebar-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-users-gear w-5 text-center"></i> Users
     </a>

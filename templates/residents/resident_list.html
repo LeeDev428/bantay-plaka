@@ -1,12 +1,16 @@
 {% extends 'base.html' %}
 {% block title %}Residents{% endblock %}
-{% block breadcrumb %}Admin &raquo; Residents{% endblock %}
+{% block breadcrumb %}{% if user.is_admin %}Admin{% else %}Guard{% endif %} &raquo; Residents{% endblock %}
 
 {% block content %}
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
   <div>
-    <h1 class="text-2xl font-bold text-slate-800">Residents</h1>
-    <p class="text-slate-500 text-sm mt-0.5">Registered subdivision residents and their vehicles</p>
+    <h1 class="text-2xl font-bold text-slate-800">Residents Directory</h1>
+    {% if is_read_only_view %}
+      <p class="text-slate-500 text-sm mt-0.5">Guard view: approved residents and registered vehicles only</p>
+    {% else %}
+      <p class="text-slate-500 text-sm mt-0.5">Admin view: manage approvals, resident details, and vehicles</p>
+    {% endif %}
   </div>
   {% if user.is_admin %}
   <button type="button" id="open-resident-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
@@ -16,6 +20,11 @@
 </div>
 
 <div class="page-card">
+  {% if is_read_only_view %}
+    <div class="mx-4 mt-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+      Guard view is read-only. Only approved residents are shown.
+    </div>
+  {% endif %}
   <div class="p-4 border-b border-slate-100">
     <form method="get" class="flex flex-col sm:flex-row gap-2">
       <input
@@ -41,6 +50,7 @@
           <th class="font-semibold">Name</th>
           <th class="font-semibold">Address</th>
           <th class="font-semibold">Contact</th>
+          <th class="font-semibold">Valid ID</th>
           <th class="font-semibold">Status</th>
           <th class="font-semibold">Vehicles</th>
           {% if user.is_admin %}<th class="font-semibold">Actions</th>{% endif %}
@@ -52,15 +62,21 @@
           <td class="font-medium text-slate-800">{{ resident.full_name }}</td>
           <td class="text-sm text-slate-500">
             {{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address }}
-            <div class="mt-1 flex items-center gap-2 text-xs">
-              <span class="text-slate-400">ID:</span>
-              <span class="text-slate-600">{{ resident.get_valid_id_type_display|default:'Not set' }}</span>
-              {% if resident.valid_id_image %}
-                <a href="{{ resident.valid_id_image.url }}" target="_blank" class="text-blue-600 hover:text-blue-700 font-medium">View ID</a>
-              {% endif %}
-            </div>
           </td>
           <td class="text-sm text-slate-500">{{ resident.contact_number|default:'—' }}</td>
+          <td>
+            <p class="text-xs text-slate-600 font-medium">{{ resident.get_valid_id_type_display|default:'Not set' }}</p>
+            {% if resident.valid_id_image %}
+              <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-800 mt-1">
+                <i class="fa fa-up-right-from-square text-[10px]"></i> View Attached ID
+              </a>
+              <a href="{{ resident.valid_id_image.url }}" target="_blank" class="block mt-2 w-fit">
+                <img src="{{ resident.valid_id_image.url }}" alt="Resident valid ID" class="h-12 w-20 rounded border border-slate-200 object-cover" />
+              </a>
+            {% else %}
+              <p class="text-[11px] text-slate-400 mt-1">No uploaded ID.</p>
+            {% endif %}
+          </td>
           <td>
             {% if resident.is_approved %}
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Approved</span>
@@ -137,7 +153,7 @@
           {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-center text-slate-400 py-12">No residents registered yet.</td></tr>
+        <tr><td colspan="{% if user.is_admin %}7{% else %}6{% endif %}" class="text-center text-slate-400 py-12">No residents registered yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -170,7 +186,7 @@
 {% if user.is_admin %}
 <div id="resident-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeResidentModal()"></div>
-  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden">
+  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
       <h3 class="text-lg font-bold text-slate-800">Register Resident</h3>
       <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeResidentModal()">
@@ -201,7 +217,7 @@
 
 <div id="vehicle-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeVehicleModal()"></div>
-  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden">
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
       <div>
         <h3 class="text-lg font-bold text-slate-800">Add Vehicle</h3>

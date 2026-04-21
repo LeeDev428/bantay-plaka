@@ -42,10 +42,10 @@ def manual_entry(request):
         form = ManualLogForm(request.POST)
         if form.is_valid():
             log = form.save(commit=False)
-
-            if BlacklistEntry.objects.filter(plate_number__iexact=log.plate_number, is_active=True).exists():
-                messages.error(request, f'Plate {log.plate_number} is blacklisted. Entry blocked.')
-                return redirect('manual_entry')
+            blacklist_entry = BlacklistEntry.objects.filter(
+                plate_number__iexact=log.plate_number,
+                is_active=True,
+            ).first()
 
             log.source = VehicleLog.SOURCE_MANUAL
             log.logged_by = request.user
@@ -62,7 +62,14 @@ def manual_entry(request):
 
             log.save()
             broadcast_log(log)
-            messages.success(request, f'Log entry saved for {log.plate_number}.')
+            if blacklist_entry:
+                blacklist_note = blacklist_entry.remarks or blacklist_entry.reason or 'Blacklisted plate.'
+                messages.warning(
+                    request,
+                    f'Log entry saved for {log.plate_number}. Plate is blacklisted: {blacklist_note}'
+                )
+            else:
+                messages.success(request, f'Log entry saved for {log.plate_number}.')
             return redirect('manual_entry')
 
     recent_logs = VehicleLog.objects.filter(source=VehicleLog.SOURCE_MANUAL).order_by('-timestamp')[:20]

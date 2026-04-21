@@ -23,10 +23,16 @@
         placeholder="Search name, username, contact"
         class="input input-bordered w-full"
       >
+      <select name="role" class="select select-bordered w-full sm:w-48">
+        <option value="">All Roles</option>
+        <option value="ADMIN" {% if role == 'ADMIN' %}selected{% endif %}>Admin</option>
+        <option value="GUARD" {% if role == 'GUARD' %}selected{% endif %}>Guard</option>
+        <option value="RESIDENT" {% if role == 'RESIDENT' %}selected{% endif %}>Resident</option>
+      </select>
       <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
         <i class="fa fa-search mr-1"></i> Search
       </button>
-      {% if q %}
+      {% if q or role %}
         <a href="{% url 'user_management' %}" class="btn btn-sm btn-ghost">Clear</a>
       {% endif %}
     </form>
@@ -107,7 +113,7 @@
       </p>
       <div class="join">
         {% if users.has_previous %}
-          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ users.previous_page_number }}">Prev</a>
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&role={{ role|urlencode }}&page={{ users.previous_page_number }}">Prev</a>
         {% else %}
           <button class="join-item btn btn-sm btn-disabled">Prev</button>
         {% endif %}
@@ -115,7 +121,7 @@
         <button class="join-item btn btn-sm btn-active">{{ users.number }}</button>
 
         {% if users.has_next %}
-          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ users.next_page_number }}">Next</a>
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&role={{ role|urlencode }}&page={{ users.next_page_number }}">Next</a>
         {% else %}
           <button class="join-item btn btn-sm btn-disabled">Next</button>
         {% endif %}

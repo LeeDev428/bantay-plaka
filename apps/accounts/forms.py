@@ -2,12 +2,37 @@ from django import forms
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+import re
 
 from apps.accounts.models import User
 from apps.residents.models import Resident
+
+
+CONTACT_NUMBER_REGEX = re.compile(r'^09\d{9}$')
+
+
+def _normalize_contact_number(raw_value: str) -> str:
+    value = (raw_value or '').strip()
+    if not CONTACT_NUMBER_REGEX.match(value):
+        raise forms.ValidationError('Contact number must be 11 digits and start with 09 (example: 09XXXXXXXXX).')
+    return value
+
+
+def _validate_strong_password(value: str):
+    if len(value or '') < 8:
+        raise forms.ValidationError('Password must be at least 8 characters long.')
+    if not re.search(r'[a-z]', value):
+        raise forms.ValidationError('Password must contain at least one lowercase letter.')
+    if not re.search(r'[A-Z]', value):
+        raise forms.ValidationError('Password must contain at least one uppercase letter.')
+    if not re.search(r'\d', value):
+        raise forms.ValidationError('Password must contain at least one number.')
+    if not re.search(r'[^A-Za-z0-9]', value):
+        raise forms.ValidationError('Password must contain at least one special character.')
 
 
 class LoginForm(AuthenticationForm):
@@ -75,6 +100,7 @@ class ResidentSignupForm(forms.Form):
     password1 = forms.CharField(
         widget=forms.PasswordInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Password'}),
         label='Password',
+        help_text='Use at least 8 characters with uppercase, lowercase, number, and special character.',
     )
     password2 = forms.CharField(
         widget=forms.PasswordInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Confirm password'}),
@@ -106,8 +132,14 @@ class ResidentSignupForm(forms.Form):
         widget=forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
     )
     contact_number = forms.CharField(
-        max_length=20,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+        max_length=11,
+        min_length=11,
+        widget=forms.TextInput(attrs={
+            'class': 'input input-bordered w-full',
+            'placeholder': '09XXXXXXXXX',
+            'maxlength': 11,
+            'inputmode': 'numeric',
+        }),
     )
     street_number = forms.CharField(
         max_length=50,
@@ -123,9 +155,9 @@ class ResidentSignupForm(forms.Form):
         max_length=255,
         widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Complete address'}),
     )
-    valid_id_type = forms.CharField(
-        max_length=80,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Government ID type'}),
+    valid_id_type = forms.ChoiceField(
+        choices=Resident.VALID_ID_TYPE_CHOICES,
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
     )
     valid_id_image = forms.ImageField(
         required=False,
@@ -145,7 +177,7 @@ class ResidentSignupForm(forms.Form):
         return email
 
     def clean_contact_number(self):
-        return self.cleaned_data['contact_number'].strip()
+        return _normalize_contact_number(self.cleaned_data.get('contact_number'))
 
     def clean(self):
         cleaned = super().clean()
@@ -153,6 +185,12 @@ class ResidentSignupForm(forms.Form):
         password2 = cleaned.get('password2')
         if password1 and password2 and password1 != password2:
             self.add_error('password2', 'Passwords do not match.')
+        if password1:
+            try:
+                _validate_strong_password(password1)
+                validate_password(password1)
+            except ValidationError as exc:
+                self.add_error('password1', exc)
 
         birth_date = cleaned.get('birth_date')
         if birth_date:
@@ -213,7 +251,12 @@ class UserCreateForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'input input-bordered w-full'}),
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'last_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'contact_number': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+            'contact_number': forms.TextInput(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': '09XXXXXXXXX',
+                'maxlength': 11,
+                'inputmode': 'numeric',
+            }),
             'role': forms.Select(attrs={'class': 'select select-bordered w-full'}),
         }
 
@@ -226,6 +269,12 @@ class UserCreateForm(forms.ModelForm):
         if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError('Email address is already in use.')
         return email
+
+    def clean_contact_number(self):
+        contact_number = self.cleaned_data.get('contact_number')
+        if contact_number:
+            return _normalize_contact_number(contact_number)
+        return ''
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -243,7 +292,12 @@ class UserEditForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'input input-bordered w-full'}),
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'last_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'contact_number': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+            'contact_number': forms.TextInput(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': '09XXXXXXXXX',
+                'maxlength': 11,
+                'inputmode': 'numeric',
+            }),
             'role': forms.Select(attrs={'class': 'select select-bordered w-full'}),
         }
 
@@ -259,3 +313,9 @@ class UserEditForm(forms.ModelForm):
         if qs.exists():
             raise forms.ValidationError('Email address is already in use.')
         return email
+
+    def clean_contact_number(self):
+        contact_number = self.cleaned_data.get('contact_number')
+        if contact_number:
+            return _normalize_contact_number(contact_number)
+        return ''

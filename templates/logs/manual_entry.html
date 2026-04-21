@@ -148,7 +148,7 @@
   }
 
   function syncEntryGroups() {
-    const selected = entryInputs.find((input) => input.checked)?.value || 'RESIDENT';
+    const selected = entryInputs.find((input) => input.checked)?.value || 'VISITOR';
     const isResident = selected === 'RESIDENT';
 
     residentGroup.classList.toggle('hidden', !isResident);

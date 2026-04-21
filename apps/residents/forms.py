@@ -1,10 +1,19 @@
 from django import forms
 from django.utils import timezone
+import re
 
 from apps.residents.models import Resident, Vehicle
 
 
+CONTACT_NUMBER_REGEX = re.compile(r'^09\d{9}$')
+
+
 class ResidentForm(forms.ModelForm):
+    valid_id_type = forms.ChoiceField(
+        choices=Resident.VALID_ID_TYPE_CHOICES,
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
+    )
+
     class Meta:
         model = Resident
         fields = [
@@ -33,10 +42,20 @@ class ResidentForm(forms.ModelForm):
             'address': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'street_number': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'street_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'contact_number': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'valid_id_type': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+            'contact_number': forms.TextInput(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': '09XXXXXXXXX',
+                'maxlength': 11,
+                'inputmode': 'numeric',
+            }),
             'valid_id_image': forms.ClearableFileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
         }
+
+    def clean_contact_number(self):
+        value = (self.cleaned_data.get('contact_number') or '').strip()
+        if value and not CONTACT_NUMBER_REGEX.match(value):
+            raise forms.ValidationError('Contact number must be 11 digits and start with 09 (example: 09XXXXXXXXX).')
+        return value
 
     def clean(self):
         cleaned = super().clean()

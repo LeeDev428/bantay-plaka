@@ -49,6 +49,9 @@ def resident_list(request):
             messages.error(request, 'Failed to register vehicle. Please complete all required fields.')
 
     residents_qs = Resident.objects.select_related('user').prefetch_related('vehicles').order_by('is_approved', 'last_name', 'first_name')
+    is_read_only_view = not request.user.is_admin()
+    if is_read_only_view:
+        residents_qs = residents_qs.filter(is_approved=True)
     if q:
         residents_qs = residents_qs.filter(
             Q(first_name__icontains=q)
@@ -64,6 +67,7 @@ def resident_list(request):
         'q': q,
         'resident_form': resident_form,
         'vehicle_form': vehicle_form,
+        'is_read_only_view': is_read_only_view,
     })
 
 

@@ -18,7 +18,8 @@ def resolve_plate(plate_number: str) -> dict:
     """Check if the plate belongs to a registered resident vehicle."""
     try:
         vehicle = Vehicle.objects.select_related('resident').get(
-            plate_number__iexact=plate_number
+            plate_number__iexact=plate_number,
+            is_approved=True,
         )
         return {
             'entry_type': VehicleLog.TYPE_RESIDENT,

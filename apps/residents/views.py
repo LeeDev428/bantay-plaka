@@ -85,8 +85,12 @@ def resident_vehicle_create_self(request):
     if form.is_valid():
         vehicle = form.save(commit=False)
         vehicle.resident = resident
+        vehicle.is_approved = False
+        vehicle.approved_by = None
+        vehicle.approved_at = None
+        vehicle.approval_notes = ''
         vehicle.save()
-        messages.success(request, f'Vehicle {vehicle.plate_number} registered successfully.')
+        messages.success(request, f'Vehicle {vehicle.plate_number} submitted and pending admin approval.')
     else:
         for field_errors in form.errors.values():
             for err in field_errors:
@@ -179,6 +183,10 @@ def vehicle_create(request, resident_pk):
         if form.is_valid():
             vehicle = form.save(commit=False)
             vehicle.resident = resident
+            vehicle.is_approved = True
+            vehicle.approved_by = request.user
+            vehicle.approved_at = timezone.now()
+            vehicle.approval_notes = ''
             vehicle.save()
             messages.success(request, f'Vehicle {vehicle.plate_number} registered.')
             return redirect('resident_list')
@@ -195,3 +203,47 @@ def vehicle_delete(request, pk):
         vehicle.delete()
         messages.success(request, 'Vehicle removed.')
     return redirect('resident_list')
+
+
+@admin_required
+def vehicle_approval_list(request):
+    q = request.GET.get('q', '').strip()
+    vehicles_qs = Vehicle.objects.select_related('resident').filter(is_approved=False).order_by('-created_at')
+    if q:
+        vehicles_qs = vehicles_qs.filter(
+            Q(plate_number__icontains=q)
+            | Q(resident__first_name__icontains=q)
+            | Q(resident__last_name__icontains=q)
+        )
+
+    paginator = Paginator(vehicles_qs, 10)
+    vehicles = paginator.get_page(request.GET.get('page', 1))
+    return render(request, 'residents/vehicle_approvals.html', {
+        'vehicles': vehicles,
+        'q': q,
+    })
+
+
+@admin_required
+def vehicle_approve(request, pk):
+    vehicle = get_object_or_404(Vehicle.objects.select_related('resident'), pk=pk)
+    if request.method == 'POST':
+        vehicle.is_approved = True
+        vehicle.approved_by = request.user
+        vehicle.approved_at = timezone.now()
+        vehicle.approval_notes = ''
+        vehicle.save(update_fields=['is_approved', 'approved_by', 'approved_at', 'approval_notes'])
+        messages.success(request, f'Vehicle {vehicle.plate_number} approved.')
+    return redirect(request.POST.get('next', 'vehicle_approval_list'))
+
+
+@admin_required
+def vehicle_reject(request, pk):
+    vehicle = get_object_or_404(Vehicle.objects.select_related('resident'), pk=pk)
+    if request.method == 'POST':
+        reason = (request.POST.get('reason') or '').strip()
+        vehicle.approval_notes = reason or 'Vehicle registration requirements were not satisfied.'
+        vehicle.save(update_fields=['approval_notes'])
+        vehicle.delete()
+        messages.success(request, f'Pending vehicle {vehicle.plate_number} was rejected and removed.')
+    return redirect(request.POST.get('next', 'vehicle_approval_list'))

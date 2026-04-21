@@ -41,17 +41,38 @@
 </div>
 
 <div class="grid sm:grid-cols-3 gap-3 mb-6">
-  <a href="{% url 'resident_vehicles' %}" class="page-card p-4 hover:border-blue-300 transition-colors">
-    <p class="text-xs uppercase text-slate-500">My Vehicles</p>
-    <p class="text-sm font-semibold text-slate-800 mt-1">Manage registered plates</p>
+  <a href="{% url 'resident_vehicles' %}" class="page-card p-4 border-l-4 border-blue-400 hover:border-blue-500 transition-colors">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <p class="text-xs uppercase text-slate-500">My Vehicles</p>
+        <p class="text-sm font-semibold text-slate-800 mt-1">Manage registered plates</p>
+      </div>
+      <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+        <i class="fa fa-car-side"></i>
+      </span>
+    </div>
   </a>
-  <a href="{% url 'resident_logs' %}" class="page-card p-4 hover:border-blue-300 transition-colors">
-    <p class="text-xs uppercase text-slate-500">In and Out Logs</p>
-    <p class="text-sm font-semibold text-slate-800 mt-1">View recent gate records</p>
+  <a href="{% url 'resident_logs' %}" class="page-card p-4 border-l-4 border-emerald-400 hover:border-emerald-500 transition-colors">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <p class="text-xs uppercase text-slate-500">In and Out Logs</p>
+        <p class="text-sm font-semibold text-slate-800 mt-1">View recent gate records</p>
+      </div>
+      <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+        <i class="fa fa-right-left"></i>
+      </span>
+    </div>
   </a>
-  <a href="{% url 'resident_profile' %}" class="page-card p-4 hover:border-blue-300 transition-colors">
-    <p class="text-xs uppercase text-slate-500">Profile</p>
-    <p class="text-sm font-semibold text-slate-800 mt-1">Review account details</p>
+  <a href="{% url 'resident_profile' %}" class="page-card p-4 border-l-4 border-amber-400 hover:border-amber-500 transition-colors">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Profile</p>
+        <p class="text-sm font-semibold text-slate-800 mt-1">Review account details</p>
+      </div>
+      <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+        <i class="fa fa-id-card"></i>
+      </span>
+    </div>
   </a>
 </div>
 

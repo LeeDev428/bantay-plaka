@@ -1,4 +1,5 @@
 from django import forms
+import re
 
 from apps.logs.models import VehicleLog
 from apps.visitors.models import Visitor, BlacklistEntry
@@ -26,7 +27,12 @@ class VisitorForm(forms.ModelForm):
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'last_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'contact_number': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+            'contact_number': forms.TextInput(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': '09XXXXXXXXX',
+                'maxlength': 11,
+                'inputmode': 'numeric',
+            }),
             'purpose': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. Visit, Delivery'}),
             'host_name': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Resident being visited'}),
             'plate_number': forms.TextInput(attrs={
@@ -55,6 +61,12 @@ class VisitorForm(forms.ModelForm):
 
     def clean_plate_number(self):
         return self.cleaned_data['plate_number'].upper().strip()
+
+    def clean_contact_number(self):
+        value = (self.cleaned_data.get('contact_number') or '').strip()
+        if not re.match(r'^09\d{9}$', value):
+            raise forms.ValidationError('Contact number must be 11 digits and start with 09.')
+        return value
 
     def clean(self):
         cleaned = super().clean()

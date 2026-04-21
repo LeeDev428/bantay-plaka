@@ -37,7 +37,7 @@
       <p class="md:col-span-2"><span class="text-slate-500">Address:</span> {{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address }}</p>
     </div>
 
-    {% if resident.valid_id_image %}
+    {% if resident.has_valid_id_image %}
       <div class="mt-5">
         <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-800">
           <i class="fa fa-image"></i> View Uploaded ID
@@ -46,6 +46,8 @@
           <img src="{{ resident.valid_id_image.url }}" alt="Resident valid ID" class="max-h-52 rounded border border-slate-200 object-contain" />
         </a>
       </div>
+    {% elif resident.valid_id_image %}
+      <p class="text-xs text-amber-600 mt-4">Uploaded ID file is currently unavailable. Please contact admin to re-upload.</p>
     {% endif %}
   </div>
 </div>

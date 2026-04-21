@@ -67,6 +67,30 @@ def resident_list(request):
     })
 
 
+@login_required
+def resident_vehicle_create_self(request):
+    if not request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    resident = get_object_or_404(Resident, user=request.user)
+    if request.method != 'POST':
+        return redirect('resident_vehicles')
+
+    form = VehicleForm(request.POST)
+    if form.is_valid():
+        vehicle = form.save(commit=False)
+        vehicle.resident = resident
+        vehicle.save()
+        messages.success(request, f'Vehicle {vehicle.plate_number} registered successfully.')
+    else:
+        for field_errors in form.errors.values():
+            for err in field_errors:
+                messages.error(request, err)
+
+    return redirect('resident_vehicles')
+
+
 @admin_required
 def resident_create(request):
     if request.method == 'POST':

@@ -48,6 +48,9 @@
           <img id="entry-feed-image" data-live-stream="true" data-live-snapshot="ENTRY_CAM" src="{% url 'camera_preview' 'ENTRY_CAM' %}" alt="Entry camera live feed" class="w-full h-full object-cover" />
         {% elif entry_feed and entry_feed.snapshot %}
           <img id="entry-feed-image" src="{{ entry_feed.snapshot.url }}" alt="Entry camera detection" class="w-full h-full object-cover" />
+        {% elif entry_feed %}
+          <img id="entry-feed-image" src="" alt="Entry camera detection" class="w-full h-full object-cover hidden" />
+          <p id="entry-feed-empty" class="text-slate-500 text-sm">Latest entry detection has no snapshot image yet.</p>
         {% else %}
           <img id="entry-feed-image" src="" alt="Entry camera detection" class="w-full h-full object-cover hidden" />
           <p id="entry-feed-empty" class="text-slate-500 text-sm">No entry detections yet.</p>
@@ -73,6 +76,9 @@
           <img id="exit-feed-image" data-live-stream="true" data-live-snapshot="EXIT_CAM" src="{% url 'camera_preview' 'EXIT_CAM' %}" alt="Exit camera live feed" class="w-full h-full object-cover" />
         {% elif exit_feed and exit_feed.snapshot %}
           <img id="exit-feed-image" src="{{ exit_feed.snapshot.url }}" alt="Exit camera detection" class="w-full h-full object-cover" />
+        {% elif exit_feed %}
+          <img id="exit-feed-image" src="" alt="Exit camera detection" class="w-full h-full object-cover hidden" />
+          <p id="exit-feed-empty" class="text-slate-500 text-sm">Latest exit detection has no snapshot image yet.</p>
         {% else %}
           <img id="exit-feed-image" src="" alt="Exit camera detection" class="w-full h-full object-cover hidden" />
           <p id="exit-feed-empty" class="text-slate-500 text-sm">No exit detections yet.</p>

@@ -6,6 +6,50 @@
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
   const tbody = document.getElementById('live-log-body');
+  const liveFrameState = {
+    entry: { busy: false, pendingSrc: '' },
+    exit: { busy: false, pendingSrc: '' },
+  };
+
+  function renderLiveFrame(prefix, src, timestampText) {
+    if (!src) return;
+    const img = document.getElementById(`${prefix}-feed-image`);
+    const meta = document.getElementById(`${prefix}-feed-meta`);
+    const empty = document.getElementById(`${prefix}-feed-empty`);
+    const state = liveFrameState[prefix];
+    if (!img || !state) return;
+
+    if (state.busy) {
+      state.pendingSrc = src;
+      if (meta) meta.textContent = timestampText;
+      return;
+    }
+
+    state.busy = true;
+    const probe = new Image();
+    probe.onload = () => {
+      img.src = probe.src;
+      img.classList.remove('hidden');
+      if (empty) empty.classList.add('hidden');
+      if (meta) meta.textContent = timestampText;
+      state.busy = false;
+
+      if (state.pendingSrc) {
+        const next = state.pendingSrc;
+        state.pendingSrc = '';
+        renderLiveFrame(prefix, next, timestampText);
+      }
+    };
+    probe.onerror = () => {
+      state.busy = false;
+      if (state.pendingSrc) {
+        const next = state.pendingSrc;
+        state.pendingSrc = '';
+        renderLiveFrame(prefix, next, timestampText);
+      }
+    };
+    probe.src = src;
+  }
 
   function escapeHtml(value) {
     return String(value || '')
@@ -128,20 +172,13 @@
       const role = data.camera_role;
       const prefix = role === 'ENTRY_CAM' ? 'entry' : role === 'EXIT_CAM' ? 'exit' : null;
       if (prefix) {
-        const img = document.getElementById(`${prefix}-feed-image`);
-        const meta = document.getElementById(`${prefix}-feed-meta`);
-        const empty = document.getElementById(`${prefix}-feed-empty`);
-        if (img) {
-          if (data.snapshot_b64) {
-            img.src = `data:image/jpeg;base64,${data.snapshot_b64}`;
-          } else if (data.snapshot_url) {
-            // Fallback for older payloads / persistent snapshot URL.
-            img.src = data.snapshot_url + '?t=' + Date.now();
-          }
-          img.classList.remove('hidden');
-          if (empty) empty.classList.add('hidden');
+        let frameSrc = '';
+        if (data.snapshot_b64) {
+          frameSrc = `data:image/jpeg;base64,${data.snapshot_b64}`;
+        } else if (data.snapshot_url) {
+          frameSrc = data.snapshot_url + '?t=' + Date.now();
         }
-        if (meta) meta.textContent = 'Live frame update: ' + data.timestamp;
+        renderLiveFrame(prefix, frameSrc, 'Live frame update: ' + data.timestamp);
       }
       return;
     }

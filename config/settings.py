@@ -128,6 +128,24 @@ MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
 (MEDIA_ROOT / 'resident_ids').mkdir(parents=True, exist_ok=True)
 (MEDIA_ROOT / 'snapshots').mkdir(parents=True, exist_ok=True)
 
+CLOUDINARY_CLOUD_NAME = env('CLOUDINARY_CLOUD_NAME', default='').strip()
+CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default='').strip()
+CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default='').strip()
+
+if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
+    try:
+        import cloudinary
+
+        cloudinary.config(
+            cloud_name=CLOUDINARY_CLOUD_NAME,
+            api_key=CLOUDINARY_API_KEY,
+            api_secret=CLOUDINARY_API_SECRET,
+            secure=True,
+        )
+        DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    except Exception:
+        pass
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'
@@ -169,6 +187,8 @@ ANPR_API_KEY = env('ANPR_API_KEY', default='')
 # Optional direct live preview streams for dashboard camera panels
 ENTRY_CAMERA_RTSP = env('ENTRY_CAMERA_RTSP', default='')
 EXIT_CAMERA_RTSP = env('EXIT_CAMERA_RTSP', default='')
+CAMERA_PREVIEW_ENABLED = env.bool('CAMERA_PREVIEW_ENABLED', default=DEBUG)
+ANPR_INGEST_URL = env('ANPR_INGEST_URL', default='').strip()
 
 # Django Channels: Redis in cloud if REDIS_URL is configured; in-memory for local dev.
 REDIS_URL = _first_env('REDIS_URL', 'REDIS_PUBLIC_URL', 'RAILWAY_REDIS_URL', default='')

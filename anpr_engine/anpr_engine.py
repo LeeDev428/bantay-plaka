@@ -151,6 +151,7 @@ HIGH_CONF_SINGLE_SHOT = 0.80
 DETECTOR_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DETECTOR_QUICK_ACCEPT_CONFIDENCE', 0.66)
 FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_FALLBACK_QUICK_ACCEPT_CONFIDENCE', 0.86)
 FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_FALLBACK_EVERY_N_FRAMES', 6))
+HEARTBEAT_SNAPSHOT_SECONDS = max(2, _env_int('ANPR_HEARTBEAT_SECONDS', 5))
 
 # Emergency demo profile for RTSP camera presentations.
 DEMO_RTSP_MODE = _env_bool('ANPR_DEMO_RTSP_MODE', False)
@@ -248,6 +249,19 @@ def _rtsp_candidates(rtsp_url: str) -> list[str]:
             candidates.append(alt)
 
     return candidates
+
+
+def _derive_frame_ingest_url(ingest_url: str) -> str:
+    normalized = (ingest_url or '').strip()
+    if not normalized:
+        return ''
+    if '/detection/ingest/' in normalized:
+        return normalized.replace('/detection/ingest/', '/detection/ingest-frame/')
+    if normalized.endswith('/ingest'):
+        return normalized[:-6] + '/ingest-frame'
+    if normalized.endswith('/ingest/'):
+        return normalized[:-7] + '/ingest-frame/'
+    return normalized
 
 
 def validate_decoded_frame(frame: np.ndarray | None) -> tuple[bool, str]:
@@ -815,9 +829,11 @@ class ANPREngine:
         debounce_seconds: int = DEBOUNCE_SECONDS,
         frame_skip: int = 2,
         rtsp_drain_grabs: int = 2,
+        heartbeat_seconds: int = HEARTBEAT_SNAPSHOT_SECONDS,
     ):
         self.rtsp_url = rtsp_url
         self.ingest_url = ingest_url
+        self.ingest_frame_url = _derive_frame_ingest_url(ingest_url)
         self._is_rtsp_source = isinstance(rtsp_url, str) and '://' in rtsp_url
         requested_role = (camera_role or 'UNKNOWN').strip().upper()
         self.camera_role = requested_role if requested_role in VALID_CAMERA_ROLES else 'UNKNOWN'
@@ -825,6 +841,7 @@ class ANPREngine:
         self.debounce_seconds = debounce_seconds
         self.frame_skip = max(1, int(frame_skip))
         self.rtsp_drain_grabs = max(0, int(rtsp_drain_grabs))
+        self.heartbeat_seconds = max(2, int(heartbeat_seconds))
         self.demo_mode = bool(self._is_rtsp_source and DEMO_RTSP_MODE)
         self.min_ocr_confidence = MIN_OCR_CONFIDENCE
         self.detector_vote_confidence = DETECTOR_MIN_VOTE_CONFIDENCE
@@ -867,6 +884,7 @@ class ANPREngine:
         self._accepted_plates = 0
         self._dropped_by_confidence = 0
         self._dropped_by_debounce = 0
+        self._last_heartbeat_post_ts = 0.0
         self._active_source = str(rtsp_url)
         self._last_diag_ts = time.time()
 
@@ -1030,6 +1048,26 @@ class ANPREngine:
         except Exception as e:
             log.error("Unexpected error posting to Django: %s", e)
         return False
+
+    def _post_frame_heartbeat(self, snapshot_b64: str) -> bool:
+        if not snapshot_b64 or not DJANGO_API_KEY:
+            return False
+        if not self.ingest_frame_url:
+            return False
+
+        try:
+            resp = requests.post(
+                self.ingest_frame_url,
+                json={
+                    'camera_role': self.camera_role,
+                    'snapshot_b64': snapshot_b64,
+                },
+                headers={'Content-Type': 'application/json', 'X-Api-Key': DJANGO_API_KEY},
+                timeout=5,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
 
     def _process_frame(self, frame: np.ndarray):
         """Detect plates in this frame, read text, post to Django if valid."""
@@ -1425,6 +1463,12 @@ class ANPREngine:
                 if frame_count % frame_interval == 0:
                     self._process_frame(frame)
 
+                now_ts = time.time()
+                if (now_ts - self._last_heartbeat_post_ts) >= self.heartbeat_seconds:
+                    heartbeat_b64 = self._build_snapshot_b64(frame)
+                    self._post_frame_heartbeat(heartbeat_b64)
+                    self._last_heartbeat_post_ts = now_ts
+
                 self._maybe_log_diagnostics()
 
                 if show_preview:
@@ -1482,6 +1526,8 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         help='Process every Nth frame. Lower is faster detection but higher CPU/GPU usage. Default: 2')
     parser.add_argument('--rtsp-drain-grabs', type=int, default=3,
         help='How many buffered RTSP frames to grab/drop before each read. Higher lowers latency but can reduce decode stability. Default: 3')
+    parser.add_argument('--heartbeat-seconds', type=int, default=HEARTBEAT_SNAPSHOT_SECONDS,
+        help=f'Seconds between live frame heartbeat uploads for dashboard feed fallback. Default: {HEARTBEAT_SNAPSHOT_SECONDS}')
 
     args = parser.parse_args()
 
@@ -1496,6 +1542,7 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         debounce_seconds=args.debounce,
         frame_skip=args.frame_skip,
         rtsp_drain_grabs=args.rtsp_drain_grabs,
+        heartbeat_seconds=args.heartbeat_seconds,
     )
     engine.run(show_preview=not args.no_preview)
 

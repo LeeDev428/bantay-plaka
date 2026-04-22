@@ -1519,6 +1519,11 @@ class ANPREngine:
             log.info("Stopped by user (Ctrl+C).")
         finally:
             cap.release()
+            # Signal worker threads to exit cleanly
+            _ml_queue.put(None)
+            _hb_queue.put(None)
+            ml_thread.join(timeout=5)
+            hb_thread.join(timeout=3)
             self._maybe_log_diagnostics(force=True)
             if show_preview:
                 cv2.destroyAllWindows()

@@ -99,6 +99,25 @@
       return;
     }
 
+    // Live camera heartbeat frame: update image immediately via WebSocket push.
+    if (data.event_type === 'camera_frame_update') {
+      const role = data.camera_role;
+      const prefix = role === 'ENTRY_CAM' ? 'entry' : role === 'EXIT_CAM' ? 'exit' : null;
+      if (prefix && data.snapshot_url) {
+        const img = document.getElementById(`${prefix}-feed-image`);
+        const meta = document.getElementById(`${prefix}-feed-meta`);
+        const empty = document.getElementById(`${prefix}-feed-empty`);
+        if (img) {
+          // Force browser to reload the image (Cloudinary URL may be same path, add cache-buster)
+          img.src = data.snapshot_url + '?t=' + Date.now();
+          img.classList.remove('hidden');
+          if (empty) empty.classList.add('hidden');
+        }
+        if (meta) meta.textContent = 'Live frame update: ' + data.timestamp;
+      }
+      return;
+    }
+
     const typeBadge = data.entry_type === 'RESIDENT'
       ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>'
       : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>';
@@ -160,22 +179,30 @@
       const empty = prefix ? document.getElementById(`${prefix}-feed-empty`) : null;
       const meta = prefix ? document.getElementById(`${prefix}-feed-meta`) : null;
 
+      // Non-RTSP snapshot mode: image updates are driven by WebSocket camera_frame_update events.
+      // Only keep the polling loop for direct RTSP stream mode (data-live-stream=true).
+      if (img.dataset.liveStream !== 'true') {
+        // Just ensure the initial image is visible if it has a src already.
+        if (img.src && img.src !== window.location.href) {
+          img.classList.remove('hidden');
+          if (empty) empty.classList.add('hidden');
+        }
+        return;
+      }
+
       let busy = false;
       let failures = 0;
       let hadSuccess = false;
 
-      if (img.dataset.liveStream === 'true') {
-        img.addEventListener('error', () => {
-          img.dataset.liveStream = 'false';
-          if (meta) {
-            meta.textContent = `Switching ${role} to snapshot mode...`;
-          }
-        });
-      }
+      img.addEventListener('error', () => {
+        img.dataset.liveStream = 'false';
+        if (meta) {
+          meta.textContent = `Switching ${role} to snapshot mode...`;
+        }
+      });
 
       setInterval(() => {
         if (img.dataset.liveStream === 'true') return;
-        if (img.dataset.liveSnapshot !== role) return;
         if (busy) return;
         busy = true;
         const probe = new Image();
@@ -206,8 +233,31 @@
     });
   }
 
+  // Live real-time clock shown below each camera feed card.
+  function startLiveClocks() {
+    const clockIds = ['entry-live-clock', 'exit-live-clock'];
+    function tick() {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      let h = now.getHours();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      const timeStr = `${pad(h)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${ampm}`;
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const dateStr = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+      const label = `${dateStr} ${timeStr}`;
+      clockIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = label;
+      });
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
   // Highlight on initial page load
   document.addEventListener('DOMContentLoaded', highlightRecentRows);
   document.addEventListener('DOMContentLoaded', startSnapshotRefresh);
+  document.addEventListener('DOMContentLoaded', startLiveClocks);
 })();
 </script>

@@ -6,9 +6,15 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 
-def _anpr_rtsp(rtsp_url: str) -> str:
-    """Use main stream for ANPR for better plate readability."""
-    return (rtsp_url or '').replace('/Streaming/Channels/102', '/Streaming/Channels/101')
+def _anpr_rtsp(rtsp_url: str, stream_profile: str = 'sub') -> str:
+    """Select RTSP profile. Default is substream for stability on low-link networks."""
+    source = (rtsp_url or '').strip()
+    profile = (stream_profile or 'sub').strip().lower()
+    if profile in {'main', '101'}:
+        return source.replace('/Streaming/Channels/102', '/Streaming/Channels/101')
+    if profile in {'sub', '102'}:
+        return source.replace('/Streaming/Channels/101', '/Streaming/Channels/102')
+    return source
 
 
 class Command(BaseCommand):
@@ -68,6 +74,12 @@ class Command(BaseCommand):
             default=int(getattr(settings, 'ANPR_RTSP_DRAIN_GRABS', 2) or 2),
             help='Buffered RTSP frame grabs before read. Default: ANPR_RTSP_DRAIN_GRABS or 2',
         )
+        parser.add_argument(
+            '--heartbeat-seconds',
+            type=int,
+            default=int(getattr(settings, 'ANPR_HEARTBEAT_SECONDS', 5) or 5),
+            help='Seconds between live frame heartbeat uploads. Default: ANPR_HEARTBEAT_SECONDS or 5',
+        )
         parser.set_defaults(strict_roles=True)
 
     def handle(self, *args, **options):
@@ -77,6 +89,8 @@ class Command(BaseCommand):
         anpr_device = str(options.get('device') or 'auto').strip().lower()
         frame_skip = max(1, int(options.get('frame_skip') or 2))
         rtsp_drain_grabs = max(0, int(options.get('rtsp_drain_grabs') or 2))
+        heartbeat_seconds = max(2, int(options.get('heartbeat_seconds') or 5))
+        stream_profile = str(getattr(settings, 'ANPR_STREAM_PROFILE', 'sub') or 'sub').strip().lower()
 
         entry_rtsp = (getattr(settings, 'ENTRY_CAMERA_RTSP', '') or '').strip()
         exit_rtsp = (getattr(settings, 'EXIT_CAMERA_RTSP', '') or '').strip()
@@ -99,6 +113,7 @@ class Command(BaseCommand):
                 f'ANPR runtime: device={anpr_device}, frame_skip={frame_skip}, rtsp_drain_grabs={rtsp_drain_grabs}'
             )
         )
+        self.stdout.write(self.style.NOTICE(f'ANPR stream profile: {stream_profile}'))
         self.stdout.write(self.style.NOTICE(f'ANPR ingest target: {ingest_url}'))
 
         base_dir = Path(settings.BASE_DIR)
@@ -144,6 +159,7 @@ class Command(BaseCommand):
                 '--mode', 'yolo',
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),
+                '--heartbeat-seconds', str(heartbeat_seconds),
             ]
             if strict_roles:
                 entry_cmd.extend(['--camera-role', 'ENTRY_CAM'])
@@ -153,21 +169,23 @@ class Command(BaseCommand):
             entry_cmd = [
                 py,
                 'anpr_engine/anpr_engine.py',
-                '--rtsp', _anpr_rtsp(entry_rtsp),
+                '--rtsp', _anpr_rtsp(entry_rtsp, stream_profile),
                 '--url', ingest_url,
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),
                 '--rtsp-drain-grabs', str(rtsp_drain_grabs),
+                '--heartbeat-seconds', str(heartbeat_seconds),
                 '--no-preview',
             ]
             exit_cmd = [
                 py,
                 'anpr_engine/anpr_engine.py',
-                '--rtsp', _anpr_rtsp(exit_rtsp),
+                '--rtsp', _anpr_rtsp(exit_rtsp, stream_profile),
                 '--url', ingest_url,
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),
                 '--rtsp-drain-grabs', str(rtsp_drain_grabs),
+                '--heartbeat-seconds', str(heartbeat_seconds),
                 '--no-preview',
             ]
             if strict_roles:

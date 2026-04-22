@@ -556,8 +556,6 @@ def ingest_camera_frame(request):
         if not snapshot_b64:
             return JsonResponse({'error': 'snapshot_b64 required'}, status=400)
 
-        image_bytes = base64.b64decode(snapshot_b64, validate=True)
-
         # Persisting every heartbeat frame to media storage adds jitter (especially on cloud storage).
         # Keep a persistent snapshot occasionally, but stream live updates over WebSocket every tick.
         snapshot_url = ''
@@ -570,6 +568,7 @@ def ingest_camera_frame(request):
                 should_persist = True
 
         if should_persist:
+            image_bytes = base64.b64decode(snapshot_b64, validate=True)
             _update_live_camera_snapshot(camera_role, image_bytes)
             snap = CameraFeedSnapshot.objects.filter(camera_role=camera_role).first()
             if snap and snap.snapshot:

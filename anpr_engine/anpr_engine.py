@@ -153,7 +153,9 @@ HIGH_CONF_SINGLE_SHOT = 0.80
 DETECTOR_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DETECTOR_QUICK_ACCEPT_CONFIDENCE', 0.66)
 FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_FALLBACK_QUICK_ACCEPT_CONFIDENCE', 0.86)
 FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_FALLBACK_EVERY_N_FRAMES', 6))
-HEARTBEAT_SNAPSHOT_SECONDS = max(1, _env_int('ANPR_HEARTBEAT_SECONDS', 2))
+HEARTBEAT_SNAPSHOT_SECONDS = max(0.10, _env_float('ANPR_HEARTBEAT_SECONDS', 1.0))
+HEARTBEAT_SNAPSHOT_MAX_WIDTH = max(320, _env_int('ANPR_HEARTBEAT_MAX_WIDTH', 640))
+HEARTBEAT_SNAPSHOT_JPEG_QUALITY = min(85, max(30, _env_int('ANPR_HEARTBEAT_JPEG_QUALITY', 45)))
 
 # Emergency demo profile for RTSP camera presentations.
 DEMO_RTSP_MODE = _env_bool('ANPR_DEMO_RTSP_MODE', False)
@@ -837,7 +839,7 @@ class ANPREngine:
         debounce_seconds: int = DEBOUNCE_SECONDS,
         frame_skip: int = 2,
         rtsp_drain_grabs: int = 2,
-        heartbeat_seconds: int = HEARTBEAT_SNAPSHOT_SECONDS,
+        heartbeat_seconds: float = HEARTBEAT_SNAPSHOT_SECONDS,
     ):
         self.ingest_url = ingest_url
         self.ingest_frame_url = _derive_frame_ingest_url(ingest_url)
@@ -848,7 +850,7 @@ class ANPREngine:
         self.debounce_seconds = debounce_seconds
         self.frame_skip = max(1, int(frame_skip))
         self.rtsp_drain_grabs = max(0, int(rtsp_drain_grabs))
-        self.heartbeat_seconds = max(1, int(heartbeat_seconds))
+        self.heartbeat_seconds = max(0.10, float(heartbeat_seconds))
         self.demo_mode = bool(self._is_rtsp_source and DEMO_RTSP_MODE)
         self.min_ocr_confidence = MIN_OCR_CONFIDENCE
         self.detector_vote_confidence = DETECTOR_MIN_VOTE_CONFIDENCE
@@ -1002,7 +1004,7 @@ class ANPREngine:
         snapshot_b64 = ''
         try:
             preview_for_upload = frame
-            max_width = 960
+            max_width = HEARTBEAT_SNAPSHOT_MAX_WIDTH
             if frame.shape[1] > max_width:
                 scale = max_width / frame.shape[1]
                 preview_for_upload = cv2.resize(
@@ -1013,7 +1015,7 @@ class ANPREngine:
             ok, encoded = cv2.imencode(
                 '.jpg',
                 preview_for_upload,
-                [int(cv2.IMWRITE_JPEG_QUALITY), 75],
+                [int(cv2.IMWRITE_JPEG_QUALITY), HEARTBEAT_SNAPSHOT_JPEG_QUALITY],
             )
             if ok:
                 snapshot_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
@@ -1575,7 +1577,7 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         help='Process every Nth frame. Lower is faster detection but higher CPU/GPU usage. Default: 2')
     parser.add_argument('--rtsp-drain-grabs', type=int, default=3,
         help='How many buffered RTSP frames to grab/drop before each read. Higher lowers latency but can reduce decode stability. Default: 3')
-    parser.add_argument('--heartbeat-seconds', type=int, default=HEARTBEAT_SNAPSHOT_SECONDS,
+    parser.add_argument('--heartbeat-seconds', type=float, default=HEARTBEAT_SNAPSHOT_SECONDS,
         help=f'Seconds between live frame heartbeat uploads for dashboard feed fallback. Default: {HEARTBEAT_SNAPSHOT_SECONDS}')
 
     args = parser.parse_args()

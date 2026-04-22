@@ -76,9 +76,9 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             '--heartbeat-seconds',
-            type=int,
-            default=int(getattr(settings, 'ANPR_HEARTBEAT_SECONDS', 5) or 5),
-            help='Seconds between live frame heartbeat uploads. Default: ANPR_HEARTBEAT_SECONDS or 5',
+            type=float,
+            default=float(getattr(settings, 'ANPR_HEARTBEAT_SECONDS', 1.0) or 1.0),
+            help='Seconds between live frame heartbeat uploads. Default: ANPR_HEARTBEAT_SECONDS or 1.0',
         )
         parser.set_defaults(strict_roles=True)
 
@@ -89,7 +89,7 @@ class Command(BaseCommand):
         anpr_device = str(options.get('device') or 'auto').strip().lower()
         frame_skip = max(1, int(options.get('frame_skip') or 2))
         rtsp_drain_grabs = max(0, int(options.get('rtsp_drain_grabs') or 2))
-        heartbeat_seconds = max(1, int(options.get('heartbeat_seconds') or 5))
+        heartbeat_seconds = max(0.10, float(options.get('heartbeat_seconds') or 1.0))
         stream_profile = str(getattr(settings, 'ANPR_STREAM_PROFILE', 'sub') or 'sub').strip().lower()
 
         entry_rtsp = (getattr(settings, 'ENTRY_CAMERA_RTSP', '') or '').strip()

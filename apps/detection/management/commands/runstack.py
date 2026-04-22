@@ -89,7 +89,7 @@ class Command(BaseCommand):
         anpr_device = str(options.get('device') or 'auto').strip().lower()
         frame_skip = max(1, int(options.get('frame_skip') or 2))
         rtsp_drain_grabs = max(0, int(options.get('rtsp_drain_grabs') or 2))
-        heartbeat_seconds = max(2, int(options.get('heartbeat_seconds') or 5))
+        heartbeat_seconds = max(1, int(options.get('heartbeat_seconds') or 5))
         stream_profile = str(getattr(settings, 'ANPR_STREAM_PROFILE', 'sub') or 'sub').strip().lower()
 
         entry_rtsp = (getattr(settings, 'ENTRY_CAMERA_RTSP', '') or '').strip()
@@ -110,7 +110,8 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.NOTICE(
-                f'ANPR runtime: device={anpr_device}, frame_skip={frame_skip}, rtsp_drain_grabs={rtsp_drain_grabs}'
+                f'ANPR runtime: device={anpr_device}, frame_skip={frame_skip}, '
+                f'rtsp_drain_grabs={rtsp_drain_grabs}, heartbeat_seconds={heartbeat_seconds}'
             )
         )
         self.stdout.write(self.style.NOTICE(f'ANPR stream profile: {stream_profile}'))

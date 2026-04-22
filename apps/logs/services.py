@@ -90,3 +90,23 @@ def broadcast_blacklist_alert(plate_number: str, tag: str = '', remarks: str = '
             },
         }
     )
+
+
+def broadcast_camera_frame(camera_role: str, snapshot_url: str, timestamp_str: str = ''):
+    """Push a live camera frame update to all connected WebSocket clients."""
+    channel_layer = get_channel_layer()
+    if not timestamp_str:
+        from django.utils import timezone as tz
+        timestamp_str = timezone.localtime(tz.now()).strftime('%b %d, %Y %I:%M:%S %p')
+    async_to_sync(channel_layer.group_send)(
+        'vehicle_logs',
+        {
+            'type': 'camera_frame_update',
+            'data': {
+                'event_type': 'camera_frame_update',
+                'camera_role': camera_role,
+                'snapshot_url': snapshot_url,
+                'timestamp': timestamp_str,
+            },
+        }
+    )

@@ -1296,7 +1296,7 @@ class ANPREngine:
 
     def run(self, show_preview: bool = True):
         """Open the camera and run ANPR loop until stopped."""
-        source: str | int = self.rtsp_url
+        source: str | int = self._active_source
         is_rtsp = isinstance(source, str) and '://' in source
         webcam_sources: list[int] = []
 

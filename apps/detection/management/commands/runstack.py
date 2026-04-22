@@ -84,12 +84,16 @@ class Command(BaseCommand):
         host = options['host']
         port = str(options['port'])
         server_mode = options['server']
+        ingest_url = (getattr(settings, 'ANPR_INGEST_URL', '') or '').strip()
+        if not ingest_url:
+            ingest_url = f'http://{host}:{port}/detection/ingest/'
 
         self.stdout.write(
             self.style.NOTICE(
                 f'ANPR runtime: device={anpr_device}, frame_skip={frame_skip}, rtsp_drain_grabs={rtsp_drain_grabs}'
             )
         )
+        self.stdout.write(self.style.NOTICE(f'ANPR ingest target: {ingest_url}'))
 
         base_dir = Path(settings.BASE_DIR)
         preferred_py = base_dir / 'venv' / 'Scripts' / 'python.exe'
@@ -129,6 +133,7 @@ class Command(BaseCommand):
                 py,
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', webcam_index,
+                '--url', ingest_url,
                 '--mode', 'yolo',
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),
@@ -142,6 +147,7 @@ class Command(BaseCommand):
                 py,
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', _anpr_rtsp(entry_rtsp),
+                '--url', ingest_url,
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),
                 '--rtsp-drain-grabs', str(rtsp_drain_grabs),
@@ -151,6 +157,7 @@ class Command(BaseCommand):
                 py,
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', _anpr_rtsp(exit_rtsp),
+                '--url', ingest_url,
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),
                 '--rtsp-drain-grabs', str(rtsp_drain_grabs),

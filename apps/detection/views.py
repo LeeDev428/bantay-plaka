@@ -31,8 +31,14 @@ _FRAME_CACHE: dict[str, tuple[bytes, float]] = {}
 _FRAME_CACHE_LOCK = threading.Lock()
 _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
+_LAST_LIVE_SNAPSHOT_PERSIST_TS: dict[str, float] = {}
+_LAST_LIVE_SNAPSHOT_PERSIST_LOCK = threading.Lock()
 MIN_GLOBAL_PLATE_RELOG_SECONDS = 4
 MAX_FRESH_CACHE_SECONDS = 1.5
+LIVE_HEARTBEAT_PERSIST_SECONDS = max(
+    5.0,
+    float(getattr(settings, 'LIVE_HEARTBEAT_PERSIST_SECONDS', 12.0) or 12.0),
+)
 CAMERA_WORKER_MAX_WIDTH = max(480, int(getattr(settings, 'CAMERA_STREAM_MAX_WIDTH', 720) or 720))
 CAMERA_WORKER_JPEG_QUALITY = min(90, max(45, int(getattr(settings, 'CAMERA_STREAM_JPEG_QUALITY', 70) or 70)))
 CAMERA_STREAM_POLL_SLEEP_SECONDS = max(
@@ -551,14 +557,32 @@ def ingest_camera_frame(request):
             return JsonResponse({'error': 'snapshot_b64 required'}, status=400)
 
         image_bytes = base64.b64decode(snapshot_b64, validate=True)
-        _update_live_camera_snapshot(camera_role, image_bytes)
 
-        # Push WebSocket event so the browser image refreshes immediately.
-        try:
+        # Persisting every heartbeat frame to media storage adds jitter (especially on cloud storage).
+        # Keep a persistent snapshot occasionally, but stream live updates over WebSocket every tick.
+        snapshot_url = ''
+        should_persist = False
+        now_ts = time.time()
+        with _LAST_LIVE_SNAPSHOT_PERSIST_LOCK:
+            last_persist_ts = _LAST_LIVE_SNAPSHOT_PERSIST_TS.get(camera_role, 0.0)
+            if (now_ts - last_persist_ts) >= LIVE_HEARTBEAT_PERSIST_SECONDS:
+                _LAST_LIVE_SNAPSHOT_PERSIST_TS[camera_role] = now_ts
+                should_persist = True
+
+        if should_persist:
+            _update_live_camera_snapshot(camera_role, image_bytes)
             snap = CameraFeedSnapshot.objects.filter(camera_role=camera_role).first()
             if snap and snap.snapshot:
-                from apps.logs.services import broadcast_camera_frame
-                broadcast_camera_frame(camera_role, snap.snapshot.url)
+                snapshot_url = snap.snapshot.url
+
+        # Push WebSocket event so browser refreshes immediately using inline frame payload.
+        try:
+            from apps.logs.services import broadcast_camera_frame
+            broadcast_camera_frame(
+                camera_role,
+                snapshot_url=snapshot_url,
+                snapshot_b64=snapshot_b64,
+            )
         except Exception:
             pass
 

@@ -46,6 +46,8 @@
       <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
         {% if has_entry_camera_stream %}
           <img id="entry-feed-image" data-live-stream="true" data-live-snapshot="ENTRY_CAM" src="{% url 'camera_preview' 'ENTRY_CAM' %}" alt="Entry camera live feed" class="w-full h-full object-cover" />
+        {% elif entry_live_snapshot and entry_live_snapshot.snapshot %}
+          <img id="entry-feed-image" src="{{ entry_live_snapshot.snapshot.url }}" alt="Entry camera live snapshot" class="w-full h-full object-cover" />
         {% elif entry_feed and entry_feed.snapshot %}
           <img id="entry-feed-image" src="{{ entry_feed.snapshot.url }}" alt="Entry camera detection" class="w-full h-full object-cover" />
         {% elif entry_feed %}
@@ -57,7 +59,9 @@
         {% endif %}
       </div>
       <p id="entry-feed-meta" class="text-xs text-slate-500 mt-2">
-        {% if entry_feed %}
+        {% if entry_live_snapshot %}
+          Live frame update: {{ entry_live_snapshot.updated_at|date:"M d, Y h:i:s A" }}
+        {% elif entry_feed %}
           Latest detection: Plate {{ entry_feed.plate_number }} - {{ entry_feed.local_time|date:"M d, Y h:i:s A" }}
         {% else %}
           Waiting for ENTRY_CAM detections...
@@ -74,6 +78,8 @@
       <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
         {% if has_exit_camera_stream %}
           <img id="exit-feed-image" data-live-stream="true" data-live-snapshot="EXIT_CAM" src="{% url 'camera_preview' 'EXIT_CAM' %}" alt="Exit camera live feed" class="w-full h-full object-cover" />
+        {% elif exit_live_snapshot and exit_live_snapshot.snapshot %}
+          <img id="exit-feed-image" src="{{ exit_live_snapshot.snapshot.url }}" alt="Exit camera live snapshot" class="w-full h-full object-cover" />
         {% elif exit_feed and exit_feed.snapshot %}
           <img id="exit-feed-image" src="{{ exit_feed.snapshot.url }}" alt="Exit camera detection" class="w-full h-full object-cover" />
         {% elif exit_feed %}
@@ -85,7 +91,9 @@
         {% endif %}
       </div>
       <p id="exit-feed-meta" class="text-xs text-slate-500 mt-2">
-        {% if exit_feed %}
+        {% if exit_live_snapshot %}
+          Live frame update: {{ exit_live_snapshot.updated_at|date:"M d, Y h:i:s A" }}
+        {% elif exit_feed %}
           Latest detection: Plate {{ exit_feed.plate_number }} - {{ exit_feed.local_time|date:"M d, Y h:i:s A" }}
         {% else %}
           Waiting for EXIT_CAM detections...

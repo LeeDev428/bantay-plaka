@@ -68,6 +68,30 @@
     });
   }
 
+  function showDetectionToast(data) {
+    const old = document.getElementById('detection-toast');
+    if (old) old.remove();
+    const statusLabel = data.status === 'TIME_IN' ? 'IN' : 'OUT';
+    const camLabel = data.camera_role === 'ENTRY_CAM' ? 'Entry' : data.camera_role === 'EXIT_CAM' ? 'Exit' : (data.camera_role || 'Camera');
+    const bgColor = data.status === 'TIME_IN' ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200';
+    const iconColor = data.status === 'TIME_IN' ? 'text-blue-500' : 'text-red-500';
+    const toast = document.createElement('div');
+    toast.id = 'detection-toast';
+    toast.className = `fixed bottom-4 right-4 z-[9998] w-80 rounded-xl border shadow-lg ${bgColor}`;
+    toast.innerHTML = `
+      <div class="px-4 py-3 flex items-start gap-3">
+        <i class="fa fa-camera ${iconColor} text-xl mt-0.5"></i>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-slate-800 text-sm">Plate Detected: ${escapeHtml(data.plate_number)}</p>
+          <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(camLabel)} Cam &bull; ${escapeHtml(statusLabel)} &bull; ${escapeHtml(data.timestamp)}</p>
+        </div>
+        <button onclick="document.getElementById('detection-toast')?.remove()" class="text-slate-400 hover:text-slate-600"><i class="fa fa-xmark"></i></button>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => { const t = document.getElementById('detection-toast'); if (t) t.remove(); }, 5000);
+  }
+
   function updateFeedCard(role, data) {
     const prefix = role === 'ENTRY_CAM' ? 'entry' : role === 'EXIT_CAM' ? 'exit' : null;
     if (!prefix || !data.snapshot_url) return;
@@ -78,13 +102,13 @@
 
     if (!img || !meta) return;
 
-    if (img.dataset.liveStream === 'true' || img.dataset.liveSnapshot === role) {
-      // Live stream or polled live frame mode: do not replace source with event snapshots.
+    // For direct RTSP stream mode, only update the meta label (the stream handles the image).
+    if (img.dataset.liveStream === 'true') {
       meta.textContent = `Latest detection: Plate ${data.plate_number} - ${data.timestamp}`;
       return;
     }
 
-    // Non-live fallback (no RTSP configured): keep latest snapshot visible.
+    // Cloud/snapshot mode (data-live-snapshot): update img.src with the annotated detection frame.
     img.src = `${data.snapshot_url}?t=${Date.now()}`;
     img.classList.remove('hidden');
     if (empty) empty.classList.add('hidden');
@@ -161,6 +185,7 @@
     // Re-run highlights after inserting new row
     highlightRecentRows();
     updateFeedCard(data.camera_role, data);
+    showDetectionToast(data);
   };
 
   socket.onopen = () => console.log('[BantayPlaka] WebSocket connected.');
@@ -255,9 +280,17 @@
     setInterval(tick, 1000);
   }
 
-  // Highlight on initial page load
-  document.addEventListener('DOMContentLoaded', highlightRecentRows);
-  document.addEventListener('DOMContentLoaded', startSnapshotRefresh);
-  document.addEventListener('DOMContentLoaded', startLiveClocks);
+  // Highlight on initial page load — run immediately if DOM already ready, otherwise wait.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      highlightRecentRows();
+      startSnapshotRefresh();
+      startLiveClocks();
+    });
+  } else {
+    highlightRecentRows();
+    startSnapshotRefresh();
+    startLiveClocks();
+  }
 })();
 </script>

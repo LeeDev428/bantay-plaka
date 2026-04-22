@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from apps.accounts.forms import LoginForm, UserCreateForm, UserEditForm, ResidentSignupForm
 from apps.accounts.models import User
-from apps.logs.models import VehicleLog
+from apps.logs.models import VehicleLog, CameraFeedSnapshot
 from apps.logs.services import attach_blacklist_metadata
 from apps.residents.models import Resident, Vehicle
 from apps.visitors.models import BlacklistEntry
@@ -42,6 +42,16 @@ def _camera_feed_context() -> dict:
         .order_by('-timestamp')
         .first()
     )
+    entry_live_snapshot = (
+        CameraFeedSnapshot.objects
+        .filter(camera_role=VehicleLog.CAMERA_ROLE_ENTRY)
+        .first()
+    )
+    exit_live_snapshot = (
+        CameraFeedSnapshot.objects
+        .filter(camera_role=VehicleLog.CAMERA_ROLE_EXIT)
+        .first()
+    )
 
     now = timezone.now()
     last_camera_local = timezone.localtime(last_camera_log.timestamp) if last_camera_log else None
@@ -52,6 +62,8 @@ def _camera_feed_context() -> dict:
     return {
         'entry_feed': latest_entry,
         'exit_feed': latest_exit,
+        'entry_live_snapshot': entry_live_snapshot,
+        'exit_live_snapshot': exit_live_snapshot,
         'has_entry_camera_stream': preview_enabled and bool(getattr(settings, 'ENTRY_CAMERA_RTSP', '').strip()),
         'has_exit_camera_stream': preview_enabled and bool(getattr(settings, 'EXIT_CAMERA_RTSP', '').strip()),
         'last_camera_log': last_camera_log,

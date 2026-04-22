@@ -92,7 +92,12 @@ def broadcast_blacklist_alert(plate_number: str, tag: str = '', remarks: str = '
     )
 
 
-def broadcast_camera_frame(camera_role: str, snapshot_url: str, timestamp_str: str = ''):
+def broadcast_camera_frame(
+    camera_role: str,
+    snapshot_url: str = '',
+    timestamp_str: str = '',
+    snapshot_b64: str = '',
+):
     """Push a live camera frame update to all connected WebSocket clients."""
     channel_layer = get_channel_layer()
     if not timestamp_str:
@@ -106,6 +111,7 @@ def broadcast_camera_frame(camera_role: str, snapshot_url: str, timestamp_str: s
                 'event_type': 'camera_frame_update',
                 'camera_role': camera_role,
                 'snapshot_url': snapshot_url,
+                'snapshot_b64': snapshot_b64,
                 'timestamp': timestamp_str,
             },
         }

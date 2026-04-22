@@ -127,13 +127,17 @@
     if (data.event_type === 'camera_frame_update') {
       const role = data.camera_role;
       const prefix = role === 'ENTRY_CAM' ? 'entry' : role === 'EXIT_CAM' ? 'exit' : null;
-      if (prefix && data.snapshot_url) {
+      if (prefix) {
         const img = document.getElementById(`${prefix}-feed-image`);
         const meta = document.getElementById(`${prefix}-feed-meta`);
         const empty = document.getElementById(`${prefix}-feed-empty`);
         if (img) {
-          // Force browser to reload the image (Cloudinary URL may be same path, add cache-buster)
-          img.src = data.snapshot_url + '?t=' + Date.now();
+          if (data.snapshot_b64) {
+            img.src = `data:image/jpeg;base64,${data.snapshot_b64}`;
+          } else if (data.snapshot_url) {
+            // Fallback for older payloads / persistent snapshot URL.
+            img.src = data.snapshot_url + '?t=' + Date.now();
+          }
           img.classList.remove('hidden');
           if (empty) empty.classList.add('hidden');
         }

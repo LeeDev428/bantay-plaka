@@ -153,7 +153,7 @@ HIGH_CONF_SINGLE_SHOT = 0.80
 DETECTOR_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DETECTOR_QUICK_ACCEPT_CONFIDENCE', 0.66)
 FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_FALLBACK_QUICK_ACCEPT_CONFIDENCE', 0.86)
 FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_FALLBACK_EVERY_N_FRAMES', 6))
-HEARTBEAT_SNAPSHOT_SECONDS = max(2, _env_int('ANPR_HEARTBEAT_SECONDS', 5))
+HEARTBEAT_SNAPSHOT_SECONDS = max(1, _env_int('ANPR_HEARTBEAT_SECONDS', 2))
 
 # Emergency demo profile for RTSP camera presentations.
 DEMO_RTSP_MODE = _env_bool('ANPR_DEMO_RTSP_MODE', False)
@@ -607,7 +607,7 @@ class RoboflowDetector:
     After that: runs completely offline, no internet needed.
     """
 
-    def __init__(self, model_id: str, api_key: str):
+    def __init__(self, model_id: str, api_key: str, device: str = 'cpu'):
         try:
             from inference import get_model
         except ImportError:
@@ -626,9 +626,15 @@ class RoboflowDetector:
             )
             sys.exit(1)
 
-        log.info(f"Loading Roboflow model: {model_id}")
+        self._device = device
+        log.info(f"Loading Roboflow model: {model_id}"
         log.info("First run downloads and caches the model (~30 sec). Next runs are instant.")
-        self._model = get_model(model_id=model_id, api_key=api_key)
+        # Pass device explicitly so CUDA is used when available.
+        try:
+            self._model = get_model(model_id=model_id, api_key=api_key, device=self._device)
+        except TypeError:
+            # Older inference builds don't accept device param — fall back silently.
+            self._model = get_model(model_id=model_id, api_key=api_key)
         self._infer_calls = 0
         self._zero_box_calls = 0
         self._last_variant = 'none'
@@ -833,7 +839,6 @@ class ANPREngine:
         rtsp_drain_grabs: int = 2,
         heartbeat_seconds: int = HEARTBEAT_SNAPSHOT_SECONDS,
     ):
-        self.rtsp_url = rtsp_url
         self.ingest_url = ingest_url
         self.ingest_frame_url = _derive_frame_ingest_url(ingest_url)
         self._is_rtsp_source = isinstance(rtsp_url, str) and '://' in rtsp_url
@@ -843,7 +848,7 @@ class ANPREngine:
         self.debounce_seconds = debounce_seconds
         self.frame_skip = max(1, int(frame_skip))
         self.rtsp_drain_grabs = max(0, int(rtsp_drain_grabs))
-        self.heartbeat_seconds = max(2, int(heartbeat_seconds))
+        self.heartbeat_seconds = max(1, int(heartbeat_seconds))
         self.demo_mode = bool(self._is_rtsp_source and DEMO_RTSP_MODE)
         self.min_ocr_confidence = MIN_OCR_CONFIDENCE
         self.detector_vote_confidence = DETECTOR_MIN_VOTE_CONFIDENCE
@@ -895,7 +900,7 @@ class ANPREngine:
         # preview and pipeline running.
         if mode == 'roboflow':
             try:
-                self.detector = RoboflowDetector(rf_model_id, ROBOFLOW_API_KEY)
+                self.detector = RoboflowDetector(rf_model_id, ROBOFLOW_API_KEY, device=self.runtime_device)
             except BaseException as exc:
                 if isinstance(exc, KeyboardInterrupt):
                     raise

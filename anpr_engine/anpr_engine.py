@@ -129,7 +129,7 @@ ROBOFLOW_API_KEY = os.getenv('ROBOFLOW_API_KEY', '')
 # Your friend's model: workspace=kurt-4w5dv, project=plate-number-detection, version=5
 DEFAULT_RF_MODEL_ID = os.getenv('ROBOFLOW_MODEL_ID', 'plate-number-detection/5')
 
-DEFAULT_INGEST_URL = 'http://127.0.0.1:8000/detection/ingest/'
+DEFAULT_INGEST_URL = (os.getenv('ANPR_INGEST_URL', '') or '').strip() or 'http://127.0.0.1:8000/detection/ingest/'
 DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 
 # Seconds before the same plate can be logged again (prevents duplicates)
@@ -1471,7 +1471,7 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
     parser.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default=DEFAULT_ANPR_DEVICE,
         help='Runtime device selection for OCR/YOLO. auto=prefer CUDA when available. Default: ANPR_DEVICE env or auto')
     parser.add_argument('--url', default=DEFAULT_INGEST_URL,
-        help=f'Django ingest URL. Default: {DEFAULT_INGEST_URL}')
+        help='Django ingest URL. Default: ANPR_INGEST_URL env or http://127.0.0.1:8000/detection/ingest/')
     parser.add_argument('--camera-role', choices=['ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'], default='UNKNOWN',
         help='Camera role for status mapping. ENTRY_CAM -> TIME_IN, EXIT_CAM -> TIME_OUT')
     parser.add_argument('--no-preview', action='store_true',

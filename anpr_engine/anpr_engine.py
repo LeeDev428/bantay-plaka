@@ -627,7 +627,7 @@ class RoboflowDetector:
             sys.exit(1)
 
         self._device = device
-        log.info(f"Loading Roboflow model: {model_id}"
+        log.info(f"Loading Roboflow model: {model_id}")
         log.info("First run downloads and caches the model (~30 sec). Next runs are instant.")
         # Pass device explicitly so CUDA is used when available.
         try:

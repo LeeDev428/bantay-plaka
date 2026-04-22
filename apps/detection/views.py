@@ -20,7 +20,7 @@ except Exception:
 import requests
 from requests.auth import HTTPDigestAuth, HTTPBasicAuth
 
-from apps.logs.models import VehicleLog
+from apps.logs.models import VehicleLog, CameraFeedSnapshot
 from apps.logs.services import broadcast_log, broadcast_blacklist_alert
 from apps.logs.views import resolve_plate
 from apps.visitors.models import BlacklistEntry
@@ -86,6 +86,17 @@ def _normalize_camera_role(camera_role: str) -> str:
     }:
         return role
     return VehicleLog.CAMERA_ROLE_UNKNOWN
+
+
+def _update_live_camera_snapshot(camera_role: str, image_bytes: bytes):
+    if camera_role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
+        return
+    if not image_bytes:
+        return
+
+    snapshot_obj, _ = CameraFeedSnapshot.objects.get_or_create(camera_role=camera_role)
+    filename = f'live_{camera_role.lower()}.jpg'
+    snapshot_obj.snapshot.save(filename, ContentFile(image_bytes), save=True)
 
 
 def _next_status_for_plate(plate_number: str, camera_role: str = VehicleLog.CAMERA_ROLE_UNKNOWN) -> str:
@@ -504,12 +515,47 @@ def ingest_plate(request):
                 safe_plate = ''.join(c for c in plate if c.isalnum())[:12] or 'plate'
                 filename = f'{camera_role.lower()}_{safe_plate}_{log.pk}.jpg'
                 log.snapshot.save(filename, ContentFile(image_bytes), save=True)
+                _update_live_camera_snapshot(camera_role, image_bytes)
             except (binascii.Error, ValueError):
                 pass
 
         broadcast_log(log)
         return JsonResponse({'ok': True, 'log_id': log.pk, 'status': status, 'camera_role': camera_role})
 
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def ingest_camera_frame(request):
+    """
+    Lightweight camera heartbeat endpoint used by ANPR workers to keep
+    latest ENTRY/EXIT snapshot visible on cloud dashboard even without plate hits.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    if not _check_api_key(request):
+        return JsonResponse({'error': 'Unauthorized — invalid or missing API key'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+        camera_role = _normalize_camera_role(data.get('camera_role', ''))
+        snapshot_b64 = (data.get('snapshot_b64', '') or '').strip()
+
+        if camera_role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
+            return JsonResponse({'error': 'camera_role must be ENTRY_CAM or EXIT_CAM'}, status=400)
+        if not snapshot_b64:
+            return JsonResponse({'error': 'snapshot_b64 required'}, status=400)
+
+        image_bytes = base64.b64decode(snapshot_b64, validate=True)
+        _update_live_camera_snapshot(camera_role, image_bytes)
+        return JsonResponse({'ok': True, 'camera_role': camera_role})
+
+    except (binascii.Error, ValueError):
+        return JsonResponse({'error': 'Invalid snapshot_b64'}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON body'}, status=400)
     except Exception as e:

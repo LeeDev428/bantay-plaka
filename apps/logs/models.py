@@ -79,3 +79,24 @@ class VehicleLog(models.Model):
 
     def __str__(self):
         return f'{self.plate_number} | {self.camera_role} | {self.entry_type} | {self.status} | {self.timestamp:%Y-%m-%d %H:%M}'
+
+
+class CameraFeedSnapshot(models.Model):
+    camera_role = models.CharField(
+        max_length=20,
+        choices=[
+            (VehicleLog.CAMERA_ROLE_ENTRY, 'Entry Camera'),
+            (VehicleLog.CAMERA_ROLE_EXIT, 'Exit Camera'),
+        ],
+        unique=True,
+        db_index=True,
+    )
+    snapshot = models.ImageField(upload_to='snapshots/live/', null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        db_table = 'camera_feed_snapshots'
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'{self.camera_role} @ {self.updated_at:%Y-%m-%d %H:%M:%S}'

@@ -7,3 +7,5 @@ daphne==4.1.2
 whitenoise==6.7.0
 channels-redis==4.2.0
 requests==2.32.3
+cloudinary==1.41.0
+django-cloudinary-storage==0.3.0

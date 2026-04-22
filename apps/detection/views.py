@@ -552,6 +552,16 @@ def ingest_camera_frame(request):
 
         image_bytes = base64.b64decode(snapshot_b64, validate=True)
         _update_live_camera_snapshot(camera_role, image_bytes)
+
+        # Push WebSocket event so the browser image refreshes immediately.
+        try:
+            snap = CameraFeedSnapshot.objects.filter(camera_role=camera_role).first()
+            if snap and snap.snapshot:
+                from apps.logs.services import broadcast_camera_frame
+                broadcast_camera_frame(camera_role, snap.snapshot.url)
+        except Exception:
+            pass
+
         return JsonResponse({'ok': True, 'camera_role': camera_role})
 
     except (binascii.Error, ValueError):

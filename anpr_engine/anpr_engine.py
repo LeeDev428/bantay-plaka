@@ -44,8 +44,10 @@ import base64
 from collections import defaultdict
 import logging
 import os
+import queue
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
@@ -1386,6 +1388,36 @@ class ANPREngine:
         if show_preview:
             log.info("Preview window open. Press 'q' inside it to quit.")
 
+        # --- Background worker threads so ML inference never stalls the read loop ---
+        _ml_queue: queue.Queue = queue.Queue(maxsize=1)
+        _hb_queue: queue.Queue = queue.Queue(maxsize=1)
+
+        def _ml_worker():
+            while True:
+                item = _ml_queue.get()
+                if item is None:
+                    break
+                try:
+                    self._process_frame(item)
+                except Exception as _exc:
+                    log.warning("ML worker error: %s", _exc)
+
+        def _hb_worker():
+            while True:
+                item = _hb_queue.get()
+                if item is None:
+                    break
+                try:
+                    self._post_frame_heartbeat(item)
+                except Exception as _exc:
+                    log.warning("Heartbeat worker error: %s", _exc)
+
+        ml_thread = threading.Thread(target=_ml_worker, daemon=True, name='anpr-ml')
+        ml_thread.start()
+        hb_thread = threading.Thread(target=_hb_worker, daemon=True, name='anpr-hb')
+        hb_thread.start()
+        log.info("Background ML + heartbeat worker threads started.")
+
         frame_interval = self.frame_skip
         frame_count = 0
         consecutive_read_fails = 0
@@ -1461,13 +1493,20 @@ class ANPREngine:
 
                 frame_count += 1
                 if frame_count % frame_interval == 0:
-                    self._process_frame(frame)
+                    # Non-blocking: drop frame if ML worker is still busy with previous one.
+                    try:
+                        _ml_queue.put_nowait(frame.copy())
+                    except queue.Full:
+                        pass  # ML is still busy; skip this frame — no stall
 
                 now_ts = time.time()
                 if (now_ts - self._last_heartbeat_post_ts) >= self.heartbeat_seconds:
                     heartbeat_b64 = self._build_snapshot_b64(frame)
-                    self._post_frame_heartbeat(heartbeat_b64)
-                    self._last_heartbeat_post_ts = now_ts
+                    try:
+                        _hb_queue.put_nowait(heartbeat_b64)
+                        self._last_heartbeat_post_ts = now_ts
+                    except queue.Full:
+                        pass  # heartbeat upload in flight; skip this tick
 
                 self._maybe_log_diagnostics()
 

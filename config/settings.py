@@ -164,6 +164,8 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 ANPR_DEVICE = (env('ANPR_DEVICE', default='auto') or 'auto').strip().lower()
 ANPR_FRAME_SKIP = env.int('ANPR_FRAME_SKIP', default=2)
 ANPR_RTSP_DRAIN_GRABS = env.int('ANPR_RTSP_DRAIN_GRABS', default=2)
+ANPR_STREAM_PROFILE = (env('ANPR_STREAM_PROFILE', default='sub') or 'sub').strip().lower()
+ANPR_HEARTBEAT_SECONDS = env.int('ANPR_HEARTBEAT_SECONDS', default=5)
 
 CAMERA_STREAM_MAX_WIDTH = env.int('CAMERA_STREAM_MAX_WIDTH', default=720)
 CAMERA_STREAM_JPEG_QUALITY = env.int('CAMERA_STREAM_JPEG_QUALITY', default=70)

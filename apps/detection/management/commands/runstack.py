@@ -24,6 +24,11 @@ class Command(BaseCommand):
         parser.add_argument('--host', default='127.0.0.1', help='Server host. Default: 127.0.0.1')
         parser.add_argument('--port', default='8000', help='Server port. Default: 8000')
         parser.add_argument(
+            '--no-server',
+            action='store_true',
+            help='Start ANPR workers only (skip local Django/Daphne server). Useful when posting directly to cloud ingest.',
+        )
+        parser.add_argument(
             '--webcam',
             action='store_true',
             help='Use local webcam for ENTRY_CAM worker (temporary camera-less testing mode).',
@@ -84,6 +89,7 @@ class Command(BaseCommand):
         host = options['host']
         port = str(options['port'])
         server_mode = options['server']
+        no_server = bool(options.get('no_server'))
         ingest_url = (getattr(settings, 'ANPR_INGEST_URL', '') or '').strip()
         if not ingest_url:
             ingest_url = f'http://{host}:{port}/detection/ingest/'
@@ -119,14 +125,15 @@ class Command(BaseCommand):
             )
             self.stdout.write(self.style.SUCCESS(f'Started {title}: {_cmdline(parts)}'))
 
-        if server_mode == 'daphne':
-            django_cmd = [py, '-m', 'daphne', '-b', host, '-p', port, 'config.asgi:application']
-            django_title = 'BantayPlaka - Daphne'
-        else:
-            django_cmd = [py, 'manage.py', 'runserver', f'{host}:{port}', '--noreload']
-            django_title = 'BantayPlaka - Django'
-
-        launches = [(django_title, django_cmd)]
+        launches = []
+        if not no_server:
+            if server_mode == 'daphne':
+                django_cmd = [py, '-m', 'daphne', '-b', host, '-p', port, 'config.asgi:application']
+                django_title = 'BantayPlaka - Daphne'
+            else:
+                django_cmd = [py, 'manage.py', 'runserver', f'{host}:{port}', '--noreload']
+                django_title = 'BantayPlaka - Django'
+            launches.append((django_title, django_cmd))
 
         if webcam_mode:
             entry_cmd = [
@@ -173,9 +180,19 @@ class Command(BaseCommand):
             _spawn(title, command)
 
         self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS(f'Open http://{host}:{port}/'))
+        if not no_server:
+            self.stdout.write(self.style.SUCCESS(f'Open http://{host}:{port}/'))
         if webcam_mode:
-            self.stdout.write('Keep the 2 spawned windows open (server + ENTRY webcam worker).')
+            if no_server:
+                self.stdout.write('Keep the ENTRY webcam worker window open.')
+            else:
+                self.stdout.write('Keep the 2 spawned windows open (server + ENTRY webcam worker).')
         else:
-            self.stdout.write('Keep the 3 spawned windows open (server + ENTRY + EXIT).')
-        self.stdout.write('Do not run an extra manual runserver in another terminal.')
+            if no_server:
+                self.stdout.write('Keep the 2 spawned windows open (ENTRY + EXIT workers).')
+            else:
+                self.stdout.write('Keep the 3 spawned windows open (server + ENTRY + EXIT).')
+        if no_server:
+            self.stdout.write('Local server skipped (--no-server). Workers are posting directly to configured ingest URL.')
+        else:
+            self.stdout.write('Do not run an extra manual runserver in another terminal.')

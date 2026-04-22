@@ -90,11 +90,18 @@ def _normalize_camera_role(camera_role: str) -> str:
 
 def _next_status_for_plate(plate_number: str, camera_role: str = VehicleLog.CAMERA_ROLE_UNKNOWN) -> str:
     """
-    Strict alternation rule per plate:
-    TIME_IN -> TIME_OUT -> TIME_IN ...
-    This prevents duplicate consecutive statuses for the same plate.
-    camera_role is still stored for auditing, but status assignment is toggle-based.
+    Primary rule:
+    - ENTRY_CAM -> TIME_IN
+    - EXIT_CAM  -> TIME_OUT
+
+    Fallback rule (UNKNOWN role):
+    Strict alternation per plate to prevent duplicate consecutive statuses.
     """
+    if camera_role == VehicleLog.CAMERA_ROLE_ENTRY:
+        return VehicleLog.STATUS_IN
+    if camera_role == VehicleLog.CAMERA_ROLE_EXIT:
+        return VehicleLog.STATUS_OUT
+
     last_log = (
         VehicleLog.objects
         .filter(plate_number__iexact=plate_number)

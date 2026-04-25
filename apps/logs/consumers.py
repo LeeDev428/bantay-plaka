@@ -18,6 +18,6 @@ class LogConsumer(AsyncWebsocketConsumer):
 
     async def blacklist_alert(self, event):
         await self.send(text_data=json.dumps(event['data']))
-
+    
     async def camera_frame_update(self, event):
         await self.send(text_data=json.dumps(event['data']))

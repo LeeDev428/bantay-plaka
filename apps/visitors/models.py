@@ -3,6 +3,13 @@ from apps.accounts.models import User
 
 
 class Visitor(models.Model):
+    TYPE_VISITOR = 'VISITOR'
+    TYPE_VERIFIED = 'VERIFIED_VISITOR'
+    VISITOR_TYPE_CHOICES = [
+        (TYPE_VISITOR, 'Visitor'),
+        (TYPE_VERIFIED, 'Verified Visitor'),
+    ]
+
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     contact_number = models.CharField(max_length=20, blank=True)
@@ -11,6 +18,12 @@ class Visitor(models.Model):
     plate_number = models.CharField(max_length=20, blank=True, db_index=True)
     vehicle_type = models.CharField(max_length=15, blank=True)
     vehicle_type_other = models.CharField(max_length=120, blank=True)
+    visitor_type = models.CharField(
+        max_length=20,
+        choices=VISITOR_TYPE_CHOICES,
+        default=TYPE_VISITOR,
+        db_index=True,
+    )
     logged_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name='logged_visitors'
     )
@@ -31,11 +44,9 @@ class Visitor(models.Model):
 class BlacklistEntry(models.Model):
     TAG_WATCHLIST = 'WATCHLIST'
     TAG_HIGH_RISK = 'HIGH_RISK'
-    TAG_TEMP_BLOCK = 'TEMP_BLOCK'
     TAG_CHOICES = [
         (TAG_WATCHLIST, 'Watchlist'),
         (TAG_HIGH_RISK, 'High Risk'),
-        (TAG_TEMP_BLOCK, 'Temporary Block'),
     ]
 
     plate_number = models.CharField(max_length=20, unique=True, db_index=True)

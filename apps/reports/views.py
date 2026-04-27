@@ -180,3 +180,84 @@ def export_csv(request):
         ])
 
     return response
+
+
+@login_required
+def export_pdf(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+    except ImportError:
+        return HttpResponse('reportlab is not installed. Run: pip install reportlab', status=500)
+
+    date_from = request.GET.get('from', '')
+    date_to = request.GET.get('to', '')
+    logs = VehicleLog.objects.select_related('logged_by').order_by('-timestamp')
+
+    if date_from:
+        try:
+            dt_from = datetime.date.fromisoformat(date_from)
+            start, _ = _day_range(dt_from)
+            logs = logs.filter(timestamp__gte=start)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt_to = datetime.date.fromisoformat(date_to)
+            _, end = _day_range(dt_to)
+            logs = logs.filter(timestamp__lt=end)
+        except ValueError:
+            pass
+
+    response = HttpResponse(content_type='application/pdf')
+    filename = f'bantayplaka_logs_{timezone.localdate()}.pdf'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    doc = SimpleDocTemplate(response, pagesize=landscape(A4), leftMargin=15*mm, rightMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
+    styles = getSampleStyleSheet()
+    elements = []
+    elements.append(Paragraph('Bantay Plaka — Vehicle Log Report', styles['Title']))
+    elements.append(Paragraph(f'Generated: {timezone.localdate()}', styles['Normal']))
+    elements.append(Spacer(1, 6*mm))
+
+    headers = ['Plate', 'Type', 'Status', 'Source', 'Name', 'Timestamp']
+    data = [headers]
+
+    bl_map = get_active_blacklist_map([log.plate_number for log in logs])
+
+    for log in logs:
+        local_ts = timezone.localtime(log.timestamp)
+        name = log.resident_name or log.visitor_name or ''
+        data.append([
+            log.plate_number or '',
+            log.entry_type,
+            log.status,
+            log.source,
+            name,
+            local_ts.strftime('%Y-%m-%d %H:%M'),
+        ])
+
+    col_widths = [35*mm, 25*mm, 22*mm, 22*mm, 60*mm, 40*mm]
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a5f')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 8),
+        ('FONTSIZE', (0, 1), (-1, -1), 7),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')]),
+        ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#cbd5e1')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(table)
+    doc.build(elements)
+    return response

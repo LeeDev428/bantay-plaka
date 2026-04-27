@@ -23,6 +23,7 @@ class VisitorForm(forms.ModelForm):
             'plate_number',
             'vehicle_type',
             'vehicle_type_other',
+            'visitor_type',
         ]
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
@@ -47,6 +48,7 @@ class VisitorForm(forms.ModelForm):
                 'class': 'input input-bordered w-full',
                 'placeholder': 'Specify vehicle type (if Other)',
             }),
+            'visitor_type': forms.Select(attrs={'class': 'select select-bordered w-full'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -56,7 +58,7 @@ class VisitorForm(forms.ModelForm):
             (VehicleLog.STATUS_OUT, 'Out'),
         ]
         self.fields['status'].label = 'Status'
-        for field_name in ['first_name', 'last_name', 'contact_number', 'purpose', 'host_name', 'plate_number', 'vehicle_type', 'status']:
+        for field_name in ['first_name', 'last_name', 'contact_number', 'purpose', 'host_name', 'plate_number', 'vehicle_type', 'status', 'visitor_type']:
             self.fields[field_name].required = True
 
     def clean_plate_number(self):
@@ -89,9 +91,13 @@ class BlacklistEntryForm(forms.ModelForm):
                 'placeholder': 'e.g. ABC 1234',
                 'maxlength': 20,
             }),
-            'tag': forms.Select(attrs={
-                'class': 'select select-bordered w-full',
-            }),
+            'tag': forms.Select(
+                choices=[
+                    (BlacklistEntry.TAG_WATCHLIST, 'Watchlist'),
+                    (BlacklistEntry.TAG_HIGH_RISK, 'High Risk'),
+                ],
+                attrs={'class': 'select select-bordered w-full'},
+            ),
             'reason': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full',
                 'placeholder': 'Reason',
@@ -140,6 +146,7 @@ class VisitorEditForm(forms.ModelForm):
             'plate_number',
             'vehicle_type',
             'vehicle_type_other',
+            'visitor_type',
         ]
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
@@ -164,11 +171,12 @@ class VisitorEditForm(forms.ModelForm):
                 'class': 'input input-bordered w-full',
                 'placeholder': 'Specify vehicle type (if Other)',
             }),
+            'visitor_type': forms.Select(attrs={'class': 'select select-bordered w-full'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field_name in ['first_name', 'last_name', 'contact_number', 'purpose', 'host_name', 'plate_number', 'vehicle_type']:
+        for field_name in ['first_name', 'last_name', 'contact_number', 'purpose', 'host_name', 'plate_number', 'vehicle_type', 'visitor_type']:
             self.fields[field_name].required = True
 
     def clean_plate_number(self):

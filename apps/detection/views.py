@@ -33,7 +33,7 @@ _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
 _LAST_LIVE_SNAPSHOT_PERSIST_TS: dict[str, float] = {}
 _LAST_LIVE_SNAPSHOT_PERSIST_LOCK = threading.Lock()
-MIN_GLOBAL_PLATE_RELOG_SECONDS = 4
+MIN_GLOBAL_PLATE_RELOG_SECONDS = 30
 MAX_FRESH_CACHE_SECONDS = 1.5
 LIVE_HEARTBEAT_PERSIST_SECONDS = max(
     5.0,
@@ -501,7 +501,9 @@ def ingest_plate(request):
                 tag=getattr(blacklist_entry, 'tag', ''),
                 remarks=(getattr(blacklist_entry, 'remarks', '') or getattr(blacklist_entry, 'reason', '')),
             )
-            return JsonResponse({'ok': False, 'blocked': True, 'error': 'Plate is blacklisted'}, status=403)
+            # Only hard-block; watchlist and high-risk still get a log entry.
+            if not blacklist_entry.tag in {BlacklistEntry.TAG_WATCHLIST, BlacklistEntry.TAG_HIGH_RISK}:
+                return JsonResponse({'ok': False, 'blocked': True, 'error': 'Plate is blacklisted'}, status=403)
 
         status = _next_status_for_plate(plate, camera_role)
 
@@ -513,6 +515,7 @@ def ingest_plate(request):
             source=VehicleLog.SOURCE_CAMERA,
             camera_role=camera_role,
             resident_name=resolved.get('resident_name', ''),
+            visitor_name=resolved.get('visitor_name', ''),
         )
 
         if snapshot_b64:

@@ -86,10 +86,6 @@ class LogEditForm(forms.ModelForm):
         entry_type = cleaned.get('entry_type')
         if entry_type == VehicleLog.TYPE_RESIDENT:
             cleaned['visitor_name'] = ''
-            if not cleaned.get('resident_name'):
-                self.add_error('resident_name', 'Resident name is required for resident logs.')
         elif entry_type == VehicleLog.TYPE_VISITOR:
             cleaned['resident_name'] = ''
-            if not cleaned.get('visitor_name'):
-                self.add_error('visitor_name', 'Visitor name is required for visitor logs.')
         return cleaned

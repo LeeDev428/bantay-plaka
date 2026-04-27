@@ -1,6 +1,7 @@
 from django.http import JsonResponse
 from django.http import StreamingHttpResponse
 from django.http import HttpResponse
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -396,9 +397,6 @@ def _read_camera_http_snapshot(rtsp_url: str):
     return None
 
 
-from django.shortcuts import render
-
-
 @login_required
 def plate_monitor(request):
     """Fullscreen plate monitor for a second display."""
@@ -419,6 +417,10 @@ def plate_monitor_latest(request):
         'name': latest.resident_name or latest.visitor_name or '',
         'timestamp': latest.timestamp.isoformat(),
     })
+
+
+@login_required
+def camera_preview(request, camera_role: str):
     if not _cv2_available():
         return JsonResponse({'error': 'Camera preview unavailable in this deployment (OpenCV missing).'}, status=503)
 

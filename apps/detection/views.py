@@ -396,8 +396,29 @@ def _read_camera_http_snapshot(rtsp_url: str):
     return None
 
 
+from django.shortcuts import render
+
+
 @login_required
-def camera_preview(request, camera_role: str):
+def plate_monitor(request):
+    """Fullscreen plate monitor for a second display."""
+    latest = VehicleLog.objects.order_by('-timestamp').first()
+    return render(request, 'detection/plate_monitor.html', {'latest': latest})
+
+
+@login_required
+def plate_monitor_latest(request):
+    """JSON endpoint polled by the plate monitor page for latest log."""
+    latest = VehicleLog.objects.order_by('-timestamp').first()
+    if not latest:
+        return JsonResponse({'plate': None})
+    return JsonResponse({
+        'plate': latest.plate_number,
+        'status': latest.status,
+        'entry_type': latest.entry_type,
+        'name': latest.resident_name or latest.visitor_name or '',
+        'timestamp': latest.timestamp.isoformat(),
+    })
     if not _cv2_available():
         return JsonResponse({'error': 'Camera preview unavailable in this deployment (OpenCV missing).'}, status=503)
 

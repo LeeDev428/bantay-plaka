@@ -11,11 +11,11 @@ from apps.logs.models import VehicleLog
 from apps.logs.forms import ManualLogForm, LogEditForm
 from apps.logs.services import broadcast_log, attach_blacklist_metadata
 from apps.residents.models import Vehicle
-from apps.visitors.models import BlacklistEntry
+from apps.visitors.models import BlacklistEntry, Visitor
 
 
 def resolve_plate(plate_number: str) -> dict:
-    """Check if the plate belongs to a registered resident vehicle."""
+    """Check if the plate belongs to a registered resident vehicle or a known visitor."""
     try:
         vehicle = Vehicle.objects.select_related('resident').get(
             plate_number__iexact=plate_number,
@@ -24,12 +24,30 @@ def resolve_plate(plate_number: str) -> dict:
         return {
             'entry_type': VehicleLog.TYPE_RESIDENT,
             'resident_name': vehicle.resident.full_name,
+            'visitor_name': '',
         }
     except Vehicle.DoesNotExist:
+        pass
+
+    # Check known visitors with this plate to persist their name.
+    known_visitor = (
+        Visitor.objects
+        .filter(plate_number__iexact=plate_number)
+        .order_by('-created_at')
+        .first()
+    )
+    if known_visitor:
         return {
             'entry_type': VehicleLog.TYPE_VISITOR,
             'resident_name': '',
+            'visitor_name': known_visitor.full_name,
         }
+
+    return {
+        'entry_type': VehicleLog.TYPE_VISITOR,
+        'resident_name': '',
+        'visitor_name': '',
+    }
 
 
 @login_required

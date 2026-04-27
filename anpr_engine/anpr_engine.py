@@ -135,7 +135,7 @@ DEFAULT_INGEST_URL = (os.getenv('ANPR_INGEST_URL', '') or '').strip() or 'http:/
 DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 
 # Seconds before the same plate can be logged again (prevents duplicates)
-DEBOUNCE_SECONDS = 4
+DEBOUNCE_SECONDS = 30
 
 # Minimum OCR confidence to accept a plate reading (0.0 - 1.0)
 MIN_OCR_CONFIDENCE = _env_float('ANPR_MIN_OCR_CONFIDENCE', 0.36)

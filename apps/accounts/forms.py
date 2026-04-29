@@ -287,11 +287,22 @@ class UserCreateForm(forms.ModelForm):
             return _normalize_contact_number(contact_number)
         return ''
 
+    @transaction.atomic
     def save(self, commit=True):
         user = super().save(commit=False)
         user.set_password(self.cleaned_data['password'])
         if commit:
             user.save()
+            if user.role == User.ROLE_RESIDENT:
+                Resident.objects.create(
+                    user=user,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    contact_number=user.contact_number or '',
+                    address='',
+                    is_approved=False,
+                    registered_by=None,
+                )
         return user
 
 

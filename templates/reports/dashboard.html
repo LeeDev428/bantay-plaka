@@ -169,6 +169,9 @@
 
           <div class="pt-2 flex justify-end gap-2">
             <button type="button" class="btn btn-ghost" onclick="closeExportModal()">Close</button>
+            <a href="{% url 'report_export_visitors_inside' %}" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">
+              <i class="fa fa-users mr-1"></i> Export Visitors Inside
+            </a>
             <button type="submit" class="btn bg-emerald-600 hover:bg-emerald-700 border-0 text-white">
               <i class="fa fa-file-csv mr-1"></i> Export CSV
             </button>

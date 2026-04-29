@@ -1,14 +1,32 @@
 {% if messages %}
-  <div class="space-y-2 mb-4">
-    {% for message in messages %}
-      <div class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm border
-        {% if message.tags == 'error' %}bg-red-50 border-red-200 text-red-700
-        {% elif message.tags == 'success' %}bg-emerald-50 border-emerald-200 text-emerald-700
-        {% elif message.tags == 'warning' %}bg-amber-50 border-amber-200 text-amber-700
-        {% else %}bg-blue-50 border-blue-200 text-blue-700{% endif %}">
-        <i class="fa {% if message.tags == 'error' %}fa-circle-xmark{% elif message.tags == 'success' %}fa-circle-check{% elif message.tags == 'warning' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}"></i>
-        <span>{{ message }}</span>
-      </div>
-    {% endfor %}
+<div id="toast-container" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none">
+  {% for message in messages %}
+  <div class="toast-item pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm max-w-sm w-full
+    {% if message.tags == 'error' %}bg-red-50 border-red-200 text-red-700
+    {% elif message.tags == 'success' %}bg-emerald-50 border-emerald-200 text-emerald-700
+    {% elif message.tags == 'warning' %}bg-amber-50 border-amber-200 text-amber-700
+    {% else %}bg-blue-50 border-blue-200 text-blue-700{% endif %}
+    opacity-0 translate-y-4 transition-all duration-300">
+    <i class="fa {% if message.tags == 'error' %}fa-circle-xmark{% elif message.tags == 'success' %}fa-circle-check{% elif message.tags == 'warning' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %} flex-shrink-0"></i>
+    <span class="flex-1">{{ message }}</span>
+    <button type="button" class="opacity-50 hover:opacity-100 ml-1" onclick="this.closest('.toast-item').remove()">
+      <i class="fa fa-xmark text-xs"></i>
+    </button>
   </div>
+  {% endfor %}
+</div>
+<script>
+(function () {
+  var toasts = document.querySelectorAll('.toast-item');
+  toasts.forEach(function (el, i) {
+    setTimeout(function () {
+      el.classList.remove('opacity-0', 'translate-y-4');
+    }, 50 + i * 100);
+    setTimeout(function () {
+      el.classList.add('opacity-0', 'translate-y-4');
+      setTimeout(function () { el.remove(); }, 300);
+    }, 4000 + i * 100);
+  });
+})();
+</script>
 {% endif %}

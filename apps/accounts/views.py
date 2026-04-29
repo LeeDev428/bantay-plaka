@@ -214,6 +214,16 @@ def user_toggle_active(request, pk):
     return redirect('user_management')
 
 
+@admin_required
+def user_delete(request, pk):
+    user = get_object_or_404(User, pk=pk)
+    if request.method == 'POST':
+        name = user.get_full_name() or user.username
+        user.delete()
+        messages.success(request, f'User "{name}" has been deleted.')
+    return redirect('user_management')
+
+
 # ── Guard views ───────────────────────────────────────────────────────────────
 
 @login_required

@@ -9,6 +9,7 @@ urlpatterns = [
     path('admin/users/create/', views.user_create, name='user_create'),
     path('admin/users/<int:pk>/edit/', views.user_edit, name='user_edit'),
     path('admin/users/<int:pk>/toggle/', views.user_toggle_active, name='user_toggle_active'),
+    path('admin/users/<int:pk>/delete/', views.user_delete, name='user_delete'),
     # Guard
     path('guard/', views.guard_dashboard, name='guard_dashboard'),
     # Resident

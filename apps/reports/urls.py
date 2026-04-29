@@ -5,4 +5,5 @@ urlpatterns = [
     path('', views.report_dashboard, name='report_dashboard'),
     path('export/', views.export_csv, name='report_export'),
     path('export/pdf/', views.export_pdf, name='report_export_pdf'),
+    path('export/visitors-inside/', views.export_visitors_inside, name='report_export_visitors_inside'),
 ]

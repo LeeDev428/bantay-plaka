@@ -293,7 +293,30 @@
     if (e.key === 'Escape') {
       window.closeUserCreateModal();
       window.closeUserEditModal();
+      window.closeUserDeleteModal();
     }
+  });
+
+  // Delete modal
+  const deleteModal = document.getElementById('user-delete-modal');
+  const deleteForm = document.getElementById('user-delete-form');
+  const deleteUserName = document.getElementById('delete-user-name');
+  const deleteButtons = document.querySelectorAll('[data-open-user-delete]');
+
+  window.closeUserDeleteModal = function () {
+    if (!deleteModal) return;
+    deleteModal.classList.add('hidden');
+    deleteModal.classList.remove('flex');
+  };
+
+  deleteButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!deleteModal || !deleteForm) return;
+      deleteForm.action = btn.dataset.deleteUrl || '';
+      deleteUserName.textContent = btn.dataset.deleteName || 'this user';
+      deleteModal.classList.remove('hidden');
+      deleteModal.classList.add('flex');
+    });
   });
 })();
 </script>

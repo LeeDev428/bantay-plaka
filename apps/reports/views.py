@@ -261,3 +261,60 @@ def export_pdf(request):
     elements.append(table)
     doc.build(elements)
     return response
+
+
+@login_required
+def export_visitors_inside(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    latest_status = (
+        VehicleLog.objects
+        .filter(plate_number=OuterRef('plate_number'))
+        .order_by('-timestamp')
+        .values('status')[:1]
+    )
+    latest_type = (
+        VehicleLog.objects
+        .filter(plate_number=OuterRef('plate_number'))
+        .order_by('-timestamp')
+        .values('entry_type')[:1]
+    )
+    latest_ts = (
+        VehicleLog.objects
+        .filter(plate_number=OuterRef('plate_number'))
+        .order_by('-timestamp')
+        .values('timestamp')[:1]
+    )
+    latest_name = (
+        VehicleLog.objects
+        .filter(plate_number=OuterRef('plate_number'))
+        .order_by('-timestamp')
+        .values('visitor_name')[:1]
+    )
+
+    inside_plates = (
+        VehicleLog.objects
+        .values('plate_number')
+        .distinct()
+        .annotate(last_status=Subquery(latest_status))
+        .annotate(last_type=Subquery(latest_type))
+        .annotate(last_ts=Subquery(latest_ts))
+        .annotate(last_name=Subquery(latest_name))
+        .filter(last_status=VehicleLog.STATUS_IN, last_type=VehicleLog.TYPE_VISITOR)
+        .order_by('plate_number')
+    )
+
+    tz = timezone.get_current_timezone()
+    response = HttpResponse(content_type='text/csv')
+    filename = f'bantayplaka_visitors_inside_{timezone.localdate()}.csv'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Plate Number', 'Visitor Name', 'Entry Time (Asia/Manila)'])
+    for item in inside_plates:
+        local_ts = timezone.localtime(item['last_ts'], tz).strftime('%Y-%m-%d %H:%M:%S') if item['last_ts'] else ''
+        writer.writerow([item['plate_number'], item['last_name'] or '', local_ts])
+
+    return response

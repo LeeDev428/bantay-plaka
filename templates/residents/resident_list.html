@@ -100,7 +100,7 @@
                 {% if user.is_admin %}
                 <form method="post" action="{% url 'vehicle_delete' v.pk %}" class="inline">
                   {% csrf_token %}
-                  <button type="submit" class="text-red-400 hover:text-red-600 transition-colors" onclick="return confirm('Remove vehicle?')">
+                  <button type="submit" class="text-red-400 hover:text-red-600 transition-colors" onclick="openModal({title:'Confirm',message:'Are you sure?',confirmCallback:function(){return true;}}); return false;">
                     <i class="fa fa-xmark text-xs"></i>
                   </button>
                 </form>
@@ -144,7 +144,7 @@
               </a>
               <form method="post" action="{% url 'resident_delete' resident.pk %}" class="inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" onclick="return confirm('Remove resident?')" title="Delete">
+                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" onclick="openModal({title:'Confirm',message:'Are you sure?',confirmCallback:function(){return true;}}); return false;" title="Delete">
                   <i class="fa fa-trash text-xs"></i>
                 </button>
               </form>

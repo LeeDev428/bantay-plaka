@@ -94,23 +94,69 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<div id="reject-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-lg w-full max-w-md mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title">
+    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-red-50 mb-4">
+      <i class="fa fa-ban text-red-600"></i>
+    </div>
+    <h2 id="reject-modal-title" class="text-base font-semibold text-slate-800 mb-1">Reject vehicle registration</h2>
+    <p class="text-sm text-slate-500 mb-3">Provide a reason — this will be visible to the resident.</p>
+    <textarea
+      id="reject-reason"
+      rows="3"
+      class="textarea textarea-bordered w-full text-sm resize-none"
+    >Vehicle registration requirements were not satisfied.</textarea>
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="button" id="reject-cancel" class="btn btn-sm btn-ghost">Cancel</button>
+      <button type="button" id="reject-confirm" class="btn btn-sm bg-red-100 hover:bg-red-200 border-0 text-red-700">
+        <i class="fa fa-ban mr-1"></i> Confirm rejection
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
-  const rejectButtons = document.querySelectorAll('[data-vehicle-reject]');
-  rejectButtons.forEach((button) => {
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      const form = button.closest('form');
-      if (!form) return;
-      const reasonInput = form.querySelector('input[name="reason"]');
-      const reason = window.prompt('Reason for rejection:', 'Vehicle registration requirements were not satisfied.');
-      if (reason === null) return;
-      if (reasonInput) {
-        reasonInput.value = reason.trim() || 'Vehicle registration requirements were not satisfied.';
-      }
-      form.submit();
+  const modal = document.getElementById('reject-modal');
+  const reasonInput = document.getElementById('reject-reason');
+  const cancelBtn = document.getElementById('reject-cancel');
+  const confirmBtn = document.getElementById('reject-confirm');
+  let activeForm = null;
+
+  document.querySelectorAll('[data-vehicle-reject]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      activeForm = btn.closest('form');
+      reasonInput.value = 'Vehicle registration requirements were not satisfied.';
+      modal.classList.remove('hidden');
+      reasonInput.focus();
     });
   });
+
+  cancelBtn.addEventListener('click', () => {
+    modal.classList.add('hidden');
+    activeForm = null;
+  });
+
+  confirmBtn.addEventListener('click', () => {
+    if (!activeForm) return;
+    const input = activeForm.querySelector('input[name="reason"]');
+    if (input) input.value = reasonInput.value.trim() || 'Vehicle registration requirements were not satisfied.';
+    modal.classList.add('hidden');
+    activeForm.submit();
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) { modal.classList.add('hidden'); activeForm = null; }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      modal.classList.add('hidden'); activeForm = null;
+    }
+  });
 })();
+</script>
+{% endblock %}
 </script>
 {% endblock %}

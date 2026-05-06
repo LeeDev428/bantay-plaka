@@ -154,9 +154,14 @@ def admin_dashboard(request):
 def user_management(request):
     q = request.GET.get('q', '').strip()
     role = request.GET.get('role', '').strip().upper()
-    users_qs = User.objects.exclude(pk=request.user.pk).order_by('role', 'last_name')
-    if role in {User.ROLE_ADMIN, User.ROLE_GUARD, User.ROLE_RESIDENT}:
+    status = request.GET.get('status', '').strip()
+    users_qs = User.objects.exclude(pk=request.user.pk).exclude(role=User.ROLE_RESIDENT).order_by('role', 'last_name')
+    if role in {User.ROLE_ADMIN, User.ROLE_GUARD}:
         users_qs = users_qs.filter(role=role)
+    if status == 'active':
+        users_qs = users_qs.filter(is_active=True)
+    elif status == 'inactive':
+        users_qs = users_qs.filter(is_active=False)
     if q:
         users_qs = users_qs.filter(
             Q(username__icontains=q)
@@ -171,6 +176,7 @@ def user_management(request):
         'users': users,
         'q': q,
         'role': role,
+        'status': status,
         'create_form': UserCreateForm(),
         'edit_form_template': UserEditForm(),
     })

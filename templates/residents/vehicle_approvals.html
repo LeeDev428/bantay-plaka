@@ -12,20 +12,26 @@
 
 <div class="page-card">
   <div class="p-4 border-b border-slate-100">
-    <form method="get" class="flex flex-col sm:flex-row gap-2">
-      <input
-        type="text"
-        name="q"
-        value="{{ q|default:'' }}"
-        placeholder="Search plate or resident"
-        class="input input-bordered w-full"
-      >
-      <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
-        <i class="fa fa-search mr-1"></i> Search
+    <form method="get" class="flex flex-wrap gap-3 items-end">
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+        <input type="text" name="q" value="{{ q|default:'' }}" placeholder="Plate or resident"
+          class="input input-bordered input-sm w-48 bg-white">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Vehicle Type</label>
+        <select name="type" class="select select-bordered select-sm bg-white">
+          <option value="">All</option>
+          <option value="CAR" {% if type_q == 'CAR' %}selected{% endif %}>Car</option>
+          <option value="MOTORCYCLE" {% if type_q == 'MOTORCYCLE' %}selected{% endif %}>Motorcycle</option>
+          <option value="TRUCK" {% if type_q == 'TRUCK' %}selected{% endif %}>Truck</option>
+          <option value="VAN" {% if type_q == 'VAN' %}selected{% endif %}>Van</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+        <i class="fa fa-filter mr-1"></i> Filter
       </button>
-      {% if q %}
-        <a href="{% url 'vehicle_approval_list' %}" class="btn btn-sm btn-ghost">Clear</a>
-      {% endif %}
+      <a href="{% url 'vehicle_approval_list' %}" class="btn btn-ghost btn-sm text-slate-500">Clear</a>
     </form>
   </div>
 
@@ -79,15 +85,13 @@
       <p class="text-xs text-slate-500">Showing page {{ vehicles.number }} of {{ vehicles.paginator.num_pages }}</p>
       <div class="join">
         {% if vehicles.has_previous %}
-          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ vehicles.previous_page_number }}">Prev</a>
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&type={{ type_q|urlencode }}&page={{ vehicles.previous_page_number }}">Prev</a>
         {% else %}
           <button class="join-item btn btn-sm btn-disabled">Prev</button>
         {% endif %}
-
         <button class="join-item btn btn-sm btn-active">{{ vehicles.number }}</button>
-
         {% if vehicles.has_next %}
-          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ vehicles.next_page_number }}">Next</a>
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&type={{ type_q|urlencode }}&page={{ vehicles.next_page_number }}">Next</a>
         {% else %}
           <button class="join-item btn btn-sm btn-disabled">Next</button>
         {% endif %}
@@ -173,7 +177,6 @@
   function closeApprove() { approveModal.classList.add('hidden'); }
   function closeReject()  { rejectModal.classList.add('hidden'); activeRejectForm = null; }
 
-  // Approve
   document.querySelectorAll('[data-vehicle-approve]').forEach((btn) => {
     btn.addEventListener('click', () => {
       approveForm.action = "{% url 'vehicle_approve' 0 %}".replace('/0/', '/' + btn.dataset.pk + '/');
@@ -189,7 +192,6 @@
   document.getElementById('approve-cancel').addEventListener('click', closeApprove);
   approveModal.addEventListener('click', (e) => { if (e.target === approveModal) closeApprove(); });
 
-  // Reject
   document.querySelectorAll('[data-vehicle-reject]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();

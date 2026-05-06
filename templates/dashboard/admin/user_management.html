@@ -6,7 +6,7 @@
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
   <div>
     <h1 class="text-2xl font-bold text-slate-800">User Management</h1>
-    <p class="text-slate-500 text-sm mt-0.5">Manage admin, guard, and resident accounts</p>
+    <p class="text-slate-500 text-sm mt-0.5">Manage admin and guard accounts</p>
   </div>
   <button type="button" id="open-user-create-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
     <i class="fa fa-plus mr-1"></i> Add User
@@ -27,7 +27,6 @@
           <option value="">All Roles</option>
           <option value="ADMIN" {% if role == 'ADMIN' %}selected{% endif %}>Admin</option>
           <option value="GUARD" {% if role == 'GUARD' %}selected{% endif %}>Guard</option>
-          <option value="RESIDENT" {% if role == 'RESIDENT' %}selected{% endif %}>Resident</option>
         </select>
       </div>
       <div>
@@ -67,8 +66,6 @@
           <td>
             {% if u.role == 'ADMIN' %}
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Admin</span>
-            {% elif u.role == 'RESIDENT' %}
-              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>
             {% else %}
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">Guard</span>
             {% endif %}
@@ -83,10 +80,7 @@
           </td>
           <td>
             <div class="flex items-center gap-1">
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600"
-                title="Edit"
+              <button type="button" class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600" title="Edit"
                 data-open-user-edit
                 data-edit-url="{% url 'user_edit' u.pk %}"
                 data-email="{{ u.email|escapejs }}"
@@ -95,9 +89,7 @@
                 data-contact="{{ u.contact_number|escapejs }}"
                 data-role="{{ u.role }}"
                 data-active="{% if u.is_active %}1{% else %}0{% endif %}"
-              >
-                <i class="fa fa-pen text-xs"></i>
-              </button>
+              ><i class="fa fa-pen text-xs"></i></button>
               <form method="post" action="{% url 'user_toggle_active' u.pk %}" class="inline">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-ghost btn-xs {% if u.is_active %}text-slate-500 hover:text-red-600{% else %}text-slate-500 hover:text-emerald-600{% endif %}"
@@ -105,16 +97,11 @@
                   <i class="fa {% if u.is_active %}fa-user-slash{% else %}fa-user-check{% endif %} text-xs"></i>
                 </button>
               </form>
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600"
-                title="Delete"
+              <button type="button" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" title="Delete"
                 data-open-user-delete
                 data-delete-url="{% url 'user_delete' u.pk %}"
                 data-delete-name="{{ u.get_full_name|default:u.username|escapejs }}"
-              >
-                <i class="fa fa-trash text-xs"></i>
-              </button>
+              ><i class="fa fa-trash text-xs"></i></button>
             </div>
           </td>
         </tr>
@@ -127,9 +114,7 @@
 
   {% if users.paginator.num_pages > 1 %}
     <div class="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <p class="text-xs text-slate-500">
-        Showing page {{ users.number }} of {{ users.paginator.num_pages }}
-      </p>
+      <p class="text-xs text-slate-500">Showing page {{ users.number }} of {{ users.paginator.num_pages }}</p>
       <div class="join">
         {% if users.has_previous %}
           <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&role={{ role|urlencode }}&status={{ status|urlencode }}&page={{ users.previous_page_number }}">Prev</a>
@@ -147,14 +132,14 @@
   {% endif %}
 </div>
 
-<div id="user-create-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+<div id="user-create-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeUserCreateModal()"></div>
-  <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+  <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
       <h3 class="text-lg font-bold text-slate-800">Add User</h3>
       <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeUserCreateModal()"><i class="fa fa-xmark text-xl"></i></button>
     </div>
-    <form method="post" action="{% url 'user_create' %}" class="px-6 py-5 space-y-3">
+    <form method="post" action="{% url 'user_create' %}" class="px-6 py-5 space-y-3 overflow-y-auto">
       {% csrf_token %}
       {% for field in create_form %}
         <div>
@@ -173,7 +158,8 @@
   </div>
 </div>
 
-<div id="user-edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">  <div class="absolute inset-0 bg-slate-900/50" onclick="closeUserEditModal()"></div>
+<div id="user-edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeUserEditModal()"></div>
   <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
       <h3 class="text-lg font-bold text-slate-800">Edit User</h3>
@@ -202,7 +188,6 @@
         <select id="edit-role" name="role" class="select select-bordered w-full" required>
           <option value="ADMIN">Admin</option>
           <option value="GUARD">Guard</option>
-          <option value="RESIDENT">Resident</option>
         </select>
       </div>
       <div>
@@ -243,8 +228,6 @@
   const createModal = document.getElementById('user-create-modal');
   const editModal = document.getElementById('user-edit-modal');
   const openCreateBtn = document.getElementById('open-user-create-modal');
-  const editButtons = document.querySelectorAll('[data-open-user-edit]');
-
   const editForm = document.getElementById('user-edit-form');
   const editEmail = document.getElementById('edit-email');
   const editFirstName = document.getElementById('edit-first-name');
@@ -253,24 +236,14 @@
   const editRole = document.getElementById('edit-role');
   const editActive = document.getElementById('edit-active');
 
-  window.closeUserCreateModal = function () {
-    createModal?.classList.add('hidden');
-    createModal?.classList.remove('flex');
-  };
-
-  window.closeUserEditModal = function () {
-    editModal?.classList.add('hidden');
-    editModal?.classList.remove('flex');
-  };
+  window.closeUserCreateModal = function () { createModal?.classList.add('hidden'); createModal?.classList.remove('flex'); };
+  window.closeUserEditModal = function () { editModal?.classList.add('hidden'); editModal?.classList.remove('flex'); };
 
   if (openCreateBtn && createModal) {
-    openCreateBtn.addEventListener('click', () => {
-      createModal.classList.remove('hidden');
-      createModal.classList.add('flex');
-    });
+    openCreateBtn.addEventListener('click', () => { createModal.classList.remove('hidden'); createModal.classList.add('flex'); });
   }
 
-  editButtons.forEach((btn) => {
+  document.querySelectorAll('[data-open-user-edit]').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (!editModal || !editForm) return;
       editForm.action = btn.dataset.editUrl || '';
@@ -288,14 +261,10 @@
   const deleteModal = document.getElementById('user-delete-modal');
   const deleteForm = document.getElementById('user-delete-form');
   const deleteUserName = document.getElementById('delete-user-name');
-  const deleteButtons = document.querySelectorAll('[data-open-user-delete]');
 
-  window.closeUserDeleteModal = function () {
-    deleteModal?.classList.add('hidden');
-    deleteModal?.classList.remove('flex');
-  };
+  window.closeUserDeleteModal = function () { deleteModal?.classList.add('hidden'); deleteModal?.classList.remove('flex'); };
 
-  deleteButtons.forEach((btn) => {
+  document.querySelectorAll('[data-open-user-delete]').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (!deleteModal || !deleteForm) return;
       deleteForm.action = btn.dataset.deleteUrl || '';
@@ -306,11 +275,7 @@
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      window.closeUserCreateModal();
-      window.closeUserEditModal();
-      window.closeUserDeleteModal();
-    }
+    if (e.key === 'Escape') { window.closeUserCreateModal(); window.closeUserEditModal(); window.closeUserDeleteModal(); }
   });
 })();
 </script>

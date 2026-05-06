@@ -45,7 +45,7 @@
         <tr class="hover:bg-slate-50 transition-colors">
           <td class="font-mono font-semibold text-slate-800">{{ vehicle.plate_number }}</td>
           <td class="text-sm text-slate-600">{{ vehicle.resident.full_name }}</td>
-          <td class="text-xs text-slate-500">{{ vehicle.get_vehicle_type_display }}{% if vehicle.color %} - {{ vehicle.color }}{% endif %}{% if vehicle.make or vehicle.model %} - {{ vehicle.make }} {{ vehicle.model }}{% endif %}</td>
+          <td class="text-xs text-slate-500">{{ vehicle.get_vehicle_type_display }}{% if vehicle.color %} – {{ vehicle.color }}{% endif %}{% if vehicle.make or vehicle.model %} – {{ vehicle.make }} {{ vehicle.model }}{% endif %}</td>
           <td class="text-xs text-slate-400">{{ vehicle.created_at|date:"M d, Y h:i A" }}</td>
           <td>
             <div class="flex items-center gap-1 flex-wrap">
@@ -96,21 +96,35 @@
   {% endif %}
 </div>
 
+<!-- Approve Modal -->
 <div id="approve-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-  <div class="bg-white rounded-2xl border border-slate-200 w-full max-w-sm mx-4 p-6" role="dialog" aria-modal="true">
-    <div class="flex justify-end"><button type="button" id="approve-modal-close" class="text-slate-400 hover:text-slate-600"><i class="fa fa-xmark"></i></button></div>
+  <div class="bg-white rounded-2xl border border-slate-200 w-full max-w-sm mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="approve-modal-title">
+    <div class="flex justify-end">
+      <button type="button" id="approve-modal-close" class="text-slate-400 hover:text-slate-600">
+        <i class="fa fa-xmark text-lg"></i>
+      </button>
+    </div>
     <div class="flex flex-col items-center text-center mb-5">
       <div class="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
         <i class="fa fa-check text-emerald-600 text-xl"></i>
       </div>
-      <h2 class="text-lg font-bold text-slate-800 mb-1">Confirm Approval</h2>
+      <h2 class="text-lg font-bold text-slate-800 mb-1" id="approve-modal-title">Confirm Approval</h2>
       <p class="text-sm text-slate-500">You are about to approve the vehicle registration for:</p>
       <span id="approve-plate" class="mt-3 font-mono font-bold text-slate-800 border border-slate-300 rounded-lg px-4 py-1.5 text-base tracking-widest"></span>
     </div>
     <div class="rounded-lg border border-slate-100 bg-slate-50 divide-y divide-slate-100 mb-4 text-sm">
-      <div class="flex px-4 py-2 gap-3"><span class="text-slate-400 w-24 shrink-0">Resident</span><span id="approve-resident" class="font-medium text-slate-700"></span></div>
-      <div class="flex px-4 py-2 gap-3"><span class="text-slate-400 w-24 shrink-0">Type</span><span id="approve-type" class="font-medium text-slate-700"></span></div>
-      <div class="flex px-4 py-2 gap-3"><span class="text-slate-400 w-24 shrink-0">Make / Model</span><span id="approve-make" class="font-medium text-slate-700"></span></div>
+      <div class="flex px-4 py-2 gap-3">
+        <span class="text-slate-400 w-24 shrink-0">Resident</span>
+        <span id="approve-resident" class="font-medium text-slate-700"></span>
+      </div>
+      <div class="flex px-4 py-2 gap-3">
+        <span class="text-slate-400 w-24 shrink-0">Type</span>
+        <span id="approve-type" class="font-medium text-slate-700"></span>
+      </div>
+      <div class="flex px-4 py-2 gap-3">
+        <span class="text-slate-400 w-24 shrink-0">Make / Model</span>
+        <span id="approve-make" class="font-medium text-slate-700"></span>
+      </div>
     </div>
     <p class="text-xs text-slate-400 text-center mb-5">The resident will be notified once approved.</p>
     <form id="approve-form" method="post" action="">
@@ -126,15 +140,40 @@
   </div>
 </div>
 
+<!-- Reject Modal -->
+<div id="reject-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+  <div class="bg-white rounded-xl border border-slate-200 w-full max-w-md mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title">
+    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-red-50 mb-4">
+      <i class="fa fa-ban text-red-600"></i>
+    </div>
+    <p class="text-base font-semibold text-slate-800 mb-1" id="reject-modal-title">Reject vehicle registration</p>
+    <p class="text-sm text-slate-500 mb-3">Provide a reason — this will be visible to the resident.</p>
+    <textarea id="reject-reason" rows="3" class="textarea textarea-bordered w-full text-sm resize-none">Vehicle registration requirements were not satisfied.</textarea>
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="button" id="reject-cancel" class="btn btn-sm btn-ghost">Cancel</button>
+      <button type="button" id="reject-confirm" class="btn btn-sm bg-red-100 hover:bg-red-200 border-0 text-red-700">
+        <i class="fa fa-ban mr-1"></i> Confirm rejection
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
 {% block extra_scripts %}
 <script>
 (function () {
-  const approveModal = document.getElementById('approve-modal');
-  const approveForm  = document.getElementById('approve-form');
-  const rejectButtons = document.querySelectorAll('[data-vehicle-reject]');
+  const approveModal  = document.getElementById('approve-modal');
+  const approveForm   = document.getElementById('approve-form');
+  const rejectModal   = document.getElementById('reject-modal');
+  const rejectReason  = document.getElementById('reject-reason');
+  const rejectConfirm = document.getElementById('reject-confirm');
+  const rejectCancel  = document.getElementById('reject-cancel');
+  let activeRejectForm = null;
 
   function closeApprove() { approveModal.classList.add('hidden'); }
+  function closeReject()  { rejectModal.classList.add('hidden'); activeRejectForm = null; }
 
+  // Approve
   document.querySelectorAll('[data-vehicle-approve]').forEach((btn) => {
     btn.addEventListener('click', () => {
       approveForm.action = "{% url 'vehicle_approve' 0 %}".replace('/0/', '/' + btn.dataset.pk + '/');
@@ -150,13 +189,8 @@
   document.getElementById('approve-cancel').addEventListener('click', closeApprove);
   approveModal.addEventListener('click', (e) => { if (e.target === approveModal) closeApprove(); });
 
-  const rejectModal   = document.getElementById('reject-modal');
-  const rejectReason  = document.getElementById('reject-reason');
-  const rejectConfirm = document.getElementById('reject-confirm');
-  const rejectCancel  = document.getElementById('reject-cancel');
-  let activeRejectForm = null;
-
-  rejectButtons.forEach((btn) => {
+  // Reject
+  document.querySelectorAll('[data-vehicle-reject]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       activeRejectForm = btn.closest('form');
@@ -166,7 +200,7 @@
     });
   });
 
-  rejectCancel.addEventListener('click', () => { rejectModal.classList.add('hidden'); activeRejectForm = null; });
+  rejectCancel.addEventListener('click', closeReject);
   rejectConfirm.addEventListener('click', () => {
     if (!activeRejectForm) return;
     const input = activeRejectForm.querySelector('input[name="reason"]');
@@ -174,13 +208,12 @@
     rejectModal.classList.add('hidden');
     activeRejectForm.submit();
   });
-  rejectModal.addEventListener('click', (e) => { if (e.target === rejectModal) { rejectModal.classList.add('hidden'); activeRejectForm = null; } });
+  rejectModal.addEventListener('click', (e) => { if (e.target === rejectModal) closeReject(); });
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     closeApprove();
-    rejectModal.classList.add('hidden');
-    activeRejectForm = null;
+    closeReject();
   });
 })();
 </script>

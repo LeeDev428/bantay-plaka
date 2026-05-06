@@ -127,24 +127,36 @@
               {% if resident.user %}
               <form method="post" action="{% url 'resident_approve' resident.pk %}" class="inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-emerald-600" title="Approve and activate resident account">
-                  <i class="fa fa-user-check text-xs"></i>
-                </button>
+                {% if resident.is_approved %}
+                  <button type="button" class="btn btn-ghost btn-xs text-emerald-400 cursor-not-allowed opacity-50" title="Already approved" disabled>
+                    <i class="fa fa-user-check text-xs"></i>
+                  </button>
+                {% else %}
+                  <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-emerald-600" title="Approve and activate resident account">
+                    <i class="fa fa-user-check text-xs"></i>
+                  </button>
+                {% endif %}
               </form>
-              <form method="post" action="{% url 'resident_reject' resident.pk %}" class="inline">
+              <form method="post" action="{% url 'resident_reject' resident.pk %}" class="inline" data-reject-resident>
                 {% csrf_token %}
                 <input type="hidden" name="reason" value="">
-                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Set as pending/inactive">
-                  <i class="fa fa-hourglass-half text-xs"></i>
-                </button>
+                {% if not resident.is_approved and not resident.approved_by %}
+                  <button type="button" class="btn btn-ghost btn-xs text-amber-400 cursor-not-allowed opacity-50" title="Already pending" disabled>
+                    <i class="fa fa-hourglass-half text-xs"></i>
+                  </button>
+                {% else %}
+                  <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Set as pending/inactive">
+                    <i class="fa fa-hourglass-half text-xs"></i>
+                  </button>
+                {% endif %}
               </form>
               {% endif %}
               <a href="{% url 'resident_edit' resident.pk %}" class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600" title="Edit">
                 <i class="fa fa-pen text-xs"></i>
               </a>
-              <form method="post" action="{% url 'resident_delete' resident.pk %}" class="inline">
+              <form method="post" action="{% url 'resident_delete' resident.pk %}" class="inline" data-delete-resident data-name="{{ resident.full_name }}">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" onclick="return confirm('Remove resident?')" title="Delete">
+                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" title="Delete">
                   <i class="fa fa-trash text-xs"></i>
                 </button>
               </form>
@@ -251,28 +263,51 @@
 {% endblock %}
 
 {% block extra_scripts %}
+
+<div id="delete-resident-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+  <div class="bg-white rounded-xl border border-slate-200 w-full max-w-sm mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="del-modal-title">
+    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-red-50 mb-4">
+      <i class="fa fa-trash text-red-600"></i>
+    </div>
+    <p class="text-base font-semibold text-slate-800 mb-1" id="del-modal-title">Remove resident?</p>
+    <p class="text-sm text-slate-500 mb-5">This will permanently delete <strong id="del-resident-name"></strong> and all their data.</p>
+    <div class="flex justify-end gap-2">
+      <button type="button" id="del-cancel" class="btn btn-sm btn-ghost">Cancel</button>
+      <button type="button" id="del-confirm" class="btn btn-sm bg-red-100 hover:bg-red-200 border-0 text-red-700">
+        <i class="fa fa-trash mr-1"></i> Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="reject-resident-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+  <div class="bg-white rounded-xl border border-slate-200 w-full max-w-md mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title">
+    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-amber-50 mb-4">
+      <i class="fa fa-hourglass-half text-amber-600"></i>
+    </div>
+    <p class="text-base font-semibold text-slate-800 mb-1" id="reject-modal-title">Set resident as pending/inactive</p>
+    <p class="text-sm text-slate-500 mb-3">Provide a reason — this will be visible to the resident.</p>
+    <textarea id="reject-reason" rows="3" class="textarea textarea-bordered w-full text-sm resize-none">Registration requirements were not satisfied.</textarea>
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="button" id="reject-cancel" class="btn btn-sm btn-ghost">Cancel</button>
+      <button type="button" id="reject-confirm" class="btn btn-sm bg-amber-100 hover:bg-amber-200 border-0 text-amber-700">
+        <i class="fa fa-hourglass-half mr-1"></i> Confirm
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   const residentModal = document.getElementById('resident-modal');
-  const vehicleModal = document.getElementById('vehicle-modal');
+  const vehicleModal  = document.getElementById('vehicle-modal');
+  const delModal      = document.getElementById('delete-resident-modal');
+  const rejectModal   = document.getElementById('reject-resident-modal');
+
+  window.closeResidentModal = () => residentModal?.classList.add('hidden') || residentModal?.classList.remove('flex');
+  window.closeVehicleModal  = () => vehicleModal?.classList.add('hidden')  || vehicleModal?.classList.remove('flex');
+
   const openResidentBtn = document.getElementById('open-resident-modal');
-  const openVehicleBtns = document.querySelectorAll('[data-open-vehicle-modal]');
-  const vehicleResidentPk = document.getElementById('vehicle-resident-pk');
-  const vehicleResidentLabel = document.getElementById('vehicle-modal-resident');
-  const rejectForms = document.querySelectorAll('form[action*="/residents/"][action$="/reject/"]');
-
-  window.closeResidentModal = function closeResidentModal() {
-    if (!residentModal) return;
-    residentModal.classList.add('hidden');
-    residentModal.classList.remove('flex');
-  };
-
-  window.closeVehicleModal = function closeVehicleModal() {
-    if (!vehicleModal) return;
-    vehicleModal.classList.add('hidden');
-    vehicleModal.classList.remove('flex');
-  };
-
   if (openResidentBtn && residentModal) {
     openResidentBtn.addEventListener('click', () => {
       residentModal.classList.remove('hidden');
@@ -280,34 +315,54 @@
     });
   }
 
-  openVehicleBtns.forEach((btn) => {
+  document.querySelectorAll('[data-open-vehicle-modal]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      if (!vehicleModal || !vehicleResidentPk || !vehicleResidentLabel) return;
-      vehicleResidentPk.value = btn.dataset.residentId || '';
-      vehicleResidentLabel.textContent = 'Resident: ' + (btn.dataset.residentName || '');
+      document.getElementById('vehicle-resident-pk').value = btn.dataset.residentId || '';
+      document.getElementById('vehicle-modal-resident').textContent = 'Resident: ' + (btn.dataset.residentName || '');
       vehicleModal.classList.remove('hidden');
       vehicleModal.classList.add('flex');
     });
   });
 
-  rejectForms.forEach((form) => {
-    const hiddenReason = form.querySelector('input[name="reason"]');
-    const button = form.querySelector('button[type="submit"]');
-    if (!button || !hiddenReason) return;
-    button.addEventListener('click', function (event) {
-      event.preventDefault();
-      const reason = window.prompt('Reason for setting resident as pending/inactive:', 'Registration requirements were not satisfied.');
-      if (reason === null) return;
-      hiddenReason.value = reason.trim() || 'Registration requirements were not satisfied.';
-      form.submit();
+  let activeDelForm = null;
+  document.querySelectorAll('[data-delete-resident]').forEach((form) => {
+    form.querySelector('button').addEventListener('click', (e) => {
+      e.preventDefault();
+      activeDelForm = form;
+      document.getElementById('del-resident-name').textContent = form.dataset.name || 'this resident';
+      delModal.classList.remove('hidden');
     });
   });
+  document.getElementById('del-cancel').addEventListener('click', () => { delModal.classList.add('hidden'); activeDelForm = null; });
+  document.getElementById('del-confirm').addEventListener('click', () => { activeDelForm?.submit(); delModal.classList.add('hidden'); });
+  delModal.addEventListener('click', (e) => { if (e.target === delModal) { delModal.classList.add('hidden'); activeDelForm = null; } });
+
+  let activeRejectForm = null;
+  document.querySelectorAll('[data-reject-resident]').forEach((form) => {
+    form.querySelector('button[type="submit"]').addEventListener('click', (e) => {
+      e.preventDefault();
+      activeRejectForm = form;
+      document.getElementById('reject-reason').value = 'Registration requirements were not satisfied.';
+      rejectModal.classList.remove('hidden');
+    });
+  });
+  document.getElementById('reject-cancel').addEventListener('click', () => { rejectModal.classList.add('hidden'); activeRejectForm = null; });
+  document.getElementById('reject-confirm').addEventListener('click', () => {
+    if (!activeRejectForm) return;
+    const input = activeRejectForm.querySelector('input[name="reason"]');
+    if (input) input.value = document.getElementById('reject-reason').value.trim() || 'Registration requirements were not satisfied.';
+    activeRejectForm.submit();
+    rejectModal.classList.add('hidden');
+  });
+  rejectModal.addEventListener('click', (e) => { if (e.target === rejectModal) { rejectModal.classList.add('hidden'); activeRejectForm = null; } });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      window.closeResidentModal();
-      window.closeVehicleModal();
-    }
+    if (e.key !== 'Escape') return;
+    window.closeResidentModal();
+    window.closeVehicleModal();
+    delModal.classList.add('hidden');
+    rejectModal.classList.add('hidden');
+    activeDelForm = activeRejectForm = null;
   });
 })();
 </script>

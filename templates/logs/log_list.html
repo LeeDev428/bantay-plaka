@@ -127,7 +127,6 @@
       </tbody>
     </table>
   </div>
-  <!-- Pagination -->
   {% if logs.has_other_pages %}
   <div class="flex justify-center py-4 gap-1 border-t border-slate-100">
     {% if logs.has_previous %}
@@ -143,7 +142,7 @@
   {% endif %}
 </div>
 
-<!-- ─── Edit Modal ─────────────────────────────────────────── -->
+<!-- Edit Modal -->
 <div id="edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
   <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeEditModal()"></div>
   <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
@@ -199,23 +198,22 @@
   </div>
 </div>
 
-<!-- ─── Delete Confirm Modal ───────────────────────────────── -->
-<div id="delete-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
-  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeDeleteModal()"></div>
-  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 text-center">
-    <div class="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-      <i class="fa fa-triangle-exclamation text-red-600 text-2xl"></i>
+<!-- Delete Modal -->
+<div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+  <div class="bg-white rounded-xl border border-slate-200 w-full max-w-sm mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="del-log-title">
+    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-red-50 mb-4">
+      <i class="fa fa-trash text-red-600"></i>
     </div>
-    <h3 class="text-lg font-bold text-slate-800 mb-1">Delete Log?</h3>
-    <p class="text-sm text-slate-500 mb-1">This will permanently delete the log entry for:</p>
-    <p id="delete-modal-plate" class="font-mono font-bold text-slate-800 text-lg mb-5"></p>
+    <p class="text-base font-semibold text-slate-800 mb-1" id="del-log-title">Delete log entry?</p>
+    <p class="text-sm text-slate-500 mb-2">This will permanently delete the log entry for:</p>
+    <p id="delete-modal-plate" class="font-mono font-bold text-slate-800 text-base mb-5 px-3 py-1.5 bg-slate-100 rounded-lg w-fit"></p>
     <form id="delete-form" method="post" action="">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ request.get_full_path }}" />
-      <div class="flex justify-center gap-3">
-        <button type="button" onclick="closeDeleteModal()" class="btn btn-ghost btn-sm text-slate-500">Cancel</button>
-        <button type="submit" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white">
-          <i class="fa fa-trash mr-1"></i> Yes, Delete
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="closeDeleteModal()" class="btn btn-sm btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-sm bg-red-100 hover:bg-red-200 border-0 text-red-700">
+          <i class="fa fa-trash mr-1"></i> Delete
         </button>
       </div>
     </form>
@@ -246,11 +244,9 @@
     document.getElementById('delete-modal-plate').textContent = plate;
     document.getElementById('delete-form').action = `/logs/${pk}/delete/`;
     document.getElementById('delete-modal').classList.remove('hidden');
-    document.getElementById('delete-modal').classList.add('flex');
   }
   function closeDeleteModal() {
     document.getElementById('delete-modal').classList.add('hidden');
-    document.getElementById('delete-modal').classList.remove('flex');
   }
   function toggleNameInputs() {
     const entryType = document.getElementById('edit-entry-type').value;
@@ -258,7 +254,6 @@
     const visitorInput = document.getElementById('edit-visitor-name');
     const residentWrap = residentInput.closest('div');
     const visitorWrap = visitorInput.closest('div');
-
     if (entryType === 'RESIDENT') {
       residentWrap.classList.remove('hidden');
       visitorWrap.classList.add('hidden');
@@ -270,7 +265,6 @@
     }
   }
   document.getElementById('edit-entry-type').addEventListener('change', toggleNameInputs);
-  // Close on Escape key
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeEditModal(); closeDeleteModal(); }
   });

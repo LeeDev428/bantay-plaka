@@ -25,21 +25,35 @@
       Guard view is read-only. Only approved residents are shown.
     </div>
   {% endif %}
+
   <div class="p-4 border-b border-slate-100">
-    <form method="get" class="flex flex-col sm:flex-row gap-2">
-      <input
-        type="text"
-        name="q"
-        value="{{ q|default:'' }}"
-        placeholder="Search resident name, address, plate"
-        class="input input-bordered w-full"
-      >
-      <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
-        <i class="fa fa-search mr-1"></i> Search
+    <form method="get" class="flex flex-wrap gap-3 items-end">
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+        <input type="text" name="q" value="{{ q|default:'' }}" placeholder="Name, address, plate"
+          class="input input-bordered input-sm w-52 bg-white">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+        <select name="status" class="select select-bordered select-sm bg-white">
+          <option value="">All</option>
+          <option value="approved" {% if status_q == 'approved' %}selected{% endif %}>Approved</option>
+          <option value="pending" {% if status_q == 'pending' %}selected{% endif %}>Pending</option>
+          <option value="rejected" {% if status_q == 'rejected' %}selected{% endif %}>Not Approved</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Vehicles</label>
+        <select name="vehicles" class="select select-bordered select-sm bg-white">
+          <option value="">All</option>
+          <option value="with" {% if vehicles_q == 'with' %}selected{% endif %}>With Vehicles</option>
+          <option value="without" {% if vehicles_q == 'without' %}selected{% endif %}>No Vehicles</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+        <i class="fa fa-filter mr-1"></i> Filter
       </button>
-      {% if q %}
-        <a href="{% url 'resident_list' %}" class="btn btn-sm btn-ghost">Clear</a>
-      {% endif %}
+      <a href="{% url 'resident_list' %}" class="btn btn-ghost btn-sm text-slate-500">Clear</a>
     </form>
   </div>
 
@@ -178,15 +192,13 @@
       </p>
       <div class="join">
         {% if residents.has_previous %}
-          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ residents.previous_page_number }}">Prev</a>
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&status={{ status_q|urlencode }}&vehicles={{ vehicles_q|urlencode }}&page={{ residents.previous_page_number }}">Prev</a>
         {% else %}
           <button class="join-item btn btn-sm btn-disabled">Prev</button>
         {% endif %}
-
         <button class="join-item btn btn-sm btn-active">{{ residents.number }}</button>
-
         {% if residents.has_next %}
-          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ residents.next_page_number }}">Next</a>
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&status={{ status_q|urlencode }}&vehicles={{ vehicles_q|urlencode }}&page={{ residents.next_page_number }}">Next</a>
         {% else %}
           <button class="join-item btn btn-sm btn-disabled">Next</button>
         {% endif %}

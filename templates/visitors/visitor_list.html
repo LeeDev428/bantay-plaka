@@ -13,25 +13,33 @@
   </a>
 </div>
 
-<div class="page-card">
-  <div class="p-4 border-b border-slate-100">
-    <form method="get" class="flex flex-col sm:flex-row gap-2">
-      <input
-        type="text"
-        name="q"
-        value="{{ q|default:'' }}"
-        placeholder="Search name, plate, host, purpose"
-        class="input input-bordered w-full"
-      >
-      <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
-        <i class="fa fa-search mr-1"></i> Search
-      </button>
-      {% if q %}
-        <a href="{% url 'visitor_list' %}" class="btn btn-sm btn-ghost">Clear</a>
-      {% endif %}
-    </form>
-  </div>
+<div class="page-card p-4 mb-4">
+  <form method="get" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+      <input type="text" name="q" value="{{ q|default:'' }}" placeholder="Name, plate, host, purpose"
+        class="input input-bordered input-sm w-52 bg-white">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Visitor Type</label>
+      <select name="visitor_type" class="select select-bordered select-sm bg-white">
+        <option value="">All</option>
+        <option value="VISITOR" {% if visitor_type_q == 'VISITOR' %}selected{% endif %}>Visitor</option>
+        <option value="VERIFIED_VISITOR" {% if visitor_type_q == 'VERIFIED_VISITOR' %}selected{% endif %}>Verified Visitor</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Date</label>
+      <input type="date" name="date" value="{{ date_q|default:'' }}" class="input input-bordered input-sm bg-white">
+    </div>
+    <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+      <i class="fa fa-filter mr-1"></i> Filter
+    </button>
+    <a href="{% url 'visitor_list' %}" class="btn btn-ghost btn-sm text-slate-500">Clear</a>
+  </form>
+</div>
 
+<div class="page-card">
   <div class="overflow-x-auto">
     <table class="table table-sm">
       <thead>
@@ -96,20 +104,16 @@
 
   {% if visitors.paginator.num_pages > 1 %}
     <div class="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <p class="text-xs text-slate-500">
-        Showing page {{ visitors.number }} of {{ visitors.paginator.num_pages }}
-      </p>
+      <p class="text-xs text-slate-500">Showing page {{ visitors.number }} of {{ visitors.paginator.num_pages }}</p>
       <div class="join">
         {% if visitors.has_previous %}
-          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ visitors.previous_page_number }}">Prev</a>
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&visitor_type={{ visitor_type_q|urlencode }}&date={{ date_q|urlencode }}&page={{ visitors.previous_page_number }}">Prev</a>
         {% else %}
           <button class="join-item btn btn-sm btn-disabled">Prev</button>
         {% endif %}
-
         <button class="join-item btn btn-sm btn-active">{{ visitors.number }}</button>
-
         {% if visitors.has_next %}
-          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&page={{ visitors.next_page_number }}">Next</a>
+          <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&visitor_type={{ visitor_type_q|urlencode }}&date={{ date_q|urlencode }}&page={{ visitors.next_page_number }}">Next</a>
         {% else %}
           <button class="join-item btn btn-sm btn-disabled">Next</button>
         {% endif %}
@@ -216,16 +220,16 @@
   const delName   = document.getElementById('del-visitor-name');
   let activeDelForm = null;
 
-  const firstName          = document.getElementById('edit-first-name');
-  const lastName           = document.getElementById('edit-last-name');
-  const contact            = document.getElementById('edit-contact');
-  const purpose            = document.getElementById('edit-purpose');
-  const hostName           = document.getElementById('edit-host-name');
-  const plate              = document.getElementById('edit-plate');
-  const vehicleType        = document.getElementById('edit-vehicle-type');
+  const firstName            = document.getElementById('edit-first-name');
+  const lastName             = document.getElementById('edit-last-name');
+  const contact              = document.getElementById('edit-contact');
+  const purpose              = document.getElementById('edit-purpose');
+  const hostName             = document.getElementById('edit-host-name');
+  const plate                = document.getElementById('edit-plate');
+  const vehicleType          = document.getElementById('edit-vehicle-type');
   const vehicleTypeOtherWrap = document.getElementById('edit-vehicle-type-other-wrap');
-  const vehicleTypeOther   = document.getElementById('edit-vehicle-type-other');
-  const visitorType        = document.getElementById('edit-visitor-type');
+  const vehicleTypeOther     = document.getElementById('edit-vehicle-type-other');
+  const visitorType          = document.getElementById('edit-visitor-type');
 
   function syncVehicleTypeOther() {
     const isOther = vehicleType && vehicleType.value === 'OTHER';
@@ -240,15 +244,15 @@
 
   document.querySelectorAll('[data-open-visitor-edit]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      editForm.action          = btn.dataset.editUrl || '';
-      firstName.value          = btn.dataset.firstName || '';
-      lastName.value           = btn.dataset.lastName || '';
-      contact.value            = btn.dataset.contact || '';
-      purpose.value            = btn.dataset.purpose || '';
-      hostName.value           = btn.dataset.hostName || '';
-      plate.value              = btn.dataset.plate || '';
-      vehicleType.value        = btn.dataset.vehicleType || '';
-      vehicleTypeOther.value   = btn.dataset.vehicleTypeOther || '';
+      editForm.action        = btn.dataset.editUrl || '';
+      firstName.value        = btn.dataset.firstName || '';
+      lastName.value         = btn.dataset.lastName || '';
+      contact.value          = btn.dataset.contact || '';
+      purpose.value          = btn.dataset.purpose || '';
+      hostName.value         = btn.dataset.hostName || '';
+      plate.value            = btn.dataset.plate || '';
+      vehicleType.value      = btn.dataset.vehicleType || '';
+      vehicleTypeOther.value = btn.dataset.vehicleTypeOther || '';
       if (visitorType) visitorType.value = btn.dataset.visitorType || 'VISITOR';
       syncVehicleTypeOther();
       editModal.classList.remove('hidden');
@@ -258,7 +262,6 @@
 
   if (vehicleType) vehicleType.addEventListener('change', syncVehicleTypeOther);
 
-  // Delete
   document.querySelectorAll('[data-delete-visitor]').forEach((form) => {
     form.querySelector('button').addEventListener('click', (e) => {
       e.preventDefault();

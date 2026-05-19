@@ -4,10 +4,18 @@
 {% block breadcrumb %}Logs &raquo; Vehicle Logs{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-bold text-slate-800">Vehicle Logs</h1>
-  <p class="text-slate-500 text-sm mt-0.5">Search, filter, and manage all gate records</p>
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">Vehicle Logs</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Search, filter, and manage all gate records</p>
+  </div>
+  <button type="button" onclick="document.getElementById('logs-export-modal').classList.remove('hidden'); document.getElementById('logs-export-modal').classList.add('flex');"
+    class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+    <i class="fa fa-file-arrow-down mr-1"></i> Export
+  </button>
 </div>
+
+{% include 'partials/export_modal.html' with modal_id="logs-export-modal" title="Export Vehicle Logs" excel_url_name="logs_export_excel" pdf_url_name="logs_export_pdf" show_date_range=True info_text="Leave dates blank to export all records. Excel includes a Summary sheet." %}
 
 <!-- Filters -->
 <div class="page-card p-4 mb-4">

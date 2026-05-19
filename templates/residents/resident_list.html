@@ -13,11 +13,21 @@
     {% endif %}
   </div>
   {% if user.is_admin %}
-  <button type="button" id="open-resident-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
-    <i class="fa fa-plus mr-1"></i> Register Resident
-  </button>
+  <div class="flex gap-2">
+    <button type="button" onclick="document.getElementById('residents-export-modal').classList.remove('hidden'); document.getElementById('residents-export-modal').classList.add('flex');"
+      class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+      <i class="fa fa-file-arrow-down mr-1"></i> Export
+    </button>
+    <button type="button" id="open-resident-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+      <i class="fa fa-plus mr-1"></i> Register Resident
+    </button>
+  </div>
   {% endif %}
 </div>
+
+{% if user.is_admin %}
+{% include 'partials/export_modal.html' with modal_id="residents-export-modal" title="Export Residents" excel_url_name="residents_export_excel" pdf_url_name="residents_export_pdf" show_date_range=False info_text="Exports all residents with their address, contact, status, and registered vehicles." %}
+{% endif %}
 
 <div class="page-card">
   {% if is_read_only_view %}

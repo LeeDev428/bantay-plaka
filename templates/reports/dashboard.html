@@ -223,33 +223,49 @@
 </div>
 
 <!-- PDF Export Modal -->
-<div id="export-pdf-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+<div id="export-pdf-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closePdfModal()"></div>
-  <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-      <h3 class="text-lg font-bold text-slate-800">Export PDF</h3>
+  <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">Export PDF</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Landscape A4 report with all log records</p>
+      </div>
       <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closePdfModal()">
         <i class="fa fa-xmark text-xl"></i>
       </button>
     </div>
-    <div class="px-6 py-5">
-      <p class="text-sm text-slate-600 mb-3">Set date range filters before generating PDF.</p>
-      <form id="export-pdf-form" method="get" action="{% url 'report_export_pdf' %}" class="space-y-3">
+    <div class="px-6 py-5 overflow-y-auto space-y-4">
+      <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
-          <input type="date" name="from" id="pdf-export-from" class="input input-bordered w-full bg-white" />
+          <input type="date" id="pdf-export-from" class="input input-bordered input-sm w-full bg-white" />
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
-          <input type="date" name="to" id="pdf-export-to" class="input input-bordered w-full bg-white" />
+          <input type="date" id="pdf-export-to" class="input input-bordered input-sm w-full bg-white" />
         </div>
-        <div class="pt-2 flex justify-end gap-2">
-          <button type="button" class="btn btn-ghost" onclick="closePdfModal()">Close</button>
-          <button type="submit" class="btn bg-red-600 hover:bg-red-700 border-0 text-white">
-            <i class="fa fa-file-pdf mr-1"></i> Export PDF
-          </button>
+      </div>
+      <div class="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-500 flex gap-2">
+        <i class="fa fa-circle-info mt-0.5 shrink-0 text-slate-400"></i>
+        <span>Leave blank to export all records as a landscape A4 PDF.</span>
+      </div>
+      <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex flex-col items-center gap-2 text-center">
+        <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+          <i class="fa fa-file-pdf text-red-600 text-lg"></i>
         </div>
-      </form>
+        <div>
+          <p class="text-sm font-semibold text-slate-700">PDF Report</p>
+          <p class="text-[11px] text-slate-400">Landscape A4, colour-coded rows</p>
+        </div>
+        <a id="pdf-download-btn" href="{% url 'report_export_pdf' %}"
+          class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1">
+          <i class="fa fa-download mr-1"></i> Download PDF
+        </a>
+      </div>
+      <div class="flex justify-end">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closePdfModal()">Close</button>
+      </div>
     </div>
   </div>
 </div>
@@ -295,12 +311,26 @@
       pdfModal.classList.add('flex');
     });
   }
-
-  window.closePdfModal = function closePdfModal() {
+  window.closePdfModal = function () {
     if (!pdfModal) return;
     pdfModal.classList.add('hidden');
     pdfModal.classList.remove('flex');
   };
+
+  // Wire PDF date inputs to download link
+  const pdfFromInput = document.getElementById('pdf-export-from');
+  const pdfToInput   = document.getElementById('pdf-export-to');
+  const pdfDlBtn     = document.getElementById('pdf-download-btn');
+  const pdfBase      = '{% url "report_export_pdf" %}';
+  function updatePdfLink() {
+    const params = new URLSearchParams();
+    if (pdfFromInput?.value) params.set('from', pdfFromInput.value);
+    if (pdfToInput?.value)   params.set('to',   pdfToInput.value);
+    const qs = params.toString() ? '?' + params.toString() : '';
+    if (pdfDlBtn) pdfDlBtn.href = pdfBase + qs;
+  }
+  pdfFromInput?.addEventListener('change', updatePdfLink);
+  pdfToInput?.addEventListener('change', updatePdfLink);
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

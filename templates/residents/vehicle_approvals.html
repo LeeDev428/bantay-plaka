@@ -8,7 +8,13 @@
     <h1 class="text-2xl font-bold text-slate-800">Pending Vehicle Approvals</h1>
     <p class="text-slate-500 text-sm mt-0.5">Review resident-submitted vehicle registrations</p>
   </div>
+  <button type="button" onclick="document.getElementById('approvals-export-modal').classList.remove('hidden'); document.getElementById('approvals-export-modal').classList.add('flex');"
+    class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+    <i class="fa fa-file-arrow-down mr-1"></i> Export
+  </button>
 </div>
+
+{% include 'partials/export_modal.html' with modal_id="approvals-export-modal" title="Export Pending Approvals" excel_url_name="approvals_export_excel" pdf_url_name="approvals_export_pdf" show_date_range=False info_text="Exports all currently pending vehicle registrations." %}
 
 <div class="page-card">
   <div class="p-4 border-b border-slate-100">

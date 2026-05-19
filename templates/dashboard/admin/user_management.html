@@ -8,10 +8,18 @@
     <h1 class="text-2xl font-bold text-slate-800">User Management</h1>
     <p class="text-slate-500 text-sm mt-0.5">Manage admin and guard accounts</p>
   </div>
-  <button type="button" id="open-user-create-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
-    <i class="fa fa-plus mr-1"></i> Add User
-  </button>
+  <div class="flex gap-2">
+    <button type="button" onclick="document.getElementById('users-export-modal').classList.remove('hidden'); document.getElementById('users-export-modal').classList.add('flex');"
+      class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+      <i class="fa fa-file-arrow-down mr-1"></i> Export
+    </button>
+    <button type="button" id="open-user-create-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+      <i class="fa fa-plus mr-1"></i> Add User
+    </button>
+  </div>
 </div>
+
+{% include 'partials/export_modal.html' with modal_id="users-export-modal" title="Export Users" excel_url_name="users_export_excel" pdf_url_name="users_export_pdf" show_date_range=False info_text="Exports all admin and guard accounts with their role and status." %}
 
 <div class="page-card">
   <div class="p-4 border-b border-slate-100">

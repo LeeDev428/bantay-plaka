@@ -1,0 +1,117 @@
+{# partials/export_modal.html
+   Include like:
+     {% include 'partials/export_modal.html' with
+         modal_id="logs-export-modal"
+         title="Export Vehicle Logs"
+         excel_url_name="logs_export_excel"
+         pdf_url_name="logs_export_pdf"
+         show_date_range=True
+         info_text="Exports all filtered vehicle log records."
+     %}
+#}
+<div id="{{ modal_id }}" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="document.getElementById('{{ modal_id }}').classList.add('hidden'); document.getElementById('{{ modal_id }}').classList.remove('flex');"></div>
+  <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">{{ title }}</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Choose a format to download</p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600"
+        onclick="document.getElementById('{{ modal_id }}').classList.add('hidden'); document.getElementById('{{ modal_id }}').classList.remove('flex');">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="px-6 py-5 overflow-y-auto space-y-4">
+
+      {% if show_date_range %}
+      <!-- Date range shared between both formats -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
+          <input type="date" id="{{ modal_id }}-from" class="input input-bordered input-sm w-full bg-white" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
+          <input type="date" id="{{ modal_id }}-to" class="input input-bordered input-sm w-full bg-white" />
+        </div>
+      </div>
+      {% endif %}
+
+      {% if info_text %}
+      <div class="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-500 flex gap-2">
+        <i class="fa fa-circle-info mt-0.5 shrink-0 text-slate-400"></i>
+        <span>{{ info_text }}</span>
+      </div>
+      {% endif %}
+
+      <!-- Format buttons -->
+      <div class="grid grid-cols-2 gap-3 pt-1">
+        <!-- Excel -->
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <i class="fa fa-file-excel text-emerald-600 text-lg"></i>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-slate-700">Excel</p>
+            <p class="text-[11px] text-slate-400">.xlsx with summary sheet</p>
+          </div>
+          <a id="{{ modal_id }}-excel-btn"
+             href="{% url excel_url_name %}"
+             class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1">
+            <i class="fa fa-download mr-1"></i> Download
+          </a>
+        </div>
+
+        <!-- PDF -->
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+            <i class="fa fa-file-pdf text-red-600 text-lg"></i>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-slate-700">PDF</p>
+            <p class="text-[11px] text-slate-400">Landscape A4 report</p>
+          </div>
+          <a id="{{ modal_id }}-pdf-btn"
+             href="{% url pdf_url_name %}"
+             class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1">
+            <i class="fa fa-download mr-1"></i> Download
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if show_date_range %}
+<script>
+(function () {
+  const modal = document.getElementById('{{ modal_id }}');
+  if (!modal) return;
+  const fromInput = document.getElementById('{{ modal_id }}-from');
+  const toInput   = document.getElementById('{{ modal_id }}-to');
+  const excelBtn  = document.getElementById('{{ modal_id }}-excel-btn');
+  const pdfBtn    = document.getElementById('{{ modal_id }}-pdf-btn');
+  const excelBase = '{% url excel_url_name %}';
+  const pdfBase   = '{% url pdf_url_name %}';
+
+  function updateLinks() {
+    const from = fromInput?.value || '';
+    const to   = toInput?.value   || '';
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to)   params.set('to',   to);
+    const qs = params.toString() ? '?' + params.toString() : '';
+    if (excelBtn) excelBtn.href = excelBase + qs;
+    if (pdfBtn)   pdfBtn.href   = pdfBase   + qs;
+  }
+
+  fromInput?.addEventListener('change', updateLinks);
+  toInput?.addEventListener('change', updateLinks);
+})();
+</script>
+{% endif %}

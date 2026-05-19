@@ -274,6 +274,10 @@ class UserCreateForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['email'].required = True
+        self.fields['role'].choices = [
+            (User.ROLE_ADMIN, 'Admin'),
+            (User.ROLE_GUARD, 'Security Guard'),
+        ]
 
     def clean_email(self):
         email = (self.cleaned_data.get('email') or '').strip().lower()

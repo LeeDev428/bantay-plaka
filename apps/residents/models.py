@@ -1,3 +1,5 @@
+from tokenize import Comment
+
 from django.db import models
 from django.core.files.storage import default_storage
 from apps.accounts.models import User
@@ -10,7 +12,6 @@ class Resident(models.Model):
     SEX_CHOICES = [
         (SEX_MALE, 'Male'),
         (SEX_FEMALE, 'Female'),
-        (SEX_OTHER, 'Other'),
     ]
     VALID_ID_TYPE_CHOICES = [
         ('', '-- Select Valid ID --'),

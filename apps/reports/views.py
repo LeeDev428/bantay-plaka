@@ -188,79 +188,46 @@ def export_pdf(request):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    try:
-        from reportlab.lib.pagesizes import A4, landscape
-        from reportlab.lib import colors
-        from reportlab.lib.units import mm
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet
-    except ImportError:
-        return HttpResponse('reportlab is not installed. Run: pip install reportlab', status=500)
+    from apps.export_helpers import build_pdf_response
 
     date_from = request.GET.get('from', '')
-    date_to = request.GET.get('to', '')
+    date_to   = request.GET.get('to',   '')
     logs = VehicleLog.objects.select_related('logged_by').order_by('-timestamp')
-
     if date_from:
         try:
-            dt_from = datetime.date.fromisoformat(date_from)
-            start, _ = _day_range(dt_from)
+            start, _ = _day_range(datetime.date.fromisoformat(date_from))
             logs = logs.filter(timestamp__gte=start)
-        except ValueError:
-            pass
+        except ValueError: date_from = ''
     if date_to:
         try:
-            dt_to = datetime.date.fromisoformat(date_to)
-            _, end = _day_range(dt_to)
+            _, end = _day_range(datetime.date.fromisoformat(date_to))
             logs = logs.filter(timestamp__lt=end)
-        except ValueError:
-            pass
+        except ValueError: date_to = ''
 
-    response = HttpResponse(content_type='application/pdf')
-    filename = f'bantayplaka_logs_{timezone.localdate()}.pdf'
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-    doc = SimpleDocTemplate(response, pagesize=landscape(A4), leftMargin=15*mm, rightMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
-    styles = getSampleStyleSheet()
-    elements = []
-    elements.append(Paragraph('Bantay Plaka — Vehicle Log Report', styles['Title']))
-    elements.append(Paragraph(f'Generated: {timezone.localdate()}', styles['Normal']))
-    elements.append(Spacer(1, 6*mm))
-
-    headers = ['Plate', 'Type', 'Status', 'Source', 'Name', 'Timestamp']
-    data = [headers]
-
-    bl_map = get_active_blacklist_map([log.plate_number for log in logs])
-
+    bl_map = get_active_blacklist_map([l.plate_number for l in logs])
+    rows = []
     for log in logs:
         local_ts = timezone.localtime(log.timestamp)
-        name = log.resident_name or log.visitor_name or ''
-        data.append([
+        rows.append([
             log.plate_number or '',
-            log.entry_type,
-            log.status,
-            log.source,
-            name,
-            local_ts.strftime('%Y-%m-%d %H:%M'),
+            log.get_entry_type_display() if hasattr(log, 'get_entry_type_display') else log.entry_type,
+            'Time In' if log.status == VehicleLog.STATUS_IN else 'Time Out',
+            log.get_source_display() if hasattr(log, 'get_source_display') else log.source,
+            log.resident_name or log.visitor_name or '',
+            log.logged_by.get_full_name() if log.logged_by else 'System',
+            local_ts.strftime('%Y-%m-%d %H:%M:%S'),
         ])
 
-    col_widths = [35*mm, 25*mm, 22*mm, 22*mm, 60*mm, 40*mm]
-    table = Table(data, colWidths=col_widths, repeatRows=1)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a5f')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 8),
-        ('FONTSIZE', (0, 1), (-1, -1), 7),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')]),
-        ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#cbd5e1')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-    ]))
-    elements.append(table)
-    doc.build(elements)
-    return response
+    return build_pdf_response(
+        'bantayplaka_logs',
+        'Bantay Plaka — Vehicle Log Report',
+        headers=['Plate', 'Type', 'Status', 'Source', 'Name', 'Logged By', 'Timestamp'],
+        col_widths_mm=[30, 20, 20, 18, 50, 34, 38],
+        rows=rows,
+        highlight_fn=lambda r: bool(bl_map.get((r[0] or '').upper())),
+        mono_col_idx=0,
+        date_from=date_from, date_to=date_to,
+    )
 
 
 @login_required
@@ -269,190 +236,59 @@ def export_excel(request):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    try:
-        import openpyxl
-        from openpyxl.styles import (
-            Font, PatternFill, Alignment, Border, Side, GradientFill
-        )
-        from openpyxl.utils import get_column_letter
-    except ImportError:
-        return HttpResponse('openpyxl is not installed. Run: pip install openpyxl', status=500)
+    from apps.export_helpers import build_excel_response
 
     date_from = request.GET.get('from', '')
-    date_to = request.GET.get('to', '')
+    date_to   = request.GET.get('to',   '')
     logs = VehicleLog.objects.select_related('logged_by').order_by('-timestamp')
-
     if date_from:
         try:
-            dt_from = datetime.date.fromisoformat(date_from)
-            start, _ = _day_range(dt_from)
+            start, _ = _day_range(datetime.date.fromisoformat(date_from))
             logs = logs.filter(timestamp__gte=start)
-        except ValueError:
-            pass
+        except ValueError: date_from = ''
     if date_to:
         try:
-            dt_to = datetime.date.fromisoformat(date_to)
-            _, end = _day_range(dt_to)
+            _, end = _day_range(datetime.date.fromisoformat(date_to))
             logs = logs.filter(timestamp__lt=end)
-        except ValueError:
-            pass
+        except ValueError: date_to = ''
 
-    bl_map = get_active_blacklist_map([log.plate_number for log in logs])
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Vehicle Logs'
-
-    # ── Styles ────────────────────────────────────────────────────────────────
-    header_fill   = PatternFill('solid', fgColor='1E3A5F')
-    subhead_fill  = PatternFill('solid', fgColor='2563EB')
-    alt_fill      = PatternFill('solid', fgColor='F1F5F9')
-    white_fill    = PatternFill('solid', fgColor='FFFFFF')
-    red_fill      = PatternFill('solid', fgColor='FEE2E2')
-    title_font    = Font(name='Calibri', bold=True, size=16, color='FFFFFF')
-    sub_font      = Font(name='Calibri', size=10, color='FFFFFF', bold=True)
-    header_font   = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
-    body_font     = Font(name='Calibri', size=9, color='1E293B')
-    mono_font     = Font(name='Courier New', size=9, bold=True, color='1E3A5F')
-    red_font      = Font(name='Calibri', size=9, color='DC2626', bold=True)
-    center        = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    left          = Alignment(horizontal='left',   vertical='center', wrap_text=True)
-    thin_side     = Side(style='thin', color='CBD5E1')
-    thick_side    = Side(style='medium', color='1E3A5F')
-    thin_border   = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
-    thick_border  = Border(left=thick_side, right=thick_side, top=thick_side, bottom=thick_side)
-
-    # ── Title block (rows 1–3) ────────────────────────────────────────────────
-    ws.merge_cells('A1:J1')
-    title_cell = ws['A1']
-    title_cell.value = 'BANTAY PLAKA — VEHICLE LOG REPORT'
-    title_cell.font = title_font
-    title_cell.fill = header_fill
-    title_cell.alignment = center
-    ws.row_dimensions[1].height = 32
-
-    ws.merge_cells('A2:J2')
-    meta_cell = ws['A2']
-    date_label = ''
-    if date_from and date_to:
-        date_label = f'  |  Period: {date_from} to {date_to}'
-    elif date_from:
-        date_label = f'  |  From: {date_from}'
-    elif date_to:
-        date_label = f'  |  To: {date_to}'
-    meta_cell.value = f'Generated: {timezone.localdate()}{date_label}  |  Total Records: {logs.count()}'
-    meta_cell.font = Font(name='Calibri', size=9, color='BFDBFE')
-    meta_cell.fill = header_fill
-    meta_cell.alignment = center
-    ws.row_dimensions[2].height = 16
-
-    ws.row_dimensions[3].height = 6  # spacer
-
-    # ── Column headers (row 4) ────────────────────────────────────────────────
-    columns = [
-        ('#',              6),
-        ('Plate Number',  16),
-        ('Entry Type',    13),
-        ('Status',        12),
-        ('Source',        11),
-        ('Camera Role',   14),
-        ('Name',          28),
-        ('Blacklist Tag', 14),
-        ('Blacklist Remarks', 30),
-        ('Timestamp',     20),
-    ]
-    for col_idx, (col_name, col_width) in enumerate(columns, start=1):
-        cell = ws.cell(row=4, column=col_idx, value=col_name)
-        cell.font = header_font
-        cell.fill = subhead_fill
-        cell.alignment = center
-        cell.border = thin_border
-        ws.column_dimensions[get_column_letter(col_idx)].width = col_width
-    ws.row_dimensions[4].height = 20
-
-    # ── Data rows ─────────────────────────────────────────────────────────────
-    for row_idx, log in enumerate(logs, start=1):
-        excel_row = row_idx + 4
+    bl_map = get_active_blacklist_map([l.plate_number for l in logs])
+    rows = []
+    for i, log in enumerate(logs, 1):
+        bl = bl_map.get((log.plate_number or '').upper(), {})
         local_ts = timezone.localtime(log.timestamp)
-        bl_info = bl_map.get((log.plate_number or '').upper(), {})
-        is_blacklisted = bool(bl_info)
-        is_alt = row_idx % 2 == 0
-
-        fill = red_fill if is_blacklisted else (alt_fill if is_alt else white_fill)
-
-        row_data = [
-            row_idx,
+        rows.append([
+            i,
             log.plate_number or '',
-            log.get_entry_type_display() if hasattr(log, 'get_entry_type_display') else log.entry_type,
             'Time In' if log.status == VehicleLog.STATUS_IN else 'Time Out',
-            log.get_source_display() if hasattr(log, 'get_source_display') else log.source,
-            log.get_camera_role_display() if hasattr(log, 'get_camera_role_display') else log.camera_role,
+            log.get_entry_type_display() if hasattr(log, 'get_entry_type_display') else log.entry_type,
+            log.get_source_display()     if hasattr(log, 'get_source_display')     else log.source,
+            log.get_camera_role_display()if hasattr(log, 'get_camera_role_display')else (log.camera_role or ''),
             log.resident_name or log.visitor_name or '',
-            bl_info.get('tag', ''),
-            bl_info.get('remarks', ''),
+            bl.get('tag_display', bl.get('tag', '')),
+            bl.get('remarks', ''),
+            log.logged_by.get_full_name() if log.logged_by else 'System',
             local_ts.strftime('%Y-%m-%d %H:%M:%S'),
-        ]
+        ])
 
-        for col_idx, value in enumerate(row_data, start=1):
-            cell = ws.cell(row=excel_row, column=col_idx, value=value)
-            cell.fill = fill
-            cell.border = thin_border
-            cell.alignment = center if col_idx in (1, 3, 4, 5, 6, 8, 10) else left
-
-            if col_idx == 1:  # row number
-                cell.font = Font(name='Calibri', size=8, color='94A3B8')
-            elif col_idx == 2:  # plate
-                cell.font = red_font if is_blacklisted else mono_font
-            elif col_idx == 8 and is_blacklisted:  # blacklist tag
-                cell.font = red_font
-            else:
-                cell.font = body_font
-
-        ws.row_dimensions[excel_row].height = 15
-
-    # ── Freeze panes & filter ─────────────────────────────────────────────────
-    ws.freeze_panes = 'A5'
-    ws.auto_filter.ref = f'A4:J{4 + logs.count()}'
-
-    # ── Summary sheet ─────────────────────────────────────────────────────────
-    ws2 = wb.create_sheet('Summary')
-    ws2.column_dimensions['A'].width = 28
-    ws2.column_dimensions['B'].width = 16
-
-    summary_title = ws2.cell(row=1, column=1, value='SUMMARY')
-    summary_title.font = Font(name='Calibri', bold=True, size=13, color='FFFFFF')
-    summary_title.fill = header_fill
-    summary_title.alignment = center
-    ws2.merge_cells('A1:B1')
-    ws2.row_dimensions[1].height = 24
-
-    summary_rows = [
-        ('Total Records', logs.count()),
-        ('Time In', logs.filter(status=VehicleLog.STATUS_IN).count()),
-        ('Time Out', logs.filter(status=VehicleLog.STATUS_OUT).count()),
-        ('Residents', logs.filter(entry_type=VehicleLog.TYPE_RESIDENT).count()),
-        ('Visitors', logs.filter(entry_type=VehicleLog.TYPE_VISITOR).count()),
-        ('Camera Source', logs.filter(source=VehicleLog.SOURCE_CAMERA).count()),
-        ('Manual Source', logs.filter(source=VehicleLog.SOURCE_MANUAL).count()),
-        ('Blacklisted Plates', sum(1 for log in logs if (log.plate_number or '').upper() in bl_map)),
-    ]
-    for i, (label, value) in enumerate(summary_rows, start=2):
-        lc = ws2.cell(row=i, column=1, value=label)
-        vc = ws2.cell(row=i, column=2, value=value)
-        row_fill = alt_fill if i % 2 == 0 else white_fill
-        lc.fill = vc.fill = row_fill
-        lc.font = Font(name='Calibri', size=10, color='334155')
-        vc.font = Font(name='Calibri', size=10, bold=True, color='1E3A5F')
-        lc.alignment = left
-        vc.alignment = center
-        lc.border = vc.border = thin_border
-        ws2.row_dimensions[i].height = 18
-
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    filename = f'bantayplaka_logs_{timezone.localdate()}.xlsx'
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    wb.save(response)
-    return response
+    return build_excel_response(
+        'bantayplaka_logs',
+        'Vehicle Logs',
+        headers=['#', 'Plate', 'Status', 'Type', 'Source', 'Camera', 'Name', 'BL Tag', 'BL Remarks', 'Logged By', 'Timestamp'],
+        col_widths=[5, 14, 11, 12, 10, 14, 26, 14, 28, 20, 20],
+        rows=rows,
+        highlight_fn=lambda r: bool(r[7]),
+        mono_cols={2}, center_cols={1, 3, 4, 5, 6, 8, 11},
+        summary_rows=[
+            ('Total Records',    len(rows)),
+            ('Time In',          sum(1 for r in rows if r[2] == 'Time In')),
+            ('Time Out',         sum(1 for r in rows if r[2] == 'Time Out')),
+            ('Resident Entries', sum(1 for r in rows if r[3] == 'Resident')),
+            ('Visitor Entries',  sum(1 for r in rows if r[3] == 'Visitor')),
+            ('Blacklisted Hits', sum(1 for r in rows if r[7])),
+        ],
+        date_from=date_from, date_to=date_to,
+    )
 
 
 @login_required

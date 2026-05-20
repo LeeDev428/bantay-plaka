@@ -8,13 +8,37 @@
     <h1 class="text-2xl font-bold text-slate-800">Pending Vehicle Approvals</h1>
     <p class="text-slate-500 text-sm mt-0.5">Review resident-submitted vehicle registrations</p>
   </div>
-  <button type="button" onclick="document.getElementById('approvals-export-modal').classList.remove('hidden'); document.getElementById('approvals-export-modal').classList.add('flex');"
-    class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
-    <i class="fa fa-file-arrow-down mr-1"></i> Export
-  </button>
+  <button type="button" onclick="document.getElementById('approvals-export-modal').classList.remove('hidden'); document.getElementById('approvals-export-modal').classList.add('flex');" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white"><i class="fa fa-file-arrow-down mr-1"></i> Export</button>
 </div>
 
-{% include 'partials/export_modal.html' with modal_id="approvals-export-modal" title="Export Pending Approvals" excel_url_name="approvals_export_excel" pdf_url_name="approvals_export_pdf" show_date_range=False info_text="Exports all currently pending vehicle registrations." %}
+<!-- Export Modal -->
+<div id="approvals-export-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="document.getElementById('approvals-export-modal').classList.add('hidden'); document.getElementById('approvals-export-modal').classList.remove('flex');"></div>
+  <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">Export Pending Approvals</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Exports all currently pending vehicle registrations.</p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="document.getElementById('approvals-export-modal').classList.add('hidden'); document.getElementById('approvals-export-modal').classList.remove('flex');"><i class="fa fa-xmark text-xl"></i></button>
+    </div>
+    <div class="px-6 py-5 overflow-y-auto space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center"><i class="fa fa-file-excel text-emerald-600 text-lg"></i></div>
+          <div><p class="text-sm font-semibold text-slate-700">Excel</p><p class="text-[11px] text-slate-400">.xlsx with summary sheet</p></div>
+          <a href="{% url 'approvals_export_excel' %}" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1"><i class="fa fa-download mr-1"></i> Download</a>
+        </div>
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center"><i class="fa fa-file-pdf text-red-600 text-lg"></i></div>
+          <div><p class="text-sm font-semibold text-slate-700">PDF</p><p class="text-[11px] text-slate-400">Landscape A4 report</p></div>
+          <a href="{% url 'approvals_export_pdf' %}" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1"><i class="fa fa-download mr-1"></i> Download</a>
+        </div>
+      </div>
+      <div class="flex justify-end"><button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('approvals-export-modal').classList.add('hidden'); document.getElementById('approvals-export-modal').classList.remove('flex');">Close</button></div>
+    </div>
+  </div>
+</div>
 
 <div class="page-card">
   <div class="p-4 border-b border-slate-100">

@@ -14,14 +14,10 @@
     <h1 class="text-2xl font-bold text-slate-800">Reports</h1>
     <p class="text-slate-500 text-sm mt-0.5">Analytics and activity summary &mdash; {{ today|date:"F d, Y" }}</p>
   </div>
-  <div class="flex gap-2">
-    <button type="button" id="open-export-excel-modal" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white">
-      <i class="fa fa-file-excel mr-1"></i> Export Excel
-    </button>
-    <button type="button" id="open-export-pdf-modal" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white">
-      <i class="fa fa-file-pdf mr-1"></i> Export PDF
-    </button>
-  </div>
+  <button type="button" onclick="document.getElementById('reports-export-modal').classList.remove('hidden'); document.getElementById('reports-export-modal').classList.add('flex');"
+    class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+    <i class="fa fa-file-arrow-down mr-1"></i> Export
+  </button>
 </div>
 
 <!-- Stats Cards -->
@@ -132,106 +128,16 @@
   </div>
 </div>
 
-<!-- Export Report Modal -->
-<div id="export-report-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
-  <div class="absolute inset-0 bg-slate-900/50" onclick="closeExportModal()"></div>
-  <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-      <h3 class="text-xl font-bold text-slate-800">Visitors Currently Inside</h3>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeExportModal()">
-        <i class="fa fa-xmark text-xl"></i>
-      </button>
-    </div>
-
-    <div class="px-6 py-5 grid md:grid-cols-2 gap-6">
-      <div>
-        <div class="space-y-2 max-h-72 overflow-y-auto pr-2">
-          {% for item in currently_inside_items %}
-            <div class="border-b border-slate-100 pb-2">
-              <p class="font-mono font-semibold text-slate-700">{{ item.plate_number }}</p>
-              <p class="text-xs text-slate-400">Visitor</p>
-            </div>
-          {% empty %}
-            <p class="text-sm text-slate-400">No visitors currently inside.</p>
-          {% endfor %}
-        </div>
-      </div>
-
-      <div>
-        <p class="text-sm text-slate-600 mb-3">Set date range filters before generating CSV.</p>
-        <form id="export-report-form" method="get" action="{% url 'report_export' %}" class="space-y-3">
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
-            <input type="date" name="from" id="export-from" class="input input-bordered w-full bg-white" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
-            <input type="date" name="to" id="export-to" class="input input-bordered w-full bg-white" />
-          </div>
-
-          <div class="pt-2 flex justify-end gap-2">
-            <button type="button" class="btn btn-ghost" onclick="closeExportModal()">Close</button>
-            <a href="{% url 'report_export_visitors_inside' %}" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">
-              <i class="fa fa-users mr-1"></i> Export Visitors Inside
-            </a>
-            <button type="submit" class="btn bg-emerald-600 hover:bg-emerald-700 border-0 text-white">
-              <i class="fa fa-file-csv mr-1"></i> Export CSV
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Excel Export Modal -->
-<div id="export-excel-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
-  <div class="absolute inset-0 bg-slate-900/50" onclick="closeExcelModal()"></div>
-  <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-      <div>
-        <h3 class="text-lg font-bold text-slate-800">Export Excel</h3>
-        <p class="text-xs text-slate-400 mt-0.5">Exports a formatted .xlsx with logs + summary sheet</p>
-      </div>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeExcelModal()">
-        <i class="fa fa-xmark text-xl"></i>
-      </button>
-    </div>
-    <div class="px-6 py-5">
-      <form id="export-excel-form" method="get" action="{% url 'report_export_excel' %}" class="space-y-3">
-        <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
-          <input type="date" name="from" id="excel-export-from" class="input input-bordered w-full bg-white" />
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
-          <input type="date" name="to" id="excel-export-to" class="input input-bordered w-full bg-white" />
-        </div>
-        <div class="rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-3 text-xs text-emerald-700 flex gap-2">
-          <i class="fa fa-circle-info mt-0.5 shrink-0"></i>
-          <span>Leave blank to export all records. The file includes a <strong>Vehicle Logs</strong> sheet with filters and an auto-generated <strong>Summary</strong> sheet.</span>
-        </div>
-        <div class="pt-1 flex justify-end gap-2">
-          <button type="button" class="btn btn-ghost" onclick="closeExcelModal()">Close</button>
-          <button type="submit" class="btn bg-emerald-600 hover:bg-emerald-700 border-0 text-white">
-            <i class="fa fa-file-excel mr-1"></i> Download Excel
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- PDF Export Modal -->
-<div id="export-pdf-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
-  <div class="absolute inset-0 bg-slate-900/50" onclick="closePdfModal()"></div>
+<!-- Export Modal -->
+<div id="reports-export-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeReportsExportModal()"></div>
   <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
       <div>
-        <h3 class="text-lg font-bold text-slate-800">Export PDF</h3>
-        <p class="text-xs text-slate-400 mt-0.5">Landscape A4 report with all log records</p>
+        <h3 class="text-lg font-bold text-slate-800">Export Vehicle Logs</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Choose format and optional date range</p>
       </div>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closePdfModal()">
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeReportsExportModal()">
         <i class="fa fa-xmark text-xl"></i>
       </button>
     </div>
@@ -239,32 +145,47 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
-          <input type="date" id="pdf-export-from" class="input input-bordered input-sm w-full bg-white" />
+          <input type="date" id="rep-export-from" class="input input-bordered input-sm w-full bg-white" />
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
-          <input type="date" id="pdf-export-to" class="input input-bordered input-sm w-full bg-white" />
+          <input type="date" id="rep-export-to" class="input input-bordered input-sm w-full bg-white" />
         </div>
       </div>
       <div class="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-500 flex gap-2">
         <i class="fa fa-circle-info mt-0.5 shrink-0 text-slate-400"></i>
-        <span>Leave blank to export all records as a landscape A4 PDF.</span>
+        <span>Leave dates blank to export all records. Excel includes a Summary sheet.</span>
       </div>
-      <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex flex-col items-center gap-2 text-center">
-        <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-          <i class="fa fa-file-pdf text-red-600 text-lg"></i>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <i class="fa fa-file-excel text-emerald-600 text-lg"></i>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-slate-700">Excel</p>
+            <p class="text-[11px] text-slate-400">.xlsx with summary sheet</p>
+          </div>
+          <a id="rep-excel-btn" href="{% url 'report_export_excel' %}"
+            class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1">
+            <i class="fa fa-download mr-1"></i> Download
+          </a>
         </div>
-        <div>
-          <p class="text-sm font-semibold text-slate-700">PDF Report</p>
-          <p class="text-[11px] text-slate-400">Landscape A4, colour-coded rows</p>
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+            <i class="fa fa-file-pdf text-red-600 text-lg"></i>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-slate-700">PDF</p>
+            <p class="text-[11px] text-slate-400">Landscape A4 report</p>
+          </div>
+          <a id="rep-pdf-btn" href="{% url 'report_export_pdf' %}"
+            class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1">
+            <i class="fa fa-download mr-1"></i> Download
+          </a>
         </div>
-        <a id="pdf-download-btn" href="{% url 'report_export_pdf' %}"
-          class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1">
-          <i class="fa fa-download mr-1"></i> Download PDF
-        </a>
       </div>
       <div class="flex justify-end">
-        <button type="button" class="btn btn-ghost btn-sm" onclick="closePdfModal()">Close</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeReportsExportModal()">Close</button>
       </div>
     </div>
   </div>
@@ -274,70 +195,32 @@
 {% block extra_scripts %}
 <script>
 (function() {
-  const excelOpenBtn = document.getElementById('open-export-excel-modal');
-  const excelModal = document.getElementById('export-excel-modal');
-  if (excelOpenBtn && excelModal) {
-    excelOpenBtn.addEventListener('click', () => {
-      excelModal.classList.remove('hidden');
-      excelModal.classList.add('flex');
-    });
-  }
-  window.closeExcelModal = function () {
-    if (!excelModal) return;
-    excelModal.classList.add('hidden');
-    excelModal.classList.remove('flex');
+  const repModal    = document.getElementById('reports-export-modal');
+  const repFrom     = document.getElementById('rep-export-from');
+  const repTo       = document.getElementById('rep-export-to');
+  const repExcelBtn = document.getElementById('rep-excel-btn');
+  const repPdfBtn   = document.getElementById('rep-pdf-btn');
+  const excelBase   = '{% url "report_export_excel" %}';
+  const pdfBase     = '{% url "report_export_pdf" %}';
+
+  window.closeReportsExportModal = function () {
+    repModal?.classList.add('hidden');
+    repModal?.classList.remove('flex');
   };
 
-  const openBtn = document.getElementById('open-export-modal');
-  const modal = document.getElementById('export-report-modal');
-  if (openBtn && modal) {
-    openBtn.addEventListener('click', () => {
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    });
-  }
-
-  window.closeExportModal = function closeExportModal() {
-    if (!modal) return;
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-  };
-
-  const pdfOpenBtn = document.getElementById('open-export-pdf-modal');
-  const pdfModal = document.getElementById('export-pdf-modal');
-  if (pdfOpenBtn && pdfModal) {
-    pdfOpenBtn.addEventListener('click', () => {
-      pdfModal.classList.remove('hidden');
-      pdfModal.classList.add('flex');
-    });
-  }
-  window.closePdfModal = function () {
-    if (!pdfModal) return;
-    pdfModal.classList.add('hidden');
-    pdfModal.classList.remove('flex');
-  };
-
-  // Wire PDF date inputs to download link
-  const pdfFromInput = document.getElementById('pdf-export-from');
-  const pdfToInput   = document.getElementById('pdf-export-to');
-  const pdfDlBtn     = document.getElementById('pdf-download-btn');
-  const pdfBase      = '{% url "report_export_pdf" %}';
-  function updatePdfLink() {
+  function updateLinks() {
     const params = new URLSearchParams();
-    if (pdfFromInput?.value) params.set('from', pdfFromInput.value);
-    if (pdfToInput?.value)   params.set('to',   pdfToInput.value);
+    if (repFrom?.value) params.set('from', repFrom.value);
+    if (repTo?.value)   params.set('to',   repTo.value);
     const qs = params.toString() ? '?' + params.toString() : '';
-    if (pdfDlBtn) pdfDlBtn.href = pdfBase + qs;
+    if (repExcelBtn) repExcelBtn.href = excelBase + qs;
+    if (repPdfBtn)   repPdfBtn.href   = pdfBase   + qs;
   }
-  pdfFromInput?.addEventListener('change', updatePdfLink);
-  pdfToInput?.addEventListener('change', updatePdfLink);
+  repFrom?.addEventListener('change', updateLinks);
+  repTo?.addEventListener('change', updateLinks);
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      window.closeExcelModal();
-      window.closeExportModal();
-      window.closePdfModal();
-    }
+    if (e.key === 'Escape') window.closeReportsExportModal();
   });
 
   const labels = {{ daily_data|safe }}.map(d => d.label);

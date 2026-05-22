@@ -142,6 +142,9 @@ def blacklist_list(request):
                 messages.success(request, f'Plate {entry.plate_number} is now active in blacklist.')
             return redirect('blacklist_list')
 
+    tag_q = request.GET.get('tag', '').strip()
+    status_q = request.GET.get('status', '').strip()
+
     entries_qs = BlacklistEntry.objects.select_related('created_by').order_by('-updated_at')
     if q:
         entries_qs = entries_qs.filter(
@@ -149,6 +152,13 @@ def blacklist_list(request):
             | Q(reason__icontains=q)
             | Q(remarks__icontains=q)
         )
+    if tag_q:
+        entries_qs = entries_qs.filter(tag=tag_q)
+    if status_q == 'active':
+        entries_qs = entries_qs.filter(is_active=True)
+    elif status_q == 'inactive':
+        entries_qs = entries_qs.filter(is_active=False)
+
     paginator = Paginator(entries_qs, 10)
     entries = paginator.get_page(request.GET.get('page', 1))
 
@@ -156,6 +166,8 @@ def blacklist_list(request):
         'form': form,
         'entries': entries,
         'q': q,
+        'tag_q': tag_q,
+        'status_q': status_q,
     })
 
 

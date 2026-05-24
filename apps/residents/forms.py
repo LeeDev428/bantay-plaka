@@ -40,7 +40,7 @@ class ResidentForm(forms.ModelForm):
             'birth_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'age': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'min': 0}),
             'address': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'street_number': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+            'street_number': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Blk / Lot / House Number'}),
             'street_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'contact_number': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full',
@@ -49,6 +49,10 @@ class ResidentForm(forms.ModelForm):
                 'inputmode': 'numeric',
             }),
             'valid_id_image': forms.ClearableFileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
+        }
+        labels = {
+            'valid_id_image': 'OR/CR (Official Receipt / Certificate of Registration)',
+            'make': 'Brand',
         }
 
     def clean_contact_number(self):

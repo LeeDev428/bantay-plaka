@@ -8,33 +8,13 @@ from apps.accounts.models import User
 class Resident(models.Model):
     SEX_MALE = 'MALE'
     SEX_FEMALE = 'FEMALE'
-    SEX_OTHER = 'OTHER'
     SEX_CHOICES = [
         (SEX_MALE, 'Male'),
         (SEX_FEMALE, 'Female'),
     ]
     VALID_ID_TYPE_CHOICES = [
-        ('', '-- Select Valid ID --'),
-        ('PHILSYS_ID', 'PhilSys National ID'),
-        ('PASSPORT', 'Passport'),
+        ('', "-- Select --"),
         ('DRIVERS_LICENSE', "Driver's License"),
-        ('UMID', 'UMID'),
-        ('SSS_ID', 'SSS ID'),
-        ('GSIS_ECARD', 'GSIS eCard'),
-        ('PRC_ID', 'PRC ID'),
-        ('POSTAL_ID', 'Postal ID'),
-        ('VOTERS_ID', "Voter's ID"),
-        ('SENIOR_CITIZEN_ID', 'Senior Citizen ID'),
-        ('PWD_ID', 'PWD ID'),
-        ('TIN_ID', 'TIN ID'),
-        ('NBI_CLEARANCE', 'NBI Clearance'),
-        ('POLICE_CLEARANCE', 'Police Clearance'),
-        ('BARANGAY_ID', 'Barangay ID'),
-        ('OWWA_ID', 'OWWA ID'),
-        ('SEAMANS_BOOK', "Seaman's Book"),
-        ('SCHOOL_ID', 'School ID'),
-        ('COMPANY_ID', 'Company ID'),
-        ('OTHER_GOVERNMENT_ID', 'Other Government Issued ID'),
     ]
 
     first_name = models.CharField(max_length=100)

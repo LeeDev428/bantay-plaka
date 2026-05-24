@@ -71,8 +71,12 @@
       </select>
     </div>
     <div>
-      <label class="block text-xs font-medium text-slate-500 mb-1">Date</label>
-      <input type="date" name="date" value="{{ date_q }}" class="input input-bordered input-sm bg-white" />
+      <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
+      <input type="date" name="date_from" value="{{ date_from_q }}" class="input input-bordered input-sm bg-white" />
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
+      <input type="date" name="date_to" value="{{ date_to_q }}" class="input input-bordered input-sm bg-white" />
     </div>
     <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
       <i class="fa fa-filter mr-1"></i> Filter
@@ -162,12 +166,12 @@
   {% if logs.has_other_pages %}
   <div class="flex justify-center py-4 gap-1 border-t border-slate-100">
     {% if logs.has_previous %}
-      <a href="?page={{ logs.previous_page_number }}&q={{ q }}&plate={{ plate_q }}&entry_type={{ entry_type_q }}&status={{ status_q }}&date={{ date_q }}"
+      <a href="?page={{ logs.previous_page_number }}&q={{ q }}&plate={{ plate_q }}&entry_type={{ entry_type_q }}&status={{ status_q }}&date_from={{ date_from_q }}&date_to={{ date_to_q }}"
         class="btn btn-sm btn-ghost text-slate-600">&laquo; Prev</a>
     {% endif %}
     <span class="btn btn-sm btn-disabled bg-slate-100 text-slate-500">{{ logs.number }} / {{ logs.paginator.num_pages }}</span>
     {% if logs.has_next %}
-      <a href="?page={{ logs.next_page_number }}&q={{ q }}&plate={{ plate_q }}&entry_type={{ entry_type_q }}&status={{ status_q }}&date={{ date_q }}"
+      <a href="?page={{ logs.next_page_number }}&q={{ q }}&plate={{ plate_q }}&entry_type={{ entry_type_q }}&status={{ status_q }}&date_from={{ date_from_q }}&date_to={{ date_to_q }}"
         class="btn btn-sm btn-ghost text-slate-600">Next &raquo;</a>
     {% endif %}
   </div>

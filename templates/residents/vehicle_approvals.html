@@ -8,7 +8,12 @@
     <h1 class="text-2xl font-bold text-slate-800">Pending Vehicle Approvals</h1>
     <p class="text-slate-500 text-sm mt-0.5">Review resident-submitted vehicle registrations</p>
   </div>
-  <button type="button" onclick="document.getElementById('approvals-export-modal').classList.remove('hidden'); document.getElementById('approvals-export-modal').classList.add('flex');" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white"><i class="fa fa-file-arrow-down mr-1"></i> Export</button>
+  <div class="flex gap-2 flex-wrap">
+    <a href="{% url 'resident_list' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+      <i class="fa fa-plus mr-1"></i> Register Vehicle
+    </a>
+    <button type="button" onclick="document.getElementById('approvals-export-modal').classList.remove('hidden'); document.getElementById('approvals-export-modal').classList.add('flex');" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white"><i class="fa fa-file-arrow-down mr-1"></i> Export</button>
+  </div>
 </div>
 
 <!-- Export Modal -->

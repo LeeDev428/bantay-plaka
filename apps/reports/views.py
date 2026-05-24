@@ -68,15 +68,24 @@ def report_dashboard(request):
         .order_by('plate_number')
     )
 
-    # 7-day daily breakdown — use UTC ranges so no CONVERT_TZ needed
+    # Activity chart with selectable period
+    chart_period_q = request.GET.get('chart_period', '7').strip()
+    try:
+        chart_days = int(chart_period_q)
+        if chart_days not in (7, 30, 90):
+            chart_days = 7
+    except ValueError:
+        chart_days = 7
+    chart_period_q = str(chart_days)
+
     daily_data = []
-    for i in range(6, -1, -1):
+    for i in range(chart_days - 1, -1, -1):
         d = today - timedelta(days=i)
         d_start, d_end = _day_range(d)
         day_qs = VehicleLog.objects.filter(timestamp__gte=d_start, timestamp__lt=d_end)
         daily_data.append({
             'date': d.strftime('%Y-%m-%d'),
-            'label': d.strftime('%a'),
+            'label': d.strftime('%b %d') if chart_days > 7 else d.strftime('%a'),
             'time_in': day_qs.filter(status=VehicleLog.STATUS_IN).count(),
             'time_out': day_qs.filter(status=VehicleLog.STATUS_OUT).count(),
         })
@@ -117,6 +126,7 @@ def report_dashboard(request):
         'currently_inside': currently_inside,
         'currently_inside_items': currently_inside_items,
         'daily_data': daily_data,
+        'chart_period_q': chart_period_q,
         'top_vehicles': top_vehicles,
         'top_rank_offset': top_rank_offset,
         'top_window_q': top_window_q,

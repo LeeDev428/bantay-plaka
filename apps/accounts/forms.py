@@ -155,7 +155,7 @@ class ResidentSignupForm(forms.Form):
     street_number = forms.CharField(
         max_length=50,
         required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'House/Unit number'}),
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Blk / Lot / House Number'}),
     )
     street_name = forms.CharField(
         max_length=150,
@@ -172,6 +172,7 @@ class ResidentSignupForm(forms.Form):
     )
     valid_id_image = forms.ImageField(
         required=True,
+        label='OR/CR (Official Receipt / Certificate of Registration)',
         widget=forms.ClearableFileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
     )
 

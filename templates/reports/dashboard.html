@@ -71,7 +71,16 @@
 <div class="grid lg:grid-cols-3 gap-6 mb-6">
   <!-- 7-Day Activity Chart -->
   <div class="lg:col-span-2 page-card p-5">
-    <h2 class="font-semibold text-slate-800 mb-4">7-Day Activity</h2>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-semibold text-slate-800">Activity Chart</h2>
+      <form method="get" class="flex items-center gap-2">
+        <select name="chart_period" class="select select-bordered select-sm bg-white" onchange="this.form.submit()">
+          <option value="7" {% if chart_period_q == '7' %}selected{% endif %}>Last 7 Days</option>
+          <option value="30" {% if chart_period_q == '30' %}selected{% endif %}>Last 30 Days</option>
+          <option value="90" {% if chart_period_q == '90' %}selected{% endif %}>Last 90 Days</option>
+        </select>
+      </form>
+    </div>
     <div class="h-64">
       <canvas id="activityChart"></canvas>
     </div>

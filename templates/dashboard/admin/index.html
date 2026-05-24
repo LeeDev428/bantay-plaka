@@ -142,4 +142,27 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script>
+(function() {
+  const data = {{ daily_data|safe }};
+  new Chart(document.getElementById('activityChart'), {
+    type: 'bar',
+    data: {
+      labels: data.map(d => d.label),
+      datasets: [
+        { label: 'Time In', data: data.map(d => d.time_in), backgroundColor: '#3b82f6', borderRadius: 4, barPercentage: 0.7 },
+        { label: 'Time Out', data: data.map(d => d.time_out), backgroundColor: '#ef4444', borderRadius: 4, barPercentage: 0.7 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', padding: 20, font: { size: 12 } } } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 }, color: '#94a3b8' }, grid: { color: '#f1f5f9' } },
+        x: { ticks: { font: { size: 11 }, color: '#94a3b8' }, grid: { display: false } }
+      }
+    }
+  });
+})();
+</script>
 {% endblock %}

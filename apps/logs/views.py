@@ -112,7 +112,8 @@ def log_list(request):
     plate_q = request.GET.get('plate', '').strip()
     entry_type_q = request.GET.get('entry_type', '').strip()
     status_q = request.GET.get('status', '').strip()
-    date_q = request.GET.get('date', '').strip()
+    date_from_q = request.GET.get('date_from', '').strip()
+    date_to_q = request.GET.get('date_to', '').strip()
 
     if q:
         logs_qs = logs_qs.filter(
@@ -126,13 +127,19 @@ def log_list(request):
         logs_qs = logs_qs.filter(entry_type=entry_type_q)
     if status_q:
         logs_qs = logs_qs.filter(status=status_q)
-    if date_q:
+    tz = timezone.get_current_timezone()
+    if date_from_q:
         try:
-            tz = timezone.get_current_timezone()
-            d = datetime.date.fromisoformat(date_q)
+            d = datetime.date.fromisoformat(date_from_q)
             day_start = timezone.make_aware(datetime.datetime.combine(d, datetime.time.min), tz)
-            day_end = day_start + datetime.timedelta(days=1)
-            logs_qs = logs_qs.filter(timestamp__gte=day_start, timestamp__lt=day_end)
+            logs_qs = logs_qs.filter(timestamp__gte=day_start)
+        except ValueError:
+            pass
+    if date_to_q:
+        try:
+            d = datetime.date.fromisoformat(date_to_q)
+            day_end = timezone.make_aware(datetime.datetime.combine(d, datetime.time.min), tz) + datetime.timedelta(days=1)
+            logs_qs = logs_qs.filter(timestamp__lt=day_end)
         except ValueError:
             pass
 
@@ -147,7 +154,8 @@ def log_list(request):
         'plate_q': plate_q,
         'entry_type_q': entry_type_q,
         'status_q': status_q,
-        'date_q': date_q,
+        'date_from_q': date_from_q,
+        'date_to_q': date_to_q,
     })
 
 

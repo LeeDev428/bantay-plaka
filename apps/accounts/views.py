@@ -138,6 +138,25 @@ def admin_dashboard(request):
         VehicleLog.objects.select_related('logged_by').all()[:10]
     )
 
+    # 7-day chart data
+    from datetime import timedelta as _td
+    import datetime as _dt
+    def _day_range(d):
+        tz = timezone.get_current_timezone()
+        s = timezone.make_aware(_dt.datetime.combine(d, _dt.time.min), tz)
+        return s, s + _td(days=1)
+
+    daily_data = []
+    for i in range(6, -1, -1):
+        d = today - _td(days=i)
+        d_start, d_end = _day_range(d)
+        day_qs = VehicleLog.objects.filter(timestamp__gte=d_start, timestamp__lt=d_end)
+        daily_data.append({
+            'label': d.strftime('%a'),
+            'time_in': day_qs.filter(status=VehicleLog.STATUS_IN).count(),
+            'time_out': day_qs.filter(status=VehicleLog.STATUS_OUT).count(),
+        })
+
     context = {
         'total_residents': Resident.objects.count(),
         'total_vehicles': Vehicle.objects.count(),
@@ -146,6 +165,7 @@ def admin_dashboard(request):
         'today_in': VehicleLog.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end, status=VehicleLog.STATUS_IN).count(),
         'today_out': VehicleLog.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end, status=VehicleLog.STATUS_OUT).count(),
         'recent_logs': recent_logs,
+        'daily_data': daily_data,
     }
     return render(request, 'dashboard/admin/index.html', context)
 

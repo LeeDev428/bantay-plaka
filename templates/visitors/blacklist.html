@@ -139,9 +139,9 @@
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 {% if entry.is_active %}
-                  <button type="submit" class="btn btn-xs bg-slate-100 hover:bg-slate-200 border-0 text-slate-700">Deactivate</button>
+                      <button type="submit" class="btn btn-xs bg-slate-100 hover:bg-slate-200 border-0 text-slate-700">Block</button>
                 {% else %}
-                  <button type="submit" class="btn btn-xs bg-emerald-100 hover:bg-emerald-200 border-0 text-emerald-700">Activate</button>
+                      <button type="submit" class="btn btn-xs bg-emerald-100 hover:bg-emerald-200 border-0 text-emerald-700">Unblock</button>
                 {% endif %}
               </form>
               <button type="button"

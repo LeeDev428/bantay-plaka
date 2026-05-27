@@ -9,10 +9,49 @@
     <p class="text-slate-500 text-sm mt-0.5">Review resident-submitted vehicle registrations</p>
   </div>
   <div class="flex gap-2 flex-wrap">
-    <a href="{% url 'resident_list' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+    <button type="button" id="open-approval-register-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
       <i class="fa fa-plus mr-1"></i> Register Vehicle
-    </a>
+    </button>
     <button type="button" onclick="document.getElementById('approvals-export-modal').classList.remove('hidden'); document.getElementById('approvals-export-modal').classList.add('flex');" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white"><i class="fa fa-file-arrow-down mr-1"></i> Export</button>
+  </div>
+</div>
+
+<!-- Register Vehicle Modal -->
+<div id="approval-register-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeApprovalRegisterModal()"></div>
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h3 class="text-lg font-bold text-slate-800">Register Vehicle</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeApprovalRegisterModal()">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+    <form method="post" class="px-6 py-5 space-y-3" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_vehicle">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Resident <span class="text-red-400">*</span></label>
+        <select name="resident_pk" class="select select-bordered w-full" required>
+          <option value="">-- Select Resident --</option>
+          {% for resident in residents %}
+            <option value="{{ resident.pk }}">{{ resident.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% for field in vehicle_form %}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeApprovalRegisterModal()">Cancel</button>
+        <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Vehicle</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -61,6 +100,7 @@
           <option value="MOTORCYCLE" {% if type_q == 'MOTORCYCLE' %}selected{% endif %}>Motorcycle</option>
           <option value="TRUCK" {% if type_q == 'TRUCK' %}selected{% endif %}>Truck</option>
           <option value="VAN" {% if type_q == 'VAN' %}selected{% endif %}>Van</option>
+          <option value="OTHER" {% if type_q == 'OTHER' %}selected{% endif %}>Other</option>
         </select>
       </div>
       <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
@@ -201,13 +241,52 @@
 {% block extra_scripts %}
 <script>
 (function () {
+  const registerModal = document.getElementById('approval-register-modal');
+  const openRegisterBtn = document.getElementById('open-approval-register-modal');
   const approveModal  = document.getElementById('approve-modal');
   const approveForm   = document.getElementById('approve-form');
   const rejectModal   = document.getElementById('reject-modal');
   const rejectReason  = document.getElementById('reject-reason');
   const rejectConfirm = document.getElementById('reject-confirm');
   const rejectCancel  = document.getElementById('reject-cancel');
+  const modalVehicleType = document.getElementById('id_vehicle-vehicle_type');
+  const modalPlate = document.getElementById('id_vehicle-plate_number');
+  const modalMake = document.getElementById('id_vehicle-make');
+  const modalModel = document.getElementById('id_vehicle-model');
   let activeRejectForm = null;
+
+  window.closeApprovalRegisterModal = function () {
+    registerModal?.classList.add('hidden');
+    registerModal?.classList.remove('flex');
+  };
+  openRegisterBtn?.addEventListener('click', () => {
+    registerModal?.classList.remove('hidden');
+    registerModal?.classList.add('flex');
+  });
+
+  {% if vehicle_form.errors %}
+  registerModal?.classList.remove('hidden');
+  registerModal?.classList.add('flex');
+  {% endif %}
+
+  const hints = {
+    CAR:        { plate: 'e.g. ABC 1234', make: 'e.g. Toyota', model: 'e.g. Vios' },
+    MOTORCYCLE: { plate: 'e.g. 1234AB',   make: 'e.g. Honda',  model: 'e.g. Click 125' },
+    TRUCK:      { plate: 'e.g. ABC 1234', make: 'e.g. Isuzu',  model: 'e.g. Elf' },
+    VAN:        { plate: 'e.g. ABC 1234', make: 'e.g. Toyota', model: 'e.g. Hi-Ace' },
+    OTHER:      { plate: 'e.g. ABC 1234', make: 'e.g. Brand',  model: 'e.g. Model' },
+  };
+
+  function syncModalHints() {
+    const key = modalVehicleType?.value || 'CAR';
+    const set = hints[key] || hints.CAR;
+    if (modalPlate) modalPlate.placeholder = set.plate;
+    if (modalMake) modalMake.placeholder = set.make;
+    if (modalModel) modalModel.placeholder = set.model;
+  }
+
+  modalVehicleType?.addEventListener('change', syncModalHints);
+  syncModalHints();
 
   function closeApprove() { approveModal.classList.add('hidden'); }
   function closeReject()  { rejectModal.classList.add('hidden'); activeRejectForm = null; }
@@ -249,6 +328,7 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    window.closeApprovalRegisterModal();
     closeApprove();
     closeReject();
   });

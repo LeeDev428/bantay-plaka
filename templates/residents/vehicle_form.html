@@ -31,3 +31,33 @@
   </div>
 </div>
 {% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const typeSelect = document.getElementById('id_vehicle_type');
+  const plateInput = document.getElementById('id_plate_number');
+  const makeInput = document.getElementById('id_make');
+  const modelInput = document.getElementById('id_model');
+
+  const hints = {
+    CAR:        { plate: 'e.g. ABC 1234', make: 'e.g. Toyota', model: 'e.g. Vios' },
+    MOTORCYCLE: { plate: 'e.g. 1234AB',   make: 'e.g. Honda',  model: 'e.g. Click 125' },
+    TRUCK:      { plate: 'e.g. ABC 1234', make: 'e.g. Isuzu',  model: 'e.g. Elf' },
+    VAN:        { plate: 'e.g. ABC 1234', make: 'e.g. Toyota', model: 'e.g. Hi-Ace' },
+    OTHER:      { plate: 'e.g. ABC 1234', make: 'e.g. Brand',  model: 'e.g. Model' },
+  };
+
+  function applyHints() {
+    const key = typeSelect?.value || 'CAR';
+    const set = hints[key] || hints.CAR;
+    if (plateInput) plateInput.placeholder = set.plate;
+    if (makeInput) makeInput.placeholder = set.make;
+    if (modelInput) modelInput.placeholder = set.model;
+  }
+
+  typeSelect?.addEventListener('change', applyHints);
+  applyHints();
+})();
+</script>
+{% endblock %}

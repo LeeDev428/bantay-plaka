@@ -26,15 +26,78 @@
     {% endif %}
   </div> {% endcomment %}
   <div class="flex gap-2">
-    <a href="{% url 'manual_entry' %}" class="btn btn-sm bg-amber-500 hover:bg-amber-600 border-0 text-white">
+    <button type="button" id="open-guard-export-modal" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+      <i class="fa fa-file-arrow-down mr-1"></i> Export
+    </button>
+    <button type="button" id="open-guard-manual-modal" class="btn btn-sm bg-amber-500 hover:bg-amber-600 border-0 text-white">
       <i class="fa fa-keyboard mr-1"></i> Manual Entry
-    </a>
-    <a href="{% url 'plate_monitor' %}" target="_blank" rel="noopener noreferrer" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+    </button>
+    <a href="{% url 'plate_monitor' %}" target="_blank" rel="noopener noreferrer" class="btn btn-sm bg-indigo-700 hover:bg-indigo-800 border-0 text-white">
       <i class="fa fa-display mr-1"></i> Open Plate Monitor
     </a>
     {% comment %} <a href="{% url 'visitor_log_entry' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
       <i class="fa fa-user-plus mr-1"></i> Log Visitor
     </a> {% endcomment %}
+  </div>
+</div>
+
+<!-- Guard Export Modal -->
+<div id="guard-export-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeGuardExportModal()"></div>
+  <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">Export Gate Logs</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Download live gate activity report.</p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeGuardExportModal()"><i class="fa fa-xmark text-xl"></i></button>
+    </div>
+    <div class="px-6 py-5 overflow-y-auto space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center"><i class="fa fa-file-excel text-emerald-600 text-lg"></i></div>
+          <div><p class="text-sm font-semibold text-slate-700">Excel</p><p class="text-[11px] text-slate-400">.xlsx with summary sheet</p></div>
+          <a href="{% url 'logs_export_excel' %}" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1"><i class="fa fa-download mr-1"></i> Download</a>
+        </div>
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center"><i class="fa fa-file-pdf text-red-600 text-lg"></i></div>
+          <div><p class="text-sm font-semibold text-slate-700">PDF</p><p class="text-[11px] text-slate-400">Landscape A4 report</p></div>
+          <a href="{% url 'logs_export_pdf' %}" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1"><i class="fa fa-download mr-1"></i> Download</a>
+        </div>
+      </div>
+      <div class="flex justify-end"><button type="button" class="btn btn-ghost btn-sm" onclick="closeGuardExportModal()">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Entry Modal -->
+<div id="guard-manual-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeGuardManualModal()"></div>
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">Manual Log Entry</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Use when camera is offline. Entry will be marked as manual.</p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeGuardManualModal()"><i class="fa fa-xmark text-xl"></i></button>
+    </div>
+    <form method="post" class="px-6 py-5 space-y-3 overflow-y-auto" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_manual_log">
+      {% for field in manual_form %}
+        <div id="guard-manual-{{ field.name }}-wrap">
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeGuardManualModal()">Cancel</button>
+        <button type="submit" class="btn bg-amber-500 hover:bg-amber-600 border-0 text-white">Save Log Entry</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -151,4 +214,50 @@
 
 {% block extra_scripts %}
 {% include 'partials/websocket_listener.html' %}
+<script>
+(function () {
+  const manualModal = document.getElementById('guard-manual-modal');
+  const exportModal = document.getElementById('guard-export-modal');
+  const openManual = document.getElementById('open-guard-manual-modal');
+  const openExport = document.getElementById('open-guard-export-modal');
+
+  window.closeGuardManualModal = function () {
+    manualModal?.classList.add('hidden');
+    manualModal?.classList.remove('flex');
+  };
+  window.closeGuardExportModal = function () {
+    exportModal?.classList.add('hidden');
+    exportModal?.classList.remove('flex');
+  };
+
+  openManual?.addEventListener('click', () => {
+    manualModal?.classList.remove('hidden');
+    manualModal?.classList.add('flex');
+  });
+  openExport?.addEventListener('click', () => {
+    exportModal?.classList.remove('hidden');
+    exportModal?.classList.add('flex');
+  });
+
+  const entryType = document.getElementById('id_manual-entry_type');
+  const residentWrap = document.getElementById('guard-manual-resident_name-wrap');
+  function syncManualFields() {
+    const isResident = entryType && entryType.value === 'RESIDENT';
+    residentWrap?.classList.toggle('hidden', !isResident);
+  }
+  entryType?.addEventListener('change', syncManualFields);
+  syncManualFields();
+
+  {% if manual_form.errors %}
+  manualModal?.classList.remove('hidden');
+  manualModal?.classList.add('flex');
+  {% endif %}
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    window.closeGuardManualModal();
+    window.closeGuardExportModal();
+  });
+})();
+</script>
 {% endblock %}

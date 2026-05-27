@@ -6,6 +6,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 
 from apps.accounts.views import admin_required
+from apps.accounts.models import User
 from apps.residents.models import Resident, Vehicle
 from apps.residents.forms import ResidentForm, VehicleForm
 

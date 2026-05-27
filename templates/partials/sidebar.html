@@ -19,6 +19,11 @@
         <i class="fa fa-clock-rotate-left w-5 text-center"></i> Vehicle Logs
       </a>
     {% endif %}
+    {% if user.is_admin %}
+      <a href="{% url 'vehicle_approval_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'vehicle_approval_list' %}active{% endif %}">
+        <i class="fa fa-car w-5 text-center"></i> Vehicle Approvals
+      </a>
+    {% endif %}
     {% if not user.is_resident %}
       <a href="{% url 'report_dashboard' %}" class="sidebar-link {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
         <i class="fa fa-chart-column w-5 text-center"></i> Reports
@@ -36,22 +41,25 @@
     <a href="{% url 'blacklist_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'blacklist_list' %}active{% endif %}">
       <i class="fa fa-ban w-5 text-center"></i> Blacklist
     </a>
+    <a href="{% url 'snapshot_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'snapshot_gallery' %}active{% endif %}">
+      <i class="fa fa-image w-5 text-center"></i> Photos
+    </a>
     {% endif %}
 
     {% if user.is_admin %}
     <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">Security</p>
     <a href="{% url 'blacklist_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'blacklist_list' %}active{% endif %}">
-      <i class="fa fa-ban w-5 text-center"></i> Add Blacklist
+      <i class="fa fa-ban w-5 text-center"></i> Blacklist
     </a>
-    <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">Admin</p>
+    <a href="{% url 'snapshot_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'snapshot_gallery' %}active{% endif %}">
+      <i class="fa fa-image w-5 text-center"></i> Photos
+    </a>
+    <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">User Management</p>
     <a href="{% url 'resident_list' %}" class="sidebar-link {% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-house-user w-5 text-center"></i> Residents
     </a>
-    <a href="{% url 'vehicle_approval_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'vehicle_approval_list' %}active{% endif %}">
-      <i class="fa fa-car w-5 text-center"></i> Vehicle Approvals
-    </a>
     <a href="{% url 'user_management' %}" class="sidebar-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
-      <i class="fa fa-users-gear w-5 text-center"></i> Users
+      <i class="fa fa-users-gear w-5 text-center"></i> Guard &amp; Admin
     </a>
     {% endif %}
 

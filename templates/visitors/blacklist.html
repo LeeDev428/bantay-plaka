@@ -44,7 +44,7 @@
             <i class="fa fa-file-excel text-emerald-600 text-lg"></i>
           </div>
           <div><p class="text-sm font-semibold text-slate-700">Excel</p><p class="text-[11px] text-slate-400">.xlsx with summary sheet</p></div>
-          <a href="#" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1">
+          <a href="{% url 'blacklist_export_excel' %}?q={{ q|urlencode }}&tag={{ tag_q|urlencode }}&status={{ status_q|urlencode }}" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1">
             <i class="fa fa-download mr-1"></i> Download
           </a>
         </div>
@@ -53,7 +53,7 @@
             <i class="fa fa-file-pdf text-red-600 text-lg"></i>
           </div>
           <div><p class="text-sm font-semibold text-slate-700">PDF</p><p class="text-[11px] text-slate-400">Landscape A4 report</p></div>
-          <a href="#" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1">
+          <a href="{% url 'blacklist_export_pdf' %}?q={{ q|urlencode }}&tag={{ tag_q|urlencode }}&status={{ status_q|urlencode }}" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1">
             <i class="fa fa-download mr-1"></i> Download
           </a>
         </div>

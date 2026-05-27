@@ -12,9 +12,10 @@ from datetime import timedelta
 from apps.accounts.forms import LoginForm, UserCreateForm, UserEditForm, ResidentSignupForm
 from apps.accounts.models import User
 from apps.logs.models import VehicleLog, CameraFeedSnapshot
-from apps.logs.services import attach_blacklist_metadata
+from apps.logs.forms import ManualLogForm
+from apps.logs.services import attach_blacklist_metadata, broadcast_log
 from apps.residents.models import Resident, Vehicle
-from apps.visitors.models import BlacklistEntry
+from apps.visitors.models import BlacklistEntry, Visitor
 
 
 def _camera_feed_context() -> dict:
@@ -245,8 +246,9 @@ def user_delete(request, pk):
     user = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
         name = user.get_full_name() or user.username
-        user.delete()
-        messages.success(request, f'User "{name}" has been deleted.')
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+        messages.success(request, f'User "{name}" has been deactivated.')
     return redirect('user_management')
 
 
@@ -257,10 +259,60 @@ def guard_dashboard(request):
     if request.user.is_resident():
         return redirect('resident_dashboard')
 
+    manual_form = ManualLogForm(prefix='manual')
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+        if action == 'create_manual_log':
+            manual_form = ManualLogForm(request.POST, prefix='manual')
+            if manual_form.is_valid():
+                log = manual_form.save(commit=False)
+                blacklist_entry = BlacklistEntry.objects.filter(
+                    plate_number__iexact=log.plate_number,
+                    is_active=True,
+                ).first()
+
+                log.source = VehicleLog.SOURCE_MANUAL
+                log.logged_by = request.user
+
+                resident_vehicle = Vehicle.objects.select_related('resident').filter(
+                    plate_number__iexact=log.plate_number,
+                    is_approved=True,
+                ).first()
+                if resident_vehicle:
+                    log.entry_type = VehicleLog.TYPE_RESIDENT
+                    log.resident_name = log.resident_name or resident_vehicle.resident.full_name
+                    log.visitor_name = ''
+                elif log.entry_type == VehicleLog.TYPE_RESIDENT:
+                    known_visitor = (
+                        Visitor.objects
+                        .filter(plate_number__iexact=log.plate_number)
+                        .order_by('-created_at')
+                        .first()
+                    )
+                    log.entry_type = VehicleLog.TYPE_VISITOR
+                    log.resident_name = ''
+                    log.visitor_name = known_visitor.full_name if known_visitor else ''
+
+                log.save()
+                broadcast_log(log)
+                if blacklist_entry:
+                    blacklist_note = blacklist_entry.remarks or blacklist_entry.reason or 'Blacklisted plate.'
+                    messages.warning(
+                        request,
+                        f'Log entry saved for {log.plate_number}. Plate is blacklisted: {blacklist_note}'
+                    )
+                else:
+                    messages.success(request, f'Log entry saved for {log.plate_number}.')
+                return redirect('guard_dashboard')
+            messages.error(request, 'Failed to save manual log entry. Please complete all required fields.')
+
     recent_logs = attach_blacklist_metadata(
         VehicleLog.objects.select_related('logged_by').all()[:10]
     )
-    context = {'recent_logs': recent_logs}
+    context = {
+        'recent_logs': recent_logs,
+        'manual_form': manual_form,
+    }
     context.update(_camera_feed_context())
     return render(request, 'dashboard/guard/index.html', context)
 

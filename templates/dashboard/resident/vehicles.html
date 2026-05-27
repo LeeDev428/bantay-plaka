@@ -20,6 +20,7 @@
         <input
           type="text"
           name="plate_number"
+          id="resident-vehicle-plate"
           class="input input-bordered w-full uppercase"
           placeholder="e.g. ABC 1234"
           maxlength="20"
@@ -27,8 +28,17 @@
         >
       </div>
       <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Plate Type</label>
+        <select name="plate_type" class="select select-bordered w-full">
+          <option value="REGULAR">Regular</option>
+          <option value="TEMPORARY">Temporary / Conduction sticker</option>
+          <option value="GOVERNMENT">Government</option>
+          <option value="DIPLOMAT">Diplomat</option>
+        </select>
+      </div>
+      <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Vehicle Type <span class="text-red-400">*</span></label>
-        <select name="vehicle_type" class="select select-bordered w-full" required>
+        <select name="vehicle_type" id="resident-vehicle-type" class="select select-bordered w-full" required>
           <option value="">-- Select --</option>
           <option value="CAR">Car</option>
           <option value="MOTORCYCLE">Motorcycle</option>
@@ -39,15 +49,19 @@
       </div>
       <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Brand <span class="text-red-400">*</span></label>
-        <input type="text" name="make" class="input input-bordered w-full" placeholder="e.g. Toyota" required>
+        <input type="text" name="make" id="resident-vehicle-make" class="input input-bordered w-full" placeholder="e.g. Toyota" required>
       </div>
       <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Model <span class="text-red-400">*</span></label>
-        <input type="text" name="model" class="input input-bordered w-full" placeholder="e.g. Vios" required>
+        <input type="text" name="model" id="resident-vehicle-model" class="input input-bordered w-full" placeholder="e.g. Vios" required>
       </div>
       <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Color <span class="text-red-400">*</span></label>
         <input type="text" name="color" class="input input-bordered w-full" placeholder="e.g. White" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Year</label>
+        <input type="number" name="year" class="input input-bordered w-full" min="1900" max="2099" placeholder="e.g. 2024">
       </div>
     </div>
 
@@ -94,4 +108,34 @@
     </div>
   {% endfor %}
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const typeSelect = document.getElementById('resident-vehicle-type');
+  const plateInput = document.getElementById('resident-vehicle-plate');
+  const makeInput = document.getElementById('resident-vehicle-make');
+  const modelInput = document.getElementById('resident-vehicle-model');
+
+  const hints = {
+    CAR:        { plate: 'e.g. ABC 1234', make: 'e.g. Toyota', model: 'e.g. Vios' },
+    MOTORCYCLE: { plate: 'e.g. 1234AB',   make: 'e.g. Honda',  model: 'e.g. Click 125' },
+    TRUCK:      { plate: 'e.g. ABC 1234', make: 'e.g. Isuzu',  model: 'e.g. Elf' },
+    VAN:        { plate: 'e.g. ABC 1234', make: 'e.g. Toyota', model: 'e.g. Hi-Ace' },
+    OTHER:      { plate: 'e.g. ABC 1234', make: 'e.g. Brand',  model: 'e.g. Model' },
+  };
+
+  function applyHints() {
+    const key = typeSelect?.value || 'CAR';
+    const set = hints[key] || hints.CAR;
+    if (plateInput) plateInput.placeholder = set.plate;
+    if (makeInput) makeInput.placeholder = set.make;
+    if (modelInput) modelInput.placeholder = set.model;
+  }
+
+  typeSelect?.addEventListener('change', applyHints);
+  applyHints();
+})();
+</script>
 {% endblock %}

@@ -146,7 +146,7 @@
                 {% if user.is_admin %}
                 <form method="post" action="{% url 'vehicle_delete' v.pk %}" class="inline">
                   {% csrf_token %}
-                  <button type="submit" class="text-red-400 hover:text-red-600 transition-colors" onclick="return confirm('Remove vehicle?')">
+                  <button type="submit" class="text-amber-500 hover:text-amber-700 transition-colors" onclick="return confirm('Vehicle delete is disabled. Keep record?')">
                     <i class="fa fa-xmark text-xs"></i>
                   </button>
                 </form>
@@ -202,8 +202,8 @@
               </a>
               <form method="post" action="{% url 'resident_delete' resident.pk %}" class="inline" data-delete-resident data-name="{{ resident.full_name }}">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" title="Delete">
-                  <i class="fa fa-trash text-xs"></i>
+                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Archive">
+                  <i class="fa fa-box-archive text-xs"></i>
                 </button>
               </form>
             </div>
@@ -313,12 +313,12 @@
     <div class="flex items-center justify-center w-10 h-10 rounded-full bg-red-50 mb-4">
       <i class="fa fa-trash text-red-600"></i>
     </div>
-    <p class="text-base font-semibold text-slate-800 mb-1" id="del-modal-title">Remove resident?</p>
-    <p class="text-sm text-slate-500 mb-5">This will permanently delete <strong id="del-resident-name"></strong> and all their data.</p>
+    <p class="text-base font-semibold text-slate-800 mb-1" id="del-modal-title">Archive resident?</p>
+    <p class="text-sm text-slate-500 mb-5">This will deactivate <strong id="del-resident-name"></strong> while retaining records.</p>
     <div class="flex justify-end gap-2">
       <button type="button" id="del-cancel" class="btn btn-sm btn-ghost">Cancel</button>
-      <button type="button" id="del-confirm" class="btn btn-sm bg-red-100 hover:bg-red-200 border-0 text-red-700">
-        <i class="fa fa-trash mr-1"></i> Delete
+      <button type="button" id="del-confirm" class="btn btn-sm bg-amber-100 hover:bg-amber-200 border-0 text-amber-700">
+        <i class="fa fa-box-archive mr-1"></i> Archive
       </button>
     </div>
   </div>

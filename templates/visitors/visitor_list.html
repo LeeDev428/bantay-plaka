@@ -8,9 +8,39 @@
     <h1 class="text-2xl font-bold text-slate-800">Visitors</h1>
     <p class="text-slate-500 text-sm mt-0.5">All visitor entries</p>
   </div>
-  <a href="{% url 'visitor_log_entry' %}" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
-    <i class="fa fa-plus mr-1"></i> Log New Visitor
-  </a>
+  <div class="flex gap-2">
+    <button type="button" onclick="document.getElementById('visitors-export-modal').classList.remove('hidden'); document.getElementById('visitors-export-modal').classList.add('flex');" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white"><i class="fa fa-file-arrow-down mr-1"></i> Export</button>
+    <button type="button" id="open-visitor-create-modal" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white"><i class="fa fa-plus mr-1"></i> Log New Visitor</button>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div id="visitors-export-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="document.getElementById('visitors-export-modal').classList.add('hidden'); document.getElementById('visitors-export-modal').classList.remove('flex');"></div>
+  <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">Export Visitors</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Exports visitors using current filters.</p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="document.getElementById('visitors-export-modal').classList.add('hidden'); document.getElementById('visitors-export-modal').classList.remove('flex');"><i class="fa fa-xmark text-xl"></i></button>
+    </div>
+    <div class="px-6 py-5 overflow-y-auto space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center"><i class="fa fa-file-excel text-emerald-600 text-lg"></i></div>
+          <div><p class="text-sm font-semibold text-slate-700">Excel</p><p class="text-[11px] text-slate-400">.xlsx with summary sheet</p></div>
+          <a href="{% url 'visitor_export_excel' %}?q={{ q|urlencode }}&visitor_type={{ visitor_type_q|urlencode }}&date={{ date_q|urlencode }}" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1"><i class="fa fa-download mr-1"></i> Download</a>
+        </div>
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center"><i class="fa fa-file-pdf text-red-600 text-lg"></i></div>
+          <div><p class="text-sm font-semibold text-slate-700">PDF</p><p class="text-[11px] text-slate-400">Landscape A4 report</p></div>
+          <a href="{% url 'visitor_export_pdf' %}?q={{ q|urlencode }}&visitor_type={{ visitor_type_q|urlencode }}&date={{ date_q|urlencode }}" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1"><i class="fa fa-download mr-1"></i> Download</a>
+        </div>
+      </div>
+      <div class="flex justify-end"><button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('visitors-export-modal').classList.add('hidden'); document.getElementById('visitors-export-modal').classList.remove('flex');">Close</button></div>
+    </div>
+  </div>
 </div>
 
 <div class="page-card p-4 mb-4">
@@ -84,14 +114,6 @@
               >
                 <i class="fa fa-pen text-xs"></i>
               </button>
-              <form method="post" action="{% url 'visitor_delete' visitor.pk %}" class="inline"
-                data-delete-visitor data-name="{{ visitor.full_name|escapejs }}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-red-600" title="Delete">
-                  <i class="fa fa-trash text-xs"></i>
-                </button>
-              </form>
             </div>
           </td>
         </tr>
@@ -120,6 +142,36 @@
       </div>
     </div>
   {% endif %}
+</div>
+
+<!-- Create Modal -->
+<div id="visitor-create-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeVisitorCreateModal()"></div>
+  <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <h3 class="text-lg font-bold text-slate-800">Log Visitor</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeVisitorCreateModal()"><i class="fa fa-xmark text-xl"></i></button>
+    </div>
+    <form method="post" class="px-6 py-5 space-y-3 overflow-y-auto" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_visitor">
+      <div class="grid sm:grid-cols-2 gap-3">
+        {% for field in visitor_form %}
+          <div class="{% if field.name == 'purpose' or field.name == 'host_name' or field.name == 'vehicle_type_other' %}sm:col-span-2{% endif %}">
+            <label class="block text-sm font-medium text-slate-700 mb-1">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeVisitorCreateModal()">Cancel</button>
+        <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Visitor Log</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- Edit Modal -->
@@ -193,32 +245,15 @@
   </div>
 </div>
 
-<!-- Delete Modal -->
-<div id="delete-visitor-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-  <div class="bg-white rounded-xl border border-slate-200 w-full max-w-sm mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="del-visitor-title">
-    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-red-50 mb-4">
-      <i class="fa fa-trash text-red-600"></i>
-    </div>
-    <p class="text-base font-semibold text-slate-800 mb-1" id="del-visitor-title">Delete visitor entry?</p>
-    <p class="text-sm text-slate-500 mb-5">This will permanently remove <strong id="del-visitor-name"></strong> from the visitor log.</p>
-    <div class="flex justify-end gap-2">
-      <button type="button" id="del-visitor-cancel" class="btn btn-sm btn-ghost">Cancel</button>
-      <button type="button" id="del-visitor-confirm" class="btn btn-sm bg-red-100 hover:bg-red-200 border-0 text-red-700">
-        <i class="fa fa-trash mr-1"></i> Delete
-      </button>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
 (function () {
+  const createModal = document.getElementById('visitor-create-modal');
+  const openCreateBtn = document.getElementById('open-visitor-create-modal');
   const editModal = document.getElementById('visitor-edit-modal');
   const editForm  = document.getElementById('visitor-edit-form');
-  const delModal  = document.getElementById('delete-visitor-modal');
-  const delName   = document.getElementById('del-visitor-name');
-  let activeDelForm = null;
 
   const firstName            = document.getElementById('edit-first-name');
   const lastName             = document.getElementById('edit-last-name');
@@ -230,6 +265,22 @@
   const vehicleTypeOtherWrap = document.getElementById('edit-vehicle-type-other-wrap');
   const vehicleTypeOther     = document.getElementById('edit-vehicle-type-other');
   const visitorType          = document.getElementById('edit-visitor-type');
+
+  window.closeVisitorCreateModal = function () {
+    createModal?.classList.add('hidden');
+    createModal?.classList.remove('flex');
+  };
+  if (openCreateBtn && createModal) {
+    openCreateBtn.addEventListener('click', () => {
+      createModal.classList.remove('hidden');
+      createModal.classList.add('flex');
+    });
+  }
+
+  {% if visitor_form.errors %}
+  createModal?.classList.remove('hidden');
+  createModal?.classList.add('flex');
+  {% endif %}
 
   function syncVehicleTypeOther() {
     const isOther = vehicleType && vehicleType.value === 'OTHER';
@@ -262,30 +313,12 @@
 
   if (vehicleType) vehicleType.addEventListener('change', syncVehicleTypeOther);
 
-  document.querySelectorAll('[data-delete-visitor]').forEach((form) => {
-    form.querySelector('button').addEventListener('click', (e) => {
-      e.preventDefault();
-      activeDelForm = form;
-      delName.textContent = form.dataset.name || 'this visitor';
-      delModal.classList.remove('hidden');
-    });
-  });
-
-  document.getElementById('del-visitor-cancel').addEventListener('click', () => {
-    delModal.classList.add('hidden'); activeDelForm = null;
-  });
-  document.getElementById('del-visitor-confirm').addEventListener('click', () => {
-    activeDelForm?.submit(); delModal.classList.add('hidden');
-  });
-  delModal.addEventListener('click', (e) => {
-    if (e.target === delModal) { delModal.classList.add('hidden'); activeDelForm = null; }
-  });
-
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    window.closeVisitorCreateModal();
     window.closeVisitorEditModal();
-    delModal.classList.add('hidden');
-    activeDelForm = null;
+    document.getElementById('visitors-export-modal')?.classList.add('hidden');
+    document.getElementById('visitors-export-modal')?.classList.remove('flex');
   });
 })();
 </script>

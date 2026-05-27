@@ -127,11 +127,11 @@
                   <i class="fa {% if u.is_active %}fa-user-slash{% else %}fa-user-check{% endif %} text-xs"></i>
                 </button>
               </form>
-              <-button type="button" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Deactivate"
+              <button type="button" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Deactivate"
                 data-open-user-delete
                 data-delete-url="{% url 'user_delete' u.pk %}"
                 data-delete-name="{{ u.get_full_name|default:u.username|escapejs }}"
-              ><i class="fa fa-user-slash text-xs"></i></-button>
+              ><i class="fa fa-user-slash text-xs"></i></button>
             </div>
           </td>
         </tr>

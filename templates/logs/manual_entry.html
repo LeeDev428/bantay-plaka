@@ -4,137 +4,137 @@
 {% block breadcrumb %}Operations &raquo; Manual Entry{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
-    <i class="fa fa-triangle-exclamation text-amber-500"></i>
-    <p class="text-sm text-amber-700"><strong>Manual Mode</strong> &mdash; Use when the camera is offline. Logs are flagged as Manual.</p>
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">Manual Entry</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Manual logs when camera scan is unavailable.</p>
   </div>
-  <h1 class="text-2xl font-bold text-slate-800">Manual Log Entry</h1>
-  <p class="text-slate-500 text-sm mt-0.5">Enter plate details manually to record time in/out</p>
+  <div class="flex gap-2">
+    <button type="button" id="open-manual-export-modal" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+      <i class="fa fa-file-arrow-down mr-1"></i> Export
+    </button>
+    <button type="button" id="open-manual-log-modal" class="btn btn-sm bg-amber-500 hover:bg-amber-600 border-0 text-white">
+      <i class="fa fa-plus mr-1"></i> Add Manual Log Entry
+    </button>
+  </div>
 </div>
 
-<div class="grid lg:grid-cols-2 gap-6">
-  <!-- Form -->
-  <div class="page-card p-6">
-    <h2 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-      <i class="fa fa-keyboard text-amber-500"></i> Enter Details
-    </h2>
-    <form method="post" novalidate id="manual-form">
-      {% csrf_token %}
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-slate-700 mb-1.5">
-          {{ form.plate_number.label }} <span class="text-red-400">*</span>
-        </label>
-        {{ form.plate_number }}
-        {% if form.plate_number.errors %}
-          <p class="text-red-500 text-xs mt-1">{{ form.plate_number.errors.0 }}</p>
-        {% endif %}
-      </div>
-
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-slate-700 mb-1.5">Status <span class="text-red-400">*</span></label>
-        <div class="grid grid-cols-2 gap-2" id="status-toggle-group">
-          <label class="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 data-[active=true]:bg-blue-50 data-[active=true]:border-blue-200 data-[active=true]:text-blue-700" data-status-option data-value="TIME_IN">
-            <input type="radio" name="status" value="TIME_IN" class="hidden" {% if form.status.value == 'TIME_OUT' %}{% else %}checked{% endif %}>
-            IN
-          </label>
-          <label class="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 data-[active=true]:bg-red-50 data-[active=true]:border-red-200 data-[active=true]:text-red-700" data-status-option data-value="TIME_OUT">
-            <input type="radio" name="status" value="TIME_OUT" class="hidden" {% if form.status.value == 'TIME_OUT' %}checked{% endif %}>
-            OUT
-          </label>
-        </div>
-        {% if form.status.errors %}
-          <p class="text-red-500 text-xs mt-1">{{ form.status.errors.0 }}</p>
-        {% endif %}
-      </div>
-
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-slate-700 mb-1.5">Entry Type <span class="text-red-400">*</span></label>
-        <div class="grid grid-cols-2 gap-2" id="entry-type-group">
-          <label class="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 data-[active=true]:bg-emerald-50 data-[active=true]:border-emerald-200 data-[active=true]:text-emerald-700" data-entry-option data-value="RESIDENT">
-            <input type="radio" name="entry_type" value="RESIDENT" class="hidden" {% if form.entry_type.value == 'RESIDENT' %}checked{% endif %}>
-            Resident
-          </label>
-          <label class="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 data-[active=true]:bg-amber-50 data-[active=true]:border-amber-200 data-[active=true]:text-amber-700" data-entry-option data-value="VISITOR">
-            <input type="radio" name="entry_type" value="VISITOR" class="hidden" {% if form.entry_type.value == 'RESIDENT' %}{% else %}checked{% endif %}>
-            Visitor
-          </label>
-        </div>
-        {% if form.entry_type.errors %}
-          <p class="text-red-500 text-xs mt-1">{{ form.entry_type.errors.0 }}</p>
-        {% endif %}
-      </div>
-
-      <div class="mb-4" id="resident-name-group">
-        <label class="block text-sm font-medium text-slate-700 mb-1.5">
-          {{ form.resident_name.label }}
-        </label>
-        {{ form.resident_name }}
-        {% if form.resident_name.errors %}
-          <p class="text-red-500 text-xs mt-1">{{ form.resident_name.errors.0 }}</p>
-        {% endif %}
-      </div>
-
-      <button type="submit" class="btn bg-amber-500 hover:bg-amber-600 border-0 text-white w-full mt-2">
-        <i class="fa fa-floppy-disk mr-1"></i> Save Log Entry
-      </button>
-    </form>
+<div class="page-card p-4 mb-4">
+  <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+    <i class="fa fa-triangle-exclamation text-amber-500"></i>
+    <p class="text-sm text-amber-700"><strong>Manual Mode</strong> &mdash; Use this only when camera feed is offline.</p>
   </div>
+</div>
 
-  <!-- Recent Manual Logs -->
-  <div class="page-card">
-    <div class="px-5 py-4 border-b border-slate-100">
-      <h2 class="font-semibold text-slate-800">Recent Manual Logs</h2>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="table table-sm">
-        <thead>
-          <tr class="bg-slate-50 text-xs uppercase text-slate-500">
-            <th class="font-semibold">Plate</th>
-            <th class="font-semibold">Type</th>
-            <th class="font-semibold">Remarks</th>
-            <th class="font-semibold">Status</th>
-            <th class="font-semibold">Timestamp</th>
+<div class="page-card">
+  <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="font-semibold text-slate-800">Recent Manual Logs</h2>
+    <a href="{% url 'log_list' %}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">View All Logs &rarr;</a>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+          <th class="font-semibold">Plate</th>
+          <th class="font-semibold">Type</th>
+          <th class="font-semibold">Remarks</th>
+          <th class="font-semibold">Status</th>
+          <th class="font-semibold">Timestamp</th>
+        </tr>
+      </thead>
+      <tbody id="live-log-body">
+        {% for log in recent_logs %}
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</td>
+            <td>
+              {% if log.entry_type == 'RESIDENT' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>
+              {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.blacklist_tag %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{{ log.blacklist_tag_display|default:'Blacklisted' }}</span>
+                <p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="{{ log.blacklist_remarks|default:log.blacklist_reason }}">{{ log.blacklist_remarks|default:log.blacklist_reason|default:'Blacklisted plate detected.' }}</p>
+              {% else %}
+                <span class="text-xs text-slate-400">No remarks</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.status == 'TIME_IN' %}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                  <i class="fa fa-arrow-right text-[9px]"></i> IN
+                </span>
+              {% else %}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                  <i class="fa fa-arrow-left text-[9px]"></i> OUT
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-xs text-slate-400">{{ log.local_time|date:"h:i A" }}</td>
           </tr>
-        </thead>
-        <tbody id="live-log-body">
-          {% for log in recent_logs %}
-            <tr class="hover:bg-slate-50 transition-colors">
-              <td class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</td>
-              <td>
-                {% if log.entry_type == 'RESIDENT' %}
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>
-                {% else %}
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Visitor</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if log.blacklist_tag %}
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{{ log.blacklist_tag_display|default:'Blacklisted' }}</span>
-                  <p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="{{ log.blacklist_remarks|default:log.blacklist_reason }}">{{ log.blacklist_remarks|default:log.blacklist_reason|default:'Blacklisted plate detected.' }}</p>
-                {% else %}
-                  <span class="text-xs text-slate-400">No remarks</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if log.status == 'TIME_IN' %}
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                    <i class="fa fa-arrow-right text-[9px]"></i> IN
-                  </span>
-                {% else %}
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                    <i class="fa fa-arrow-left text-[9px]"></i> OUT
-                  </span>
-                {% endif %}
-              </td>
-              <td class="text-xs text-slate-400">{{ log.local_time|date:"h:i A" }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="5" class="text-center text-slate-400 py-8">No manual entries yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+        {% empty %}
+          <tr><td colspan="5" class="text-center text-slate-400 py-8">No manual entries yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div id="manual-export-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeManualExportModal()"></div>
+  <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">Export Logs</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Download logs for offline review.</p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeManualExportModal()"><i class="fa fa-xmark text-xl"></i></button>
     </div>
+    <div class="px-6 py-5 overflow-y-auto space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center"><i class="fa fa-file-excel text-emerald-600 text-lg"></i></div>
+          <div><p class="text-sm font-semibold text-slate-700">Excel</p><p class="text-[11px] text-slate-400">.xlsx with summary sheet</p></div>
+          <a href="{% url 'logs_export_excel' %}" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1"><i class="fa fa-download mr-1"></i> Download</a>
+        </div>
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex flex-col items-center gap-2 text-center">
+          <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center"><i class="fa fa-file-pdf text-red-600 text-lg"></i></div>
+          <div><p class="text-sm font-semibold text-slate-700">PDF</p><p class="text-[11px] text-slate-400">Landscape A4 report</p></div>
+          <a href="{% url 'logs_export_pdf' %}" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1"><i class="fa fa-download mr-1"></i> Download</a>
+        </div>
+      </div>
+      <div class="flex justify-end"><button type="button" class="btn btn-ghost btn-sm" onclick="closeManualExportModal()">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Manual Entry Modal -->
+<div id="manual-log-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeManualLogModal()"></div>
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <h3 class="text-lg font-bold text-slate-800">Add Manual Log Entry</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeManualLogModal()"><i class="fa fa-xmark text-xl"></i></button>
+    </div>
+    <form method="post" class="px-6 py-5 space-y-3 overflow-y-auto" novalidate>
+      {% csrf_token %}
+      {% for field in form %}
+        <div id="manual-{{ field.name }}-wrap">
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeManualLogModal()">Cancel</button>
+        <button type="submit" class="btn bg-amber-500 hover:bg-amber-600 border-0 text-white">Save Log Entry</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}
@@ -142,39 +142,49 @@
 {% block extra_scripts %}
 <script>
 (function () {
-  const entryInputs = Array.from(document.querySelectorAll('input[name="entry_type"]'));
-  const statusInputs = Array.from(document.querySelectorAll('input[name="status"]'));
-  const residentGroup = document.getElementById('resident-name-group');
-  const residentInput = document.getElementById('id_resident_name');
+  const manualModal = document.getElementById('manual-log-modal');
+  const exportModal = document.getElementById('manual-export-modal');
+  const openManualBtn = document.getElementById('open-manual-log-modal');
+  const openExportBtn = document.getElementById('open-manual-export-modal');
+  const entryType = document.getElementById('id_entry_type');
+  const residentWrap = document.getElementById('manual-resident_name-wrap');
 
-  function paintToggle(inputs, selector) {
-    const labels = document.querySelectorAll(selector);
-    labels.forEach((label) => {
-      const value = label.dataset.value;
-      const checked = inputs.some((input) => input.value === value && input.checked);
-      label.dataset.active = checked ? 'true' : 'false';
-    });
+  window.closeManualLogModal = function () {
+    manualModal?.classList.add('hidden');
+    manualModal?.classList.remove('flex');
+  };
+  window.closeManualExportModal = function () {
+    exportModal?.classList.add('hidden');
+    exportModal?.classList.remove('flex');
+  };
+
+  openManualBtn?.addEventListener('click', () => {
+    manualModal?.classList.remove('hidden');
+    manualModal?.classList.add('flex');
+  });
+  openExportBtn?.addEventListener('click', () => {
+    exportModal?.classList.remove('hidden');
+    exportModal?.classList.add('flex');
+  });
+
+  function syncFields() {
+    const isResident = entryType && entryType.value === 'RESIDENT';
+    residentWrap?.classList.toggle('hidden', !isResident);
   }
 
-  function syncEntryGroups() {
-    const selected = entryInputs.find((input) => input.checked)?.value || 'VISITOR';
-    const isResident = selected === 'RESIDENT';
+  entryType?.addEventListener('change', syncFields);
+  syncFields();
 
-    residentGroup.classList.toggle('hidden', !isResident);
-    if (residentInput) residentInput.required = false;
+  {% if form.errors %}
+  manualModal?.classList.remove('hidden');
+  manualModal?.classList.add('flex');
+  {% endif %}
 
-    paintToggle(entryInputs, '[data-entry-option]');
-  }
-
-  function syncStatusGroups() {
-    paintToggle(statusInputs, '[data-status-option]');
-  }
-
-  entryInputs.forEach((input) => input.addEventListener('change', syncEntryGroups));
-  statusInputs.forEach((input) => input.addEventListener('change', syncStatusGroups));
-
-  syncEntryGroups();
-  syncStatusGroups();
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    window.closeManualLogModal();
+    window.closeManualExportModal();
+  });
 })();
 </script>
 {% endblock %}

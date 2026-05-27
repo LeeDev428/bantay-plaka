@@ -6,6 +6,7 @@ Drop this file anywhere and import directly — no Django app dependency.
 """
 from django.http import HttpResponse
 from django.utils import timezone
+import math
 
 NAVY  = '1E3A5F'
 BLUE  = '2563EB'
@@ -77,18 +78,29 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
         c.fill = fill(BLUE); c.alignment = center; c.border = border
     ws.row_dimensions[4].height = 20
 
-    for i, w in enumerate(col_widths, 1):
-        ws.column_dimensions[get_column_letter(i)].width = w
+    # Start with requested widths, then auto-expand based on content.
+    computed_widths = {i: float(w) for i, w in enumerate(col_widths, 1)}
 
     # ── Data rows ──
     for r_idx, row in enumerate(rows, 1):
         erow = r_idx + 4
         flagged = highlight_fn(row) if highlight_fn else False
         bg = fill(REDBG) if flagged else (fill(ALT) if r_idx % 2 == 0 else fill(WHITE))
+        max_line_estimate = 1
         for c_idx, val in enumerate(row, 1):
             cell = ws.cell(row=erow, column=c_idx, value=val)
             cell.fill = bg; cell.border = border
             cell.alignment = center if c_idx in center_cols else left
+
+            text = '' if val is None else str(val)
+            longest_line = max((len(line) for line in text.splitlines()), default=0)
+            computed_widths[c_idx] = max(computed_widths.get(c_idx, 8.0), min(60.0, longest_line + 2.0))
+
+            col_width = max(computed_widths.get(c_idx, 8.0), 8.0)
+            wrapped_lines = max(1, math.ceil(max(1, longest_line) / max(8.0, col_width - 1.5)))
+            explicit_lines = max(1, text.count('\n') + 1)
+            max_line_estimate = max(max_line_estimate, wrapped_lines, explicit_lines)
+
             if c_idx == 1:
                 cell.font = Font(name='Calibri', size=8, color='94A3B8')
             elif c_idx in mono_cols:
@@ -97,7 +109,10 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
             else:
                 cell.font = Font(name='Calibri', size=9,
                                  color='DC2626' if flagged else SLATE)
-        ws.row_dimensions[erow].height = 15
+        ws.row_dimensions[erow].height = min(80, max(15, 15 * max_line_estimate))
+
+    for c_idx, width in computed_widths.items():
+        ws.column_dimensions[get_column_letter(c_idx)].width = width
 
     if rows:
         ws.freeze_panes = 'A5'

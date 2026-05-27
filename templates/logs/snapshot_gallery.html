@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Snapshot Gallery{% endblock %}
+{% block breadcrumb %}Operations &raquo; Photos{% endblock %}
+
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">Scan Photos</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Captured snapshots from gate IN/OUT scans.</p>
+  </div>
+</div>
+
+<div class="page-card p-4 mb-4">
+  <form method="get" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+      <input type="text" name="q" value="{{ q|default:'' }}" placeholder="Plate or name" class="input input-bordered input-sm w-44 bg-white">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Camera</label>
+      <select name="camera" class="select select-bordered select-sm bg-white">
+        <option value="">All</option>
+        <option value="ENTRY_CAM" {% if camera_q == 'ENTRY_CAM' %}selected{% endif %}>Entry</option>
+        <option value="EXIT_CAM" {% if camera_q == 'EXIT_CAM' %}selected{% endif %}>Exit</option>
+        <option value="UNKNOWN" {% if camera_q == 'UNKNOWN' %}selected{% endif %}>Unknown</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+      <select name="status" class="select select-bordered select-sm bg-white">
+        <option value="">All</option>
+        <option value="TIME_IN" {% if status_q == 'TIME_IN' %}selected{% endif %}>Time In</option>
+        <option value="TIME_OUT" {% if status_q == 'TIME_OUT' %}selected{% endif %}>Time Out</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
+      <input type="date" name="date_from" value="{{ date_from_q|default:'' }}" class="input input-bordered input-sm bg-white">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
+      <input type="date" name="date_to" value="{{ date_to_q|default:'' }}" class="input input-bordered input-sm bg-white">
+    </div>
+    <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+      <i class="fa fa-filter mr-1"></i> Filter
+    </button>
+    <a href="{% url 'snapshot_gallery' %}" class="btn btn-ghost btn-sm text-slate-500">Clear</a>
+  </form>
+</div>
+
+{% if snapshots %}
+<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for log in snapshots %}
+    <div class="page-card overflow-hidden">
+      <a href="{{ log.snapshot.url }}" target="_blank" class="block bg-slate-100">
+        <img src="{{ log.snapshot.url }}" alt="Snapshot {{ log.plate_number }}" class="w-full h-48 object-cover">
+      </a>
+      <div class="p-4 space-y-1">
+        <p class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</p>
+        <p class="text-xs text-slate-500">{{ log.get_entry_type_display }} • {{ log.get_status_display }} • {{ log.get_camera_role_display }}</p>
+        <p class="text-xs text-slate-400">{{ log.local_time|date:"M d, Y h:i:s A" }}</p>
+        <a href="{{ log.snapshot.url }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-2">
+          <i class="fa fa-up-right-from-square text-[10px]"></i> Open Full Image
+        </a>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="page-card p-10 text-center text-slate-400">No snapshot photos found for current filters.</div>
+{% endif %}
+
+{% if snapshots.paginator.num_pages > 1 %}
+  <div class="mt-4 px-1 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <p class="text-xs text-slate-500">Showing page {{ snapshots.number }} of {{ snapshots.paginator.num_pages }}</p>
+    <div class="join">
+      {% if snapshots.has_previous %}
+        <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&camera={{ camera_q|urlencode }}&status={{ status_q|urlencode }}&date_from={{ date_from_q|urlencode }}&date_to={{ date_to_q|urlencode }}&page={{ snapshots.previous_page_number }}">Prev</a>
+      {% else %}
+        <button class="join-item btn btn-sm btn-disabled">Prev</button>
+      {% endif %}
+      <button class="join-item btn btn-sm btn-active">{{ snapshots.number }}</button>
+      {% if snapshots.has_next %}
+        <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&camera={{ camera_q|urlencode }}&status={{ status_q|urlencode }}&date_from={{ date_from_q|urlencode }}&date_to={{ date_to_q|urlencode }}&page={{ snapshots.next_page_number }}">Next</a>
+      {% else %}
+        <button class="join-item btn btn-sm btn-disabled">Next</button>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

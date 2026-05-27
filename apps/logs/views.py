@@ -160,6 +160,66 @@ def log_list(request):
 
 
 @login_required
+def snapshot_gallery(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    q = request.GET.get('q', '').strip()
+    camera_q = request.GET.get('camera', '').strip().upper()
+    status_q = request.GET.get('status', '').strip().upper()
+    date_from_q = request.GET.get('date_from', '').strip()
+    date_to_q = request.GET.get('date_to', '').strip()
+
+    snapshots_qs = VehicleLog.objects.select_related('logged_by').filter(
+        snapshot__isnull=False,
+    ).exclude(snapshot='').order_by('-timestamp')
+
+    if q:
+        snapshots_qs = snapshots_qs.filter(
+            Q(plate_number__icontains=q)
+            | Q(resident_name__icontains=q)
+            | Q(visitor_name__icontains=q)
+        )
+    if camera_q in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT, VehicleLog.CAMERA_ROLE_UNKNOWN}:
+        snapshots_qs = snapshots_qs.filter(camera_role=camera_q)
+    else:
+        camera_q = ''
+    if status_q in {VehicleLog.STATUS_IN, VehicleLog.STATUS_OUT}:
+        snapshots_qs = snapshots_qs.filter(status=status_q)
+    else:
+        status_q = ''
+
+    tz = timezone.get_current_timezone()
+    if date_from_q:
+        try:
+            d = datetime.date.fromisoformat(date_from_q)
+            day_start = timezone.make_aware(datetime.datetime.combine(d, datetime.time.min), tz)
+            snapshots_qs = snapshots_qs.filter(timestamp__gte=day_start)
+        except ValueError:
+            date_from_q = ''
+    if date_to_q:
+        try:
+            d = datetime.date.fromisoformat(date_to_q)
+            day_end = timezone.make_aware(datetime.datetime.combine(d, datetime.time.min), tz) + datetime.timedelta(days=1)
+            snapshots_qs = snapshots_qs.filter(timestamp__lt=day_end)
+        except ValueError:
+            date_to_q = ''
+
+    paginator = Paginator(snapshots_qs, 18)
+    snapshots = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'logs/snapshot_gallery.html', {
+        'snapshots': snapshots,
+        'q': q,
+        'camera_q': camera_q,
+        'status_q': status_q,
+        'date_from_q': date_from_q,
+        'date_to_q': date_to_q,
+    })
+
+
+@login_required
 def log_edit(request, pk):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -187,8 +247,7 @@ def log_delete(request, pk):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    log = get_object_or_404(VehicleLog, pk=pk)
+    _ = get_object_or_404(VehicleLog, pk=pk)
     if request.method == 'POST':
-        log.delete()
-        messages.success(request, f'Log #{pk} deleted.')
+        messages.warning(request, f'Delete is disabled. Log #{pk} was retained.')
     return redirect(request.POST.get('next', 'log_list'))

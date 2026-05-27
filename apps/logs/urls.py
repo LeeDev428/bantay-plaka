@@ -4,6 +4,7 @@ from apps.logs import export_views
 
 urlpatterns = [
     path('manual/', views.manual_entry, name='manual_entry'),
+    path('snapshots/', views.snapshot_gallery, name='snapshot_gallery'),
     path('', views.log_list, name='log_list'),
     path('<int:pk>/edit/', views.log_edit, name='log_edit'),
     path('<int:pk>/delete/', views.log_delete, name='log_delete'),

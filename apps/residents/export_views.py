@@ -113,7 +113,7 @@ def _approval_rows(qs):
 
 @admin_required
 def export_approvals_excel(request):
-    qs = Vehicle.objects.select_related('resident').filter(is_approved=False).order_by('-created_at')
+    qs = Vehicle.objects.select_related('resident').filter(is_approved=False, approval_notes='').order_by('-created_at')
     rows = _approval_rows(qs)
     return build_excel_response(
         'bantayplaka_pending_vehicles', 'Pending Approvals',
@@ -125,7 +125,7 @@ def export_approvals_excel(request):
 
 @admin_required
 def export_approvals_pdf(request):
-    qs = Vehicle.objects.select_related('resident').filter(is_approved=False).order_by('-created_at')
+    qs = Vehicle.objects.select_related('resident').filter(is_approved=False, approval_notes='').order_by('-created_at')
     rows = _approval_rows(qs)
     return build_pdf_response(
         'bantayplaka_pending_vehicles', 'Bantay Plaka — Pending Vehicle Approvals',

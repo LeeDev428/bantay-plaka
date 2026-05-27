@@ -152,10 +152,23 @@ class ResidentSignupForm(forms.Form):
             'inputmode': 'numeric',
         }),
     )
-    street_number = forms.CharField(
-        max_length=50,
+    blk_number = forms.CharField(
+        max_length=30,
         required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Blk / Lot / House Number'}),
+        label='BLK Number',
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. 12'}),
+    )
+    lot_number = forms.CharField(
+        max_length=30,
+        required=False,
+        label='LOT Number',
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. 4'}),
+    )
+    house_number = forms.CharField(
+        max_length=30,
+        required=False,
+        label='House Number',
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. 128'}),
     )
     street_name = forms.CharField(
         max_length=150,
@@ -216,6 +229,18 @@ class ResidentSignupForm(forms.Form):
 
     @transaction.atomic
     def save(self):
+        blk = (self.cleaned_data.get('blk_number') or '').strip()
+        lot = (self.cleaned_data.get('lot_number') or '').strip()
+        house = (self.cleaned_data.get('house_number') or '').strip()
+        street_number_parts = []
+        if blk:
+            street_number_parts.append(f'Blk {blk}')
+        if lot:
+            street_number_parts.append(f'Lot {lot}')
+        if house:
+            street_number_parts.append(f'House {house}')
+        street_number = ' '.join(street_number_parts)
+
         user = User(
             username=self.cleaned_data['username'],
             email=self.cleaned_data['email'],
@@ -239,7 +264,7 @@ class ResidentSignupForm(forms.Form):
             age=self.cleaned_data.get('computed_age'),
             contact_number=self.cleaned_data['contact_number'],
             address=self.cleaned_data['address'],
-            street_number=self.cleaned_data.get('street_number', ''),
+            street_number=street_number,
             street_name=self.cleaned_data.get('street_name', ''),
             valid_id_type=self.cleaned_data.get('valid_id_type', ''),
             valid_id_image=self.cleaned_data.get('valid_id_image'),

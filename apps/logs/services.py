@@ -1,6 +1,7 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.utils import timezone
+import threading
 
 from apps.logs.models import VehicleLog
 
@@ -42,54 +43,64 @@ def attach_blacklist_metadata(logs):
     return logs_list
 
 
+def _send_group_message(payload: dict):
+    """Best-effort websocket send; never raises to caller."""
+    try:
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+        async_to_sync(channel_layer.group_send)('vehicle_logs', payload)
+    except Exception:
+        # Broadcast failures should never break normal HTTP request/response flow.
+        return
+
+
+def _send_group_message_async(payload: dict):
+    """Dispatch websocket sends in a daemon thread to avoid request blocking."""
+    thread = threading.Thread(target=_send_group_message, args=(payload,), daemon=True)
+    thread.start()
+
+
 def broadcast_log(vehicle_log: VehicleLog):
     """Push a log entry to all connected WebSocket clients."""
-    channel_layer = get_channel_layer()
     local_ts = timezone.localtime(vehicle_log.timestamp)
     bl_info = get_active_blacklist_map([vehicle_log.plate_number]).get(vehicle_log.plate_number.upper(), {})
-    async_to_sync(channel_layer.group_send)(
-        'vehicle_logs',
-        {
-            'type': 'log_entry',
-            'data': {
-                'id': vehicle_log.pk,
-                'plate_number': vehicle_log.plate_number,
-                'entry_type': vehicle_log.entry_type,
-                'status': vehicle_log.status,
-                'source': vehicle_log.source,
-                'camera_role': vehicle_log.camera_role,
-                'snapshot_url': vehicle_log.snapshot.url if vehicle_log.snapshot else '',
-                'display_name': vehicle_log.get_display_name(),
-                'blacklist_tag': bl_info.get('tag', ''),
-                'blacklist_tag_display': bl_info.get('tag_display', ''),
-                'blacklist_remarks': bl_info.get('remarks', ''),
-                'timestamp': local_ts.strftime('%b %d, %Y %I:%M:%S %p'),
-            },
-        }
-    )
+    _send_group_message_async({
+        'type': 'log_entry',
+        'data': {
+            'id': vehicle_log.pk,
+            'plate_number': vehicle_log.plate_number,
+            'entry_type': vehicle_log.entry_type,
+            'status': vehicle_log.status,
+            'source': vehicle_log.source,
+            'camera_role': vehicle_log.camera_role,
+            'snapshot_url': vehicle_log.snapshot.url if vehicle_log.snapshot else '',
+            'display_name': vehicle_log.get_display_name(),
+            'blacklist_tag': bl_info.get('tag', ''),
+            'blacklist_tag_display': bl_info.get('tag_display', ''),
+            'blacklist_remarks': bl_info.get('remarks', ''),
+            'timestamp': local_ts.strftime('%b %d, %Y %I:%M:%S %p'),
+        },
+    })
 
 
 def broadcast_blacklist_alert(plate_number: str, tag: str = '', remarks: str = ''):
     """Push a high-visibility alert when a blacklisted plate is detected."""
-    channel_layer = get_channel_layer()
     details = f' [{tag}]' if tag else ''
-    async_to_sync(channel_layer.group_send)(
-        'vehicle_logs',
-        {
-            'type': 'blacklist_alert',
-            'data': {
-                'event_type': 'blacklist_alert',
-                'plate_number': plate_number,
-                'title': 'Blacklisted Vehicle Detected',
-                'message': (
-                    f'Plate {plate_number}{details} is in blacklist. '
-                    f'{remarks or "Please cooperate and proceed to the guard for verification and proper action."}'
-                ),
-                'tag': tag,
-                'remarks': remarks,
-            },
-        }
-    )
+    _send_group_message_async({
+        'type': 'blacklist_alert',
+        'data': {
+            'event_type': 'blacklist_alert',
+            'plate_number': plate_number,
+            'title': 'Blacklisted Vehicle Detected',
+            'message': (
+                f'Plate {plate_number}{details} is in blacklist. '
+                f'{remarks or "Please cooperate and proceed to the guard for verification and proper action."}'
+            ),
+            'tag': tag,
+            'remarks': remarks,
+        },
+    })
 
 
 def broadcast_camera_frame(
@@ -99,20 +110,16 @@ def broadcast_camera_frame(
     snapshot_b64: str = '',
 ):
     """Push a live camera frame update to all connected WebSocket clients."""
-    channel_layer = get_channel_layer()
     if not timestamp_str:
         from django.utils import timezone as tz
         timestamp_str = timezone.localtime(tz.now()).strftime('%b %d, %Y %I:%M:%S %p')
-    async_to_sync(channel_layer.group_send)(
-        'vehicle_logs',
-        {
-            'type': 'camera_frame_update',
-            'data': {
-                'event_type': 'camera_frame_update',
-                'camera_role': camera_role,
-                'snapshot_url': snapshot_url,
-                'snapshot_b64': snapshot_b64,
-                'timestamp': timestamp_str,
-            },
-        }
-    )
+    _send_group_message_async({
+        'type': 'camera_frame_update',
+        'data': {
+            'event_type': 'camera_frame_update',
+            'camera_role': camera_role,
+            'snapshot_url': snapshot_url,
+            'snapshot_b64': snapshot_b64,
+            'timestamp': timestamp_str,
+        },
+    })

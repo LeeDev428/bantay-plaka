@@ -127,11 +127,6 @@
                   <i class="fa {% if u.is_active %}fa-user-slash{% else %}fa-user-check{% endif %} text-xs"></i>
                 </button>
               </form>
-              <button type="button" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Deactivate"
-                data-open-user-delete
-                data-delete-url="{% url 'user_delete' u.pk %}"
-                data-delete-name="{{ u.get_full_name|default:u.username|escapejs }}"
-              ><i class="fa fa-user-slash text-xs"></i></button>
             </div>
           </td>
         </tr>
@@ -234,23 +229,6 @@
   </div>
 </div>
 
-<div id="user-delete-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
-  <div class="absolute inset-0 bg-slate-900/50" onclick="closeUserDeleteModal()"></div>
-  <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-      <h3 class="text-lg font-bold text-slate-800">Deactivate User</h3>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeUserDeleteModal()"><i class="fa fa-xmark text-xl"></i></button>
-    </div>
-    <div class="px-6 py-5">
-      <p class="text-slate-600 text-sm">Are you sure you want to deactivate <span id="delete-user-name" class="font-semibold text-slate-800"></span>? Record will be retained.</p>
-    </div>
-    <form id="user-delete-form" method="post" class="px-6 pb-5 flex justify-end gap-2">
-      {% csrf_token %}
-      <button type="button" class="btn btn-ghost" onclick="closeUserDeleteModal()">Cancel</button>
-      <button type="submit" class="btn bg-amber-600 hover:bg-amber-700 border-0 text-white"><i class="fa fa-user-slash mr-1"></i> Deactivate</button>
-    </form>
-  </div>
-</div>
 {% endblock %}
 
 {% block extra_scripts %}<script>
@@ -288,24 +266,8 @@
     });
   });
 
-  const deleteModal = document.getElementById('user-delete-modal');
-  const deleteForm = document.getElementById('user-delete-form');
-  const deleteUserName = document.getElementById('delete-user-name');
-
-  window.closeUserDeleteModal = function () { deleteModal?.classList.add('hidden'); deleteModal?.classList.remove('flex'); };
-
-  document.querySelectorAll('[data-open-user-delete]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (!deleteModal || !deleteForm) return;
-      deleteForm.action = btn.dataset.deleteUrl || '';
-      deleteUserName.textContent = btn.dataset.deleteName || 'this user';
-      deleteModal.classList.remove('hidden');
-      deleteModal.classList.add('flex');
-    });
-  });
-
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { window.closeUserCreateModal(); window.closeUserEditModal(); window.closeUserDeleteModal(); }
+    if (e.key === 'Escape') { window.closeUserCreateModal(); window.closeUserEditModal(); }
   });
 })();
 </script>

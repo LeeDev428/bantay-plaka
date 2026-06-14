@@ -14,6 +14,8 @@ from apps.accounts.models import User
 from apps.logs.models import VehicleLog, CameraFeedSnapshot
 from apps.logs.forms import ManualLogForm
 from apps.logs.services import attach_blacklist_metadata, broadcast_log
+from apps.archives.models import ArchivedItem
+from apps.archives.services import archive_instance
 from apps.residents.models import Resident, Vehicle
 from apps.visitors.models import BlacklistEntry, Visitor
 
@@ -246,6 +248,12 @@ def user_delete(request, pk):
     user = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
         name = user.get_full_name() or user.username
+        archive_instance(
+            user,
+            entity_type=ArchivedItem.ENTITY_USER,
+            archived_by=request.user,
+            notes='User archived from user management.',
+        )
         user.is_active = False
         user.save(update_fields=['is_active'])
         messages.success(request, f'User "{name}" has been deactivated.')
@@ -277,6 +285,7 @@ def guard_dashboard(request):
                 resident_vehicle = Vehicle.objects.select_related('resident').filter(
                     plate_number__iexact=log.plate_number,
                     is_approved=True,
+                    is_archived=False,
                 ).first()
                 if resident_vehicle:
                     log.entry_type = VehicleLog.TYPE_RESIDENT
@@ -333,6 +342,7 @@ def resident_dashboard(request):
         return redirect('logout')
 
     vehicles = list(resident.vehicles.all())
+    vehicles = [v for v in vehicles if not v.is_archived]
     plates = [v.plate_number for v in vehicles if v.plate_number]
     active_blacklist = list(
         BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
@@ -375,7 +385,7 @@ def resident_vehicles(request):
         return redirect('dashboard')
 
     resident = get_object_or_404(Resident.objects.prefetch_related('vehicles'), user=request.user)
-    vehicles = list(resident.vehicles.all().order_by('plate_number'))
+    vehicles = list(resident.vehicles.filter(is_archived=False).order_by('plate_number'))
     plates = [v.plate_number for v in vehicles if v.plate_number]
     active_blacklist = list(
         BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
@@ -398,7 +408,7 @@ def resident_logs(request):
         return redirect('dashboard')
 
     resident = get_object_or_404(Resident.objects.prefetch_related('vehicles'), user=request.user)
-    plates = list(resident.vehicles.values_list('plate_number', flat=True))
+    plates = list(resident.vehicles.filter(is_archived=False).values_list('plate_number', flat=True))
     logs_qs = VehicleLog.objects.filter(plate_number__in=plates).order_by('-timestamp')
     paginator = Paginator(logs_qs, 10)
     logs = paginator.get_page(request.GET.get('page', 1))
@@ -416,7 +426,7 @@ def resident_profile(request):
         return redirect('dashboard')
 
     resident = get_object_or_404(Resident, user=request.user)
-    plates = list(resident.vehicles.values_list('plate_number', flat=True))
+    plates = list(resident.vehicles.filter(is_archived=False).values_list('plate_number', flat=True))
     active_blacklist = BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
     if active_blacklist.exists():
         resident_status = 'BLACKLISTED'

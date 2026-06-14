@@ -8,6 +8,11 @@
     <h1 class="text-2xl font-bold text-slate-800">Scan Photos</h1>
     <p class="text-slate-500 text-sm mt-0.5">Captured snapshots from gate IN/OUT scans.</p>
   </div>
+  <div class="flex flex-wrap items-center gap-2 text-xs">
+    <span class="inline-flex items-center px-2 py-1 rounded-full bg-emerald-100 text-emerald-700"><i class="fa fa-circle text-[8px] mr-1"></i> Resident</span>
+    <span class="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700"><i class="fa fa-circle text-[8px] mr-1"></i> Visitor</span>
+    <span class="inline-flex items-center px-2 py-1 rounded-full bg-red-100 text-red-700"><i class="fa fa-circle text-[8px] mr-1"></i> Blacklist</span>
+  </div>
 </div>
 
 <div class="page-card p-4 mb-4">
@@ -51,13 +56,19 @@
 {% if snapshots %}
 <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
   {% for log in snapshots %}
-    <div class="page-card overflow-hidden">
+    <div class="page-card overflow-hidden border {{ log.palette_class|default:'border-slate-200' }}">
       <a href="{{ log.snapshot.url }}" target="_blank" class="block bg-slate-100">
         <img src="{{ log.snapshot.url }}" alt="Snapshot {{ log.plate_number }}" class="w-full h-48 object-cover">
       </a>
       <div class="p-4 space-y-1">
-        <p class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</p>
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</p>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium {{ log.badge_class|default:'bg-slate-100 text-slate-700' }}">{{ log.palette_name|default:'UNKNOWN' }}</span>
+        </div>
         <p class="text-xs text-slate-500">{{ log.get_entry_type_display }} • {{ log.get_status_display }} • {{ log.get_camera_role_display }}</p>
+        {% if log.blacklist_remarks or log.blacklist_reason %}
+          <p class="text-xs text-red-600">{{ log.blacklist_remarks|default:log.blacklist_reason }}</p>
+        {% endif %}
         <p class="text-xs text-slate-400">{{ log.local_time|date:"M d, Y h:i:s A" }}</p>
         <a href="{{ log.snapshot.url }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-2">
           <i class="fa fa-up-right-from-square text-[10px]"></i> Open Full Image

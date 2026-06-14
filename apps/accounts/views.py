@@ -5,6 +5,7 @@ from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.db.models import Q
+from django.db.models import Prefetch
 from django.core.paginator import Paginator
 import datetime
 from datetime import timedelta
@@ -16,7 +17,7 @@ from apps.logs.forms import ManualLogForm
 from apps.logs.services import attach_blacklist_metadata, broadcast_log
 from apps.archives.models import ArchivedItem
 from apps.archives.services import archive_instance
-from apps.residents.models import Resident, Vehicle
+from apps.residents.models import Resident, Vehicle, VehicleDocument
 from apps.visitors.models import BlacklistEntry, Visitor
 
 
@@ -384,8 +385,41 @@ def resident_vehicles(request):
     if not request.user.is_resident():
         return redirect('dashboard')
 
-    resident = get_object_or_404(Resident.objects.prefetch_related('vehicles'), user=request.user)
-    vehicles = list(resident.vehicles.filter(is_archived=False).order_by('plate_number'))
+    resident = get_object_or_404(
+        Resident.objects.prefetch_related(
+            Prefetch(
+                'vehicles',
+                queryset=Vehicle.objects.filter(is_archived=False)
+                .prefetch_related('documents')
+                .order_by('plate_number'),
+            )
+        ),
+        user=request.user,
+    )
+    vehicles = list(resident.vehicles.all())
+    today = timezone.localdate()
+
+    for vehicle in vehicles:
+        docs = sorted(
+            list(vehicle.documents.all()),
+            key=lambda d: (d.registration_year, d.created_at),
+            reverse=True,
+        )
+        latest_doc = docs[0] if docs else None
+        if latest_doc:
+            should_needs_update = (
+                latest_doc.status == VehicleDocument.STATUS_NEEDS_UPDATE
+                or latest_doc.registration_year < today.year
+                or (latest_doc.expires_on and latest_doc.expires_on < today)
+            )
+            if should_needs_update and latest_doc.status != VehicleDocument.STATUS_NEEDS_UPDATE:
+                latest_doc.status = VehicleDocument.STATUS_NEEDS_UPDATE
+                latest_doc.save(update_fields=['status', 'updated_at'])
+            vehicle.current_orcr = latest_doc
+            vehicle.orcr_needs_update = should_needs_update
+        else:
+            vehicle.current_orcr = None
+            vehicle.orcr_needs_update = True
     plates = [v.plate_number for v in vehicles if v.plate_number]
     active_blacklist = list(
         BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
@@ -397,6 +431,7 @@ def resident_vehicles(request):
     context = {
         'resident': resident,
         'vehicles': vehicles,
+        'current_year': today.year,
         'now_local': timezone.localtime(),
     }
     return render(request, 'dashboard/resident/vehicles.html', context)

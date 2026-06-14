@@ -47,12 +47,6 @@
       <p class="text-xs text-slate-500">Uploaded: {{ doc.created_at|date:'M d, Y h:i A' }}</p>
       {% if doc.notes %}<p class="text-xs text-slate-600">{{ doc.notes }}</p>{% endif %}
 
-      <form method="post" action="{% url 'vehicle_document_update_status' doc.pk %}" class="pt-2 border-t border-slate-100 space-y-2">
-        {% csrf_token %}
-        <label class="block text-xs font-medium text-slate-500">Update Status</label>
-        {{ status_forms|get_item:doc.pk.status }}
-      </form>
-
       <form method="post" action="{% url 'vehicle_document_update_status' doc.pk %}" class="space-y-2">
         {% csrf_token %}
         <select name="status" class="select select-bordered select-sm w-full">

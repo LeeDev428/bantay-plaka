@@ -20,6 +20,7 @@ def resolve_plate(plate_number: str) -> dict:
         vehicle = Vehicle.objects.select_related('resident').get(
             plate_number__iexact=plate_number,
             is_approved=True,
+            is_archived=False,
         )
         return {
             'entry_type': VehicleLog.TYPE_RESIDENT,

@@ -58,8 +58,14 @@
     <a href="{% url 'resident_list' %}" class="sidebar-link {% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-house-user w-5 text-center"></i> Residents
     </a>
+    <a href="{% url 'vehicle_document_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'vehicle_document_gallery' or request.resolver_match.url_name == 'vehicle_document_list' %}active{% endif %}">
+      <i class="fa fa-folder-tree w-5 text-center"></i> OR/CR Files
+    </a>
     <a href="{% url 'user_management' %}" class="sidebar-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-users-gear w-5 text-center"></i> Guard &amp; Admin
+    </a>
+    <a href="{% url 'archive_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'archive_list' %}active{% endif %}">
+      <i class="fa fa-box-archive w-5 text-center"></i> Archive
     </a>
     {% endif %}
 

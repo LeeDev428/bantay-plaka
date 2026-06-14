@@ -16,7 +16,9 @@ urlpatterns = [
     path('vehicles/<int:pk>/delete/', views.vehicle_delete, name='vehicle_delete'),
     path('vehicles/<int:pk>/documents/', views.vehicle_document_list, name='vehicle_document_list'),
     path('vehicles/<int:pk>/documents/upload/', views.vehicle_document_upload, name='vehicle_document_upload'),
+    path('vehicles/documents/', views.vehicle_document_gallery, name='vehicle_document_gallery'),
     path('vehicles/documents/<int:pk>/status/', views.vehicle_document_update_status, name='vehicle_document_update_status'),
+    path('self/vehicles/<int:pk>/documents/upload/', views.resident_vehicle_document_upload, name='resident_vehicle_document_upload'),
     path('vehicles/<int:pk>/approve/', views.vehicle_approve, name='vehicle_approve'),
     path('vehicles/<int:pk>/reject/', views.vehicle_reject, name='vehicle_reject'),
     # Exports — residents

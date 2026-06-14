@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}OR/CR File Management{% endblock %}
+{% block breadcrumb %}Admin &raquo; OR/CR Files{% endblock %}
+
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">OR/CR File Management</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Residents upload files; admin can monitor yearly update status.</p>
+  </div>
+</div>
+
+<div class="page-card p-4 mb-5">
+  <form method="get" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+      <input type="text" name="q" value="{{ q|default:'' }}" class="input input-bordered input-sm w-56 bg-white" placeholder="Plate, resident, notes">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+      <select name="status" class="select select-bordered select-sm bg-white">
+        <option value="">All</option>
+        <option value="OK" {% if status_q == 'OK' %}selected{% endif %}>OK</option>
+        <option value="NEEDS_UPDATE" {% if status_q == 'NEEDS_UPDATE' %}selected{% endif %}>Needs Update</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Year</label>
+      <input type="number" name="year" value="{{ year_q|default:'' }}" class="input input-bordered input-sm w-28 bg-white" placeholder="2026">
+    </div>
+    <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">Filter</button>
+    <a href="{% url 'vehicle_document_gallery' %}" class="btn btn-sm btn-ghost text-slate-500">Clear</a>
+  </form>
+</div>
+
+<div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+  {% for doc in docs %}
+    <div class="page-card overflow-hidden">
+      <a href="{{ doc.file.url }}" target="_blank" class="block bg-slate-100">
+        <img src="{{ doc.file.url }}" alt="ORCR {{ doc.vehicle.plate_number }}" class="w-full h-48 object-cover">
+      </a>
+      <div class="p-4 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <p class="font-semibold text-slate-800">{{ doc.vehicle.plate_number }}</p>
+            <p class="text-xs text-slate-500">{{ doc.vehicle.resident.full_name }}</p>
+          </div>
+          {% if doc.status == 'OK' %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">OK</span>
+          {% else %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Needs Update</span>
+          {% endif %}
+        </div>
+
+        <p class="text-xs text-slate-500">Registration Year: {{ doc.registration_year }}</p>
+        <p class="text-xs text-slate-500">Expires: {{ doc.expires_on|date:'M d, Y'|default:'Not set' }}</p>
+        <p class="text-xs text-slate-500">Uploaded: {{ doc.created_at|date:'M d, Y h:i A' }}</p>
+
+        <form method="post" action="{% url 'vehicle_document_update_status' doc.pk %}" class="space-y-2 pt-2 border-t border-slate-100">
+          {% csrf_token %}
+          <select name="status" class="select select-bordered select-sm w-full">
+            <option value="OK" {% if doc.status == 'OK' %}selected{% endif %}>OK</option>
+            <option value="NEEDS_UPDATE" {% if doc.status == 'NEEDS_UPDATE' %}selected{% endif %}>Needs Update</option>
+          </select>
+          <input type="text" name="notes" value="{{ doc.notes }}" class="input input-bordered input-sm w-full" placeholder="Optional notes">
+          <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white w-full">Update Status</button>
+        </form>
+      </div>
+    </div>
+  {% empty %}
+    <div class="page-card p-8 text-center text-slate-400 sm:col-span-2 xl:col-span-3">No uploaded OR/CR files found.</div>
+  {% endfor %}
+</div>
+
+{% if docs.paginator.num_pages > 1 %}
+  <div class="mt-5 flex items-center justify-between page-card p-3">
+    <p class="text-xs text-slate-500">Page {{ docs.number }} of {{ docs.paginator.num_pages }}</p>
+    <div class="join">
+      {% if docs.has_previous %}
+        <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&status={{ status_q|urlencode }}&year={{ year_q|urlencode }}&page={{ docs.previous_page_number }}">Prev</a>
+      {% else %}
+        <button class="join-item btn btn-sm btn-disabled">Prev</button>
+      {% endif %}
+      <button class="join-item btn btn-sm btn-active">{{ docs.number }}</button>
+      {% if docs.has_next %}
+        <a class="join-item btn btn-sm" href="?q={{ q|urlencode }}&status={{ status_q|urlencode }}&year={{ year_q|urlencode }}&page={{ docs.next_page_number }}">Next</a>
+      {% else %}
+        <button class="join-item btn btn-sm btn-disabled">Next</button>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

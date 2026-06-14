@@ -1,6 +1,7 @@
 from django.urls import path
 from apps.accounts import views
 from apps.accounts import export_views
+from apps.archives import views as archive_views
 
 urlpatterns = [
     path('', views.dashboard_redirect, name='dashboard'),
@@ -14,6 +15,7 @@ urlpatterns = [
     # Exports — users
     path('admin/users/export/excel/', export_views.export_users_excel, name='users_export_excel'),
     path('admin/users/export/pdf/',   export_views.export_users_pdf,   name='users_export_pdf'),
+    path('admin/archive/', archive_views.archive_list, name='archive_list'),
     # Guard
     path('guard/', views.guard_dashboard, name='guard_dashboard'),
     # Resident

@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import socket
 from pathlib import Path
 
 from django.conf import settings
@@ -15,6 +16,52 @@ def _anpr_rtsp(rtsp_url: str, stream_profile: str = 'sub') -> str:
     if profile in {'sub', '102'}:
         return source.replace('/Streaming/Channels/101', '/Streaming/Channels/102')
     return source
+
+
+def _rtsp_host_port(rtsp_url: str) -> tuple[str, int]:
+    source = (rtsp_url or '').strip()
+    if '://' in source:
+        source = source.split('://', 1)[1]
+    # Keep hostpart after the last @ to tolerate passwords containing @.
+    hostpart = source.rsplit('@', 1)[-1]
+    hostpart = hostpart.split('/', 1)[0]
+
+    host = hostpart
+    port = 554
+    if hostpart.startswith('['):
+        # IPv6 literal: [addr]:port
+        if ']:' in hostpart:
+            host = hostpart[1:hostpart.index(']')]
+            port_str = hostpart[hostpart.index(']:') + 2:]
+            if port_str.isdigit():
+                port = int(port_str)
+        else:
+            host = hostpart.strip('[]')
+    elif ':' in hostpart:
+        maybe_host, maybe_port = hostpart.rsplit(':', 1)
+        if maybe_port.isdigit():
+            host = maybe_host
+            port = int(maybe_port)
+
+    return host.strip(), port
+
+
+def _check_rtsp_endpoint(rtsp_url: str, timeout_seconds: float = 2.0) -> tuple[bool, str]:
+    host, port = _rtsp_host_port(rtsp_url)
+    if not host:
+        return False, 'Invalid RTSP URL: host is empty.'
+
+    try:
+        socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        return False, f'Cannot resolve camera host {host}:{port} ({exc}).'
+
+    try:
+        with socket.create_connection((host, port), timeout=timeout_seconds):
+            pass
+        return True, f'Camera endpoint reachable at {host}:{port}.'
+    except OSError as exc:
+        return False, f'Cannot connect to camera endpoint {host}:{port} ({exc}).'
 
 
 class Command(BaseCommand):
@@ -80,6 +127,11 @@ class Command(BaseCommand):
             default=float(getattr(settings, 'ANPR_HEARTBEAT_SECONDS', 1.0) or 1.0),
             help='Seconds between live frame heartbeat uploads. Default: ANPR_HEARTBEAT_SECONDS or 1.0',
         )
+        parser.add_argument(
+            '--skip-camera-check',
+            action='store_true',
+            help='Skip RTSP host/port preflight checks before starting workers.',
+        )
         parser.set_defaults(strict_roles=True)
 
     def handle(self, *args, **options):
@@ -90,6 +142,7 @@ class Command(BaseCommand):
         frame_skip = max(1, int(options.get('frame_skip') or 2))
         rtsp_drain_grabs = max(0, int(options.get('rtsp_drain_grabs') or 2))
         heartbeat_seconds = max(0.10, float(options.get('heartbeat_seconds') or 1.0))
+        skip_camera_check = bool(options.get('skip_camera_check'))
         stream_profile = str(getattr(settings, 'ANPR_STREAM_PROFILE', 'sub') or 'sub').strip().lower()
 
         entry_rtsp = (getattr(settings, 'ENTRY_CAMERA_RTSP', '') or '').strip()
@@ -167,10 +220,34 @@ class Command(BaseCommand):
             launches.append(('BantayPlaka - ENTRY CAM (Webcam)', entry_cmd))
             self.stdout.write(self.style.WARNING('Webcam mode enabled: only ENTRY_CAM worker will be started.'))
         else:
+            entry_rtsp_anpr = _anpr_rtsp(entry_rtsp, stream_profile)
+            exit_rtsp_anpr = _anpr_rtsp(exit_rtsp, stream_profile)
+
+            if not skip_camera_check:
+                entry_ok, entry_msg = _check_rtsp_endpoint(entry_rtsp_anpr)
+                exit_ok, exit_msg = _check_rtsp_endpoint(exit_rtsp_anpr)
+                if entry_ok:
+                    self.stdout.write(self.style.SUCCESS(f'ENTRY preflight: {entry_msg}'))
+                else:
+                    self.stdout.write(self.style.ERROR(f'ENTRY preflight: {entry_msg}'))
+
+                if exit_ok:
+                    self.stdout.write(self.style.SUCCESS(f'EXIT preflight: {exit_msg}'))
+                else:
+                    self.stdout.write(self.style.ERROR(f'EXIT preflight: {exit_msg}'))
+
+                if not (entry_ok and exit_ok):
+                    raise CommandError(
+                        'Camera preflight check failed. '\
+                        'Likely causes: camera power/PoE off, wrong IP, wrong network/VLAN, or bad cable. '\
+                        'Fix network reachability first, then rerun runstack. '\
+                        'Use --skip-camera-check only if you intentionally want to bypass this validation.'
+                    )
+
             entry_cmd = [
                 py,
                 'anpr_engine/anpr_engine.py',
-                '--rtsp', _anpr_rtsp(entry_rtsp, stream_profile),
+                '--rtsp', entry_rtsp_anpr,
                 '--url', ingest_url,
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),
@@ -181,7 +258,7 @@ class Command(BaseCommand):
             exit_cmd = [
                 py,
                 'anpr_engine/anpr_engine.py',
-                '--rtsp', _anpr_rtsp(exit_rtsp, stream_profile),
+                '--rtsp', exit_rtsp_anpr,
                 '--url', ingest_url,
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),

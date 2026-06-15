@@ -132,6 +132,12 @@ class Command(BaseCommand):
             action='store_true',
             help='Skip RTSP host/port preflight checks before starting workers.',
         )
+        parser.add_argument(
+            '--strict-camera-check',
+            action='store_true',
+            default=bool(getattr(settings, 'ANPR_STRICT_CAMERA_CHECK', False)),
+            help='Fail startup when camera preflight check fails. Default: disabled.',
+        )
         parser.set_defaults(strict_roles=True)
 
     def handle(self, *args, **options):
@@ -143,6 +149,7 @@ class Command(BaseCommand):
         rtsp_drain_grabs = max(0, int(options.get('rtsp_drain_grabs') or 2))
         heartbeat_seconds = max(0.10, float(options.get('heartbeat_seconds') or 1.0))
         skip_camera_check = bool(options.get('skip_camera_check'))
+        strict_camera_check = bool(options.get('strict_camera_check'))
         stream_profile = str(getattr(settings, 'ANPR_STREAM_PROFILE', 'sub') or 'sub').strip().lower()
 
         entry_rtsp = (getattr(settings, 'ENTRY_CAMERA_RTSP', '') or '').strip()
@@ -229,19 +236,35 @@ class Command(BaseCommand):
                 if entry_ok:
                     self.stdout.write(self.style.SUCCESS(f'ENTRY preflight: {entry_msg}'))
                 else:
-                    self.stdout.write(self.style.ERROR(f'ENTRY preflight: {entry_msg}'))
+                    if strict_camera_check:
+                        self.stdout.write(self.style.ERROR(f'ENTRY preflight: {entry_msg}'))
+                    else:
+                        self.stdout.write(self.style.WARNING(f'ENTRY preflight: {entry_msg}'))
 
                 if exit_ok:
                     self.stdout.write(self.style.SUCCESS(f'EXIT preflight: {exit_msg}'))
                 else:
-                    self.stdout.write(self.style.ERROR(f'EXIT preflight: {exit_msg}'))
+                    if strict_camera_check:
+                        self.stdout.write(self.style.ERROR(f'EXIT preflight: {exit_msg}'))
+                    else:
+                        self.stdout.write(self.style.WARNING(f'EXIT preflight: {exit_msg}'))
 
                 if not (entry_ok and exit_ok):
-                    raise CommandError(
-                        'Camera preflight check failed. '\
-                        'Likely causes: camera power/PoE off, wrong IP, wrong network/VLAN, or bad cable. '\
-                        'Fix network reachability first, then rerun runstack. '\
-                        'Use --skip-camera-check only if you intentionally want to bypass this validation.'
+                    preflight_message = (
+                        'Camera preflight check failed. '
+                        'Likely causes: camera power/PoE off, wrong IP, wrong network/VLAN, or bad cable. '
+                        'Fix network reachability first, then rerun runstack.'
+                    )
+                    if strict_camera_check:
+                        raise CommandError(
+                            preflight_message
+                            + ' Use --skip-camera-check to bypass this validation when needed.'
+                        )
+                    self.stdout.write(
+                        self.style.WARNING(
+                            preflight_message
+                            + ' Continuing startup because strict camera check is disabled.'
+                        )
                     )
 
             entry_cmd = [

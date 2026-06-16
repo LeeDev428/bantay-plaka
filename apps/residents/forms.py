@@ -2,7 +2,7 @@ from django import forms
 from django.utils import timezone
 import re
 
-from apps.residents.models import Resident, Vehicle, VehicleDocument
+from apps.residents.models import Resident, Vehicle
 
 
 CONTACT_NUMBER_REGEX = re.compile(r'^09\d{9}$')
@@ -73,16 +73,6 @@ class ResidentForm(forms.ModelForm):
 
 
 class VehicleForm(forms.ModelForm):
-    registration_year = forms.IntegerField(
-        required=False,
-        min_value=1990,
-        max_value=2100,
-        widget=forms.NumberInput(attrs={
-            'class': 'input input-bordered w-full',
-            'placeholder': 'e.g. 2026',
-        }),
-    )
-
     class Meta:
         model = Vehicle
         fields = ['plate_number', 'vehicle_type', 'make', 'model', 'color']
@@ -108,25 +98,3 @@ class VehicleForm(forms.ModelForm):
 
     def clean_plate_number(self):
         return self.cleaned_data['plate_number'].upper().strip()
-
-
-class VehicleDocumentUploadForm(forms.ModelForm):
-    class Meta:
-        model = VehicleDocument
-        fields = ['file', 'registration_year', 'expires_on', 'notes']
-        widgets = {
-            'file': forms.ClearableFileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
-            'registration_year': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. 2026'}),
-            'expires_on': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
-            'notes': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Optional notes'}),
-        }
-
-
-class VehicleDocumentStatusForm(forms.ModelForm):
-    class Meta:
-        model = VehicleDocument
-        fields = ['status', 'notes']
-        widgets = {
-            'status': forms.Select(attrs={'class': 'select select-bordered w-full'}),
-            'notes': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Optional admin notes'}),
-        }

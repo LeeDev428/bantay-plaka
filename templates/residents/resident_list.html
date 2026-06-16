@@ -144,14 +144,9 @@
                 <span class="font-mono text-xs font-semibold px-2 py-0.5 bg-slate-100 rounded text-slate-700">{{ v.plate_number }}</span>
                 <span class="text-xs text-slate-400">{{ v.color }} {{ v.make }} {{ v.model }}</span>
                 {% if user.is_admin %}
-                <a href="{% url 'vehicle_document_list' v.pk %}" class="text-blue-600 hover:text-blue-700 transition-colors" title="Manage OR/CR files">
-                  <i class="fa fa-folder-open text-xs"></i>
-                </a>
-                {% endif %}
-                {% if user.is_admin %}
                 <form method="post" action="{% url 'vehicle_delete' v.pk %}" class="inline">
                   {% csrf_token %}
-                  <button type="submit" class="text-amber-500 hover:text-amber-700 transition-colors" onclick="return confirm('Archive this vehicle? OR/CR uploads will be kept.')">
+                  <button type="submit" class="text-amber-500 hover:text-amber-700 transition-colors" onclick="return confirm('Vehicle delete is disabled. Keep record?')">
                     <i class="fa fa-xmark text-xs"></i>
                   </button>
                 </form>

@@ -109,15 +109,6 @@ class Vehicle(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     approval_notes = models.CharField(max_length=255, blank=True)
-    is_archived = models.BooleanField(default=False, db_index=True)
-    archived_at = models.DateTimeField(null=True, blank=True)
-    archived_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='archived_vehicles',
-    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -126,35 +117,3 @@ class Vehicle(models.Model):
 
     def __str__(self):
         return f'{self.plate_number} — {self.resident.full_name}'
-
-
-class VehicleDocument(models.Model):
-    STATUS_OK = 'OK'
-    STATUS_NEEDS_UPDATE = 'NEEDS_UPDATE'
-    STATUS_CHOICES = [
-        (STATUS_OK, 'OK'),
-        (STATUS_NEEDS_UPDATE, 'Needs Update'),
-    ]
-
-    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name='documents')
-    file = models.ImageField(upload_to='vehicle_documents/orcr/')
-    registration_year = models.PositiveSmallIntegerField(db_index=True)
-    expires_on = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OK, db_index=True)
-    notes = models.CharField(max_length=255, blank=True)
-    uploaded_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='uploaded_vehicle_documents',
-    )
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'vehicle_documents'
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f'{self.vehicle.plate_number} OR/CR {self.registration_year}'

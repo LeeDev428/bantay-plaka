@@ -63,10 +63,6 @@
         <label class="block text-sm font-medium text-slate-700 mb-1">Year</label>
         <input type="number" name="year" class="input input-bordered w-full" min="1900" max="2099" placeholder="e.g. 2024">
       </div>
-      <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">OR/CR Registration Year</label>
-        <input type="number" name="registration_year" class="input input-bordered w-full" min="2000" max="2099" value="{{ current_year }}" placeholder="e.g. {{ current_year }}">
-      </div>
     </div>
 
     <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
@@ -98,37 +94,6 @@
         <p><span class="text-slate-500">Model:</span> {{ vehicle.model|default:'-' }}</p>
         <p><span class="text-slate-500">Color:</span> {{ vehicle.color|default:'-' }}</p>
       </div>
-
-      <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div class="flex items-center justify-between gap-2">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-600">OR/CR Status</p>
-          {% if vehicle.current_orcr and not vehicle.orcr_needs_update %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">OK</span>
-          {% else %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Needs Update</span>
-          {% endif %}
-        </div>
-        {% if vehicle.current_orcr %}
-          <p class="text-xs text-slate-500 mt-1">Year {{ vehicle.current_orcr.registration_year }}{% if vehicle.current_orcr.expires_on %} • Expires {{ vehicle.current_orcr.expires_on|date:'M d, Y' }}{% endif %}</p>
-          <a href="{{ vehicle.current_orcr.file.url }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-2">
-            <i class="fa fa-up-right-from-square text-[10px]"></i> View Latest File
-          </a>
-        {% else %}
-          <p class="text-xs text-slate-500 mt-1">No OR/CR file uploaded yet.</p>
-        {% endif %}
-      </div>
-
-      <form method="post" enctype="multipart/form-data" action="{% url 'resident_vehicle_document_upload' vehicle.pk %}" class="mt-3 space-y-2" novalidate>
-        {% csrf_token %}
-        <label class="block text-xs font-semibold uppercase tracking-wide text-slate-600">Upload New OR/CR</label>
-        <input type="file" name="file" class="file-input file-input-bordered file-input-sm w-full" accept="image/*" required>
-        <div class="grid grid-cols-2 gap-2">
-          <input type="number" name="registration_year" class="input input-bordered input-sm w-full" min="2000" max="2099" value="{{ current_year }}" required>
-          <input type="date" name="expires_on" class="input input-bordered input-sm w-full">
-        </div>
-        <input type="text" name="notes" class="input input-bordered input-sm w-full" placeholder="Optional notes">
-        <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white w-full">Upload OR/CR</button>
-      </form>
 
       {% if vehicle.blacklist_entry %}
         <div class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">

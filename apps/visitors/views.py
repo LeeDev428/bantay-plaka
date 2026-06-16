@@ -8,8 +8,6 @@ from django.utils import timezone
 
 from apps.visitors.models import Visitor, BlacklistEntry
 from apps.visitors.forms import VisitorForm, BlacklistEntryForm, VisitorEditForm
-from apps.archives.models import ArchivedItem
-from apps.archives.services import archive_instance
 from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log
 from apps.export_helpers import build_excel_response, build_pdf_response
@@ -154,16 +152,9 @@ def visitor_delete(request, pk):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    visitor = get_object_or_404(Visitor, pk=pk)
+    _ = get_object_or_404(Visitor, pk=pk)
     if request.method == 'POST':
-        archive_instance(
-            visitor,
-            entity_type=ArchivedItem.ENTITY_VISITOR,
-            archived_by=request.user,
-            notes='Visitor archived from visitors module.',
-        )
-        visitor.delete()
-        messages.success(request, 'Visitor archived and removed from active list.')
+        messages.warning(request, 'Delete is disabled. Visitor entry was retained.')
     return redirect(request.POST.get('next', 'visitor_list'))
 
 

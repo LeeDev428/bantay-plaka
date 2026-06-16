@@ -12,8 +12,6 @@ from apps.logs.forms import ManualLogForm, LogEditForm
 from apps.logs.services import broadcast_log, attach_blacklist_metadata
 from apps.residents.models import Vehicle
 from apps.visitors.models import BlacklistEntry, Visitor
-from apps.archives.models import ArchivedItem
-from apps.archives.services import archive_instance
 
 
 def resolve_plate(plate_number: str) -> dict:
@@ -22,7 +20,6 @@ def resolve_plate(plate_number: str) -> dict:
         vehicle = Vehicle.objects.select_related('resident').get(
             plate_number__iexact=plate_number,
             is_approved=True,
-            is_archived=False,
         )
         return {
             'entry_type': VehicleLog.TYPE_RESIDENT,
@@ -211,22 +208,6 @@ def snapshot_gallery(request):
 
     paginator = Paginator(snapshots_qs, 18)
     snapshots = paginator.get_page(request.GET.get('page', 1))
-    attach_blacklist_metadata(snapshots.object_list)
-
-    for log in snapshots.object_list:
-        is_blacklisted = bool(getattr(log, 'blacklist_tag', '') or getattr(log, 'blacklist_reason', '') or getattr(log, 'blacklist_remarks', ''))
-        if is_blacklisted:
-            log.palette_name = 'BLACKLIST'
-            log.palette_class = 'border-red-300 bg-red-50/40'
-            log.badge_class = 'bg-red-100 text-red-700'
-        elif log.entry_type == VehicleLog.TYPE_RESIDENT:
-            log.palette_name = 'RESIDENT'
-            log.palette_class = 'border-emerald-300 bg-emerald-50/40'
-            log.badge_class = 'bg-emerald-100 text-emerald-700'
-        else:
-            log.palette_name = 'VISITOR'
-            log.palette_class = 'border-blue-300 bg-blue-50/40'
-            log.badge_class = 'bg-blue-100 text-blue-700'
 
     return render(request, 'logs/snapshot_gallery.html', {
         'snapshots': snapshots,
@@ -266,14 +247,7 @@ def log_delete(request, pk):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    log = get_object_or_404(VehicleLog, pk=pk)
+    _ = get_object_or_404(VehicleLog, pk=pk)
     if request.method == 'POST':
-        archive_instance(
-            log,
-            entity_type=ArchivedItem.ENTITY_LOG,
-            archived_by=request.user,
-            notes='Vehicle log archived from logs module.',
-        )
-        log.delete()
-        messages.success(request, f'Log #{pk} archived and removed from active list.')
+        messages.warning(request, f'Delete is disabled. Log #{pk} was retained.')
     return redirect(request.POST.get('next', 'log_list'))

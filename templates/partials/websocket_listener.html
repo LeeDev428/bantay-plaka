@@ -3,6 +3,7 @@
   if (window.__bpWsListenerInitialized) return;
   window.__bpWsListenerInitialized = true;
 
+-->
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
   const tbody = document.getElementById('live-log-body');

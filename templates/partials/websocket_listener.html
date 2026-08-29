@@ -3,9 +3,28 @@
   if (window.__bpWsListenerInitialized) return;
   window.__bpWsListenerInitialized = true;
 
--->
+  //const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  //const socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
+
+
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
+  let socket = null;
+  let reconnectAttempts = 0;
+
+  function connectSocket() {
+    socket = new WebSocket(`${protocol}://${window.location.host}/ws/logs/`);
+    socket.onmessage = handleMessage;
+    socket.onopen = () => {
+      console.log('[BantayPlaka] WebSocket connected.');
+      reconnectAttempts = 0;
+    };
+    socket.onclose = () => {
+      console.warn('[BantayPlaka] WebSocket disconnected. Reconnecting...');
+      const delay = Math.min(1000 * (2 ** reconnectAttempts), 15000);
+      reconnectAttempts += 1;
+      setTimeout(connectSocket, delay);
+    };
+  }
   const tbody = document.getElementById('live-log-body');
   const liveFrameState = {
     entry: { busy: false, pendingSrc: '' },
@@ -160,7 +179,7 @@
     meta.textContent = `Latest detection: Plate ${data.plate_number} - ${data.timestamp}`;
   }
 
-  socket.onmessage = function (e) {
+  function handleMessage(e) {
     const data = JSON.parse(e.data);
 
     if (data.event_type === 'blacklist_alert') {
@@ -228,10 +247,10 @@
     highlightRecentRows();
     updateFeedCard(data.camera_role, data);
     showDetectionToast(data);
-  };
+  }
 
-  socket.onopen = () => console.log('[BantayPlaka] WebSocket connected.');
-  socket.onclose = () => console.warn('[BantayPlaka] WebSocket disconnected.');
+  //socket.onopen = () => console.log('[BantayPlaka] WebSocket connected.');
+  //socket.onclose = () => console.warn('[BantayPlaka] WebSocket disconnected.');
 
   function startSnapshotRefresh() {
     if (window.__bpSnapshotRefreshStarted) return;
@@ -328,11 +347,13 @@
       highlightRecentRows();
       startSnapshotRefresh();
       startLiveClocks();
+      connectSocket();
     });
   } else {
     highlightRecentRows();
     startSnapshotRefresh();
     startLiveClocks();
+    connectSocket();
   }
 })();
 </script>

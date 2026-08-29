@@ -9,7 +9,7 @@
     <h1 class="text-2xl font-bold text-slate-800">Gate Monitor</h1>
     <p class="text-slate-500 text-sm mt-0.5">Real-time gate activity &mdash; {{ request.user.get_full_name }}</p>
   </div>
-  {% comment %} <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2">
     {% if camera_stale %}
       <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">ANPR STALE</span>
       <span class="text-xs text-slate-500">
@@ -24,7 +24,7 @@
       <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">ANPR LIVE</span>
       <span class="text-xs text-slate-500">Last camera log {{ last_camera_log_local|date:"h:i:s A" }}</span>
     {% endif %}
-  </div> {% endcomment %}
+  </div>
   <div class="flex gap-2">
     <button type="button" id="open-guard-export-modal" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
       <i class="fa fa-file-arrow-down mr-1"></i> Export

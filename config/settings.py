@@ -39,12 +39,14 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # project apps
+        'apps.core',
     'apps.accounts',
     'apps.residents',
     'apps.visitors',
     'apps.logs',
     'apps.detection',
     'apps.reports',
+    'apps.archive',
     # channels
     'channels',
 ]

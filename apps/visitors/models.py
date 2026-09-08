@@ -1,5 +1,6 @@
 from django.db import models
 from apps.accounts.models import User
+from apps.core.models import Archivable
 
 
 class Visitor(models.Model):
@@ -41,7 +42,7 @@ class Visitor(models.Model):
         return f'{self.full_name} — {self.plate_number or "No Plate"}'
 
 
-class BlacklistEntry(models.Model):
+class BlacklistEntry(Archivable, models.Model):
     TAG_WATCHLIST = 'WATCHLIST'
     TAG_HIGH_RISK = 'HIGH_RISK'
     TAG_CHOICES = [
@@ -49,7 +50,7 @@ class BlacklistEntry(models.Model):
         (TAG_HIGH_RISK, 'High Risk'),
     ]
 
-    plate_number = models.CharField(max_length=20, unique=True, db_index=True)
+    plate_number = models.CharField(max_length=20, db_index=True)
     tag = models.CharField(max_length=20, choices=TAG_CHOICES, default=TAG_WATCHLIST)
     reason = models.CharField(max_length=255)
     remarks = models.TextField()
@@ -63,6 +64,13 @@ class BlacklistEntry(models.Model):
     class Meta:
         db_table = 'blacklist_entries'
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['plate_number'],
+                condition=models.Q(is_archived=False),
+                name='unique_active_blacklist_plate',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.plate_number} ({"ACTIVE" if self.is_active else "INACTIVE"})'

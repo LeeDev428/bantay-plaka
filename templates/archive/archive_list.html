@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% block title %}Archive{% endblock %}
+{% block breadcrumb %}Security &raquo; Archive{% endblock %}
+
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">Archive</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Restore or permanently delete archived records</p>
+  </div>
+</div>
+
+<!-- Category tabs -->
+<div class="page-card p-2 mb-4">
+  <div class="flex flex-wrap gap-1">
+    {% for section in sections %}
+      <button type="button"
+        class="archive-tab-btn btn btn-sm {% if forloop.first %}bg-blue-600 hover:bg-blue-700 border-0 text-white{% else %}btn-ghost text-slate-500{% endif %}"
+        data-tab-target="archive-tab-{{ section.slug }}"
+        onclick="switchArchiveTab('{{ section.slug }}')">
+        {{ section.label }}
+        <span class="ml-1 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500 text-[10px] font-semibold px-1.5 py-0.5">{{ section.items|length }}</span>
+      </button>
+    {% endfor %}
+  </div>
+</div>
+
+{% for section in sections %}
+<div id="archive-tab-{{ section.slug }}" class="archive-tab-panel {% if not forloop.first %}hidden{% endif %}">
+  <div class="page-card">
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+            {% if section.slug == 'residents' %}
+              <th class="font-semibold">Name</th>
+              <th class="font-semibold">Address</th>
+              <th class="font-semibold">Contact</th>
+            {% elif section.slug == 'vehicles' %}
+              <th class="font-semibold">Plate</th>
+              <th class="font-semibold">Resident</th>
+              <th class="font-semibold">Type</th>
+            {% elif section.slug == 'logs' %}
+              <th class="font-semibold">Plate</th>
+              <th class="font-semibold">Camera</th>
+              <th class="font-semibold">Timestamp</th>
+            {% elif section.slug == 'blacklist' %}
+              <th class="font-semibold">Plate</th>
+              <th class="font-semibold">Tag</th>
+              <th class="font-semibold">Reason</th>
+            {% endif %}
+            <th class="font-semibold">Archived At</th>
+            <th class="font-semibold">Archived By</th>
+            <th class="font-semibold">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in section.items %}
+          <tr class="hover:bg-slate-50 transition-colors">
+            {% if section.slug == 'residents' %}
+              <td class="font-semibold text-slate-800">{{ item.full_name }}</td>
+              <td class="text-sm text-slate-600">{{ item.address|default:'—' }}</td>
+              <td class="text-sm text-slate-500">{{ item.contact_number|default:'—' }}</td>
+            {% elif section.slug == 'vehicles' %}
+              <td class="font-mono font-semibold text-slate-800">{{ item.plate_number }}</td>
+              <td class="text-sm text-slate-600">{{ item.resident.full_name|default:'—' }}</td>
+              <td class="text-sm text-slate-500">{{ item.get_vehicle_type_display }}</td>
+            {% elif section.slug == 'logs' %}
+              <td class="font-mono font-semibold text-slate-800">{{ item.plate_number }}</td>
+              <td class="text-sm text-slate-500">{{ item.get_camera_role_display }}</td>
+              <td class="text-xs text-slate-400">{{ item.local_time|date:"M d, Y h:i:s A" }}</td>
+            {% elif section.slug == 'blacklist' %}
+              <td class="font-mono font-semibold text-slate-800">{{ item.plate_number }}</td>
+              <td>
+                {% if item.tag == 'HIGH_RISK' %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">{{ item.get_tag_display }}</span>
+                {% else %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{{ item.get_tag_display }}</span>
+                {% endif %}
+              </td>
+              <td class="text-sm text-slate-600">{{ item.reason|default:'—' }}</td>
+            {% endif %}
+            <td class="text-xs text-slate-400">{{ item.archived_at|date:"M d, Y h:i A" }}</td>
+            <td class="text-xs text-slate-500">{{ item.archived_by.get_full_name|default:'—' }}</td>
+            <td>
+              <div class="flex flex-wrap gap-1">
+                <form method="post" action="{% url 'archive:restore' section.slug item.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-xs bg-emerald-100 hover:bg-emerald-200 border-0 text-emerald-700">
+                    <i class="fa fa-rotate-left mr-1"></i> Restore
+                  </button>
+                </form>
+                <form method="post" action="{% url 'archive:permanent_delete' section.slug item.pk %}" data-permanent-delete>
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-xs bg-red-100 hover:bg-red-200 border-0 text-red-700">
+                    <i class="fa fa-trash mr-1"></i> Delete
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-slate-400 py-12">No archived {{ section.label|lower }}.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Permanent Delete Confirmation Modal -->
+<div id="permanent-delete-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+  <div class="bg-white rounded-xl border border-slate-200 w-full max-w-sm mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="perm-del-modal-title">
+    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-red-50 mb-4">
+      <i class="fa fa-triangle-exclamation text-red-600"></i>
+    </div>
+    <p class="text-base font-semibold text-slate-800 mb-1" id="perm-del-modal-title">Permanently delete this record?</p>
+    <p class="text-sm text-slate-500 mb-5">This cannot be undone. The record will be removed from the database entirely.</p>
+    <div class="flex justify-end gap-2">
+      <button type="button" id="perm-del-cancel" class="btn btn-sm btn-ghost">Cancel</button>
+      <button type="button" id="perm-del-confirm" class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white">
+        <i class="fa fa-trash mr-1"></i> Delete
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function switchArchiveTab(activeSlug) {
+  document.querySelectorAll('.archive-tab-panel').forEach((panel) => {
+    panel.classList.toggle('hidden', panel.id !== 'archive-tab-' + activeSlug);
+  });
+  document.querySelectorAll('.archive-tab-btn').forEach((btn) => {
+    const isActive = btn.dataset.tabTarget === 'archive-tab-' + activeSlug;
+    btn.classList.toggle('bg-blue-600', isActive);
+    btn.classList.toggle('hover:bg-blue-700', isActive);
+    btn.classList.toggle('border-0', isActive);
+    btn.classList.toggle('text-white', isActive);
+    btn.classList.toggle('btn-ghost', !isActive);
+    btn.classList.toggle('text-slate-500', !isActive);
+  });
+}
+
+(function () {
+  const permDelModal = document.getElementById('permanent-delete-modal');
+  let activePermDelForm = null;
+
+  document.querySelectorAll('[data-permanent-delete]').forEach((form) => {
+    form.querySelector('button').addEventListener('click', (e) => {
+      e.preventDefault();
+      activePermDelForm = form;
+      permDelModal.classList.remove('hidden');
+    });
+  });
+
+  document.getElementById('perm-del-cancel').addEventListener('click', () => {
+    permDelModal.classList.add('hidden');
+    activePermDelForm = null;
+  });
+
+  document.getElementById('perm-del-confirm').addEventListener('click', () => {
+    activePermDelForm?.submit();
+    permDelModal.classList.add('hidden');
+  });
+
+  permDelModal.addEventListener('click', (e) => {
+    if (e.target === permDelModal) {
+      permDelModal.classList.add('hidden');
+      activePermDelForm = null;
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      permDelModal.classList.add('hidden');
+      activePermDelForm = null;
+    }
+  });
+})();
+</script>
+{% endblock %}

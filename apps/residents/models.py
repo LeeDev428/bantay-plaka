@@ -3,9 +3,10 @@ from tokenize import Comment
 from django.db import models
 from django.core.files.storage import default_storage
 from apps.accounts.models import User
+from apps.core.models import Archivable
 
 
-class Resident(models.Model):
+class Resident(Archivable, models.Model):
     SEX_MALE = 'MALE'
     SEX_FEMALE = 'FEMALE'
     SEX_CHOICES = [
@@ -79,7 +80,7 @@ class Resident(models.Model):
             return False
 
 
-class Vehicle(models.Model):
+class Vehicle(Archivable, models.Model):
     TYPE_CAR = 'CAR'
     TYPE_MOTORCYCLE = 'MOTORCYCLE'
     TYPE_TRUCK = 'TRUCK'
@@ -94,7 +95,7 @@ class Vehicle(models.Model):
     ]
 
     resident = models.ForeignKey(Resident, on_delete=models.CASCADE, related_name='vehicles')
-    plate_number = models.CharField(max_length=20, unique=True, db_index=True)
+    plate_number = models.CharField(max_length=20, db_index=True)
     vehicle_type = models.CharField(max_length=15, choices=VEHICLE_TYPE_CHOICES, default=TYPE_CAR)
     make = models.CharField(max_length=100, blank=True)
     model = models.CharField(max_length=100, blank=True)
@@ -114,6 +115,13 @@ class Vehicle(models.Model):
     class Meta:
         db_table = 'vehicles'
         ordering = ['plate_number']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['plate_number'],
+                condition=models.Q(is_archived=False),
+                name='unique_active_vehicle_plate',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.plate_number} — {self.resident.full_name}'

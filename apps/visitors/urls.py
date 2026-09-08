@@ -14,4 +14,5 @@ urlpatterns = [
     path('blacklist/<int:pk>/toggle/', views.blacklist_toggle, name='blacklist_toggle'),
     path('blacklist/<int:pk>/edit/', views.blacklist_edit, name='blacklist_edit'),
     path('blacklist/<int:pk>/cancel/', views.blacklist_cancel, name='blacklist_cancel'),
+    path('blacklist/<int:pk>/delete/', views.blacklist_delete, name='blacklist_delete'),
 ]

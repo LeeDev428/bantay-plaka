@@ -16,6 +16,7 @@ urlpatterns = [
     path('logs/', include('apps.logs.urls')),
     path('detection/', include('apps.detection.urls')),
     path('reports/', include('apps.reports.urls')),
+    path('archive/', include('apps.archive.urls', namespace='archive')),
     re_path(r'^media/(?P<path>.*)$', static_serve, {'document_root': settings.MEDIA_ROOT}),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) \
   + staticfiles_urlpatterns()

@@ -498,3 +498,20 @@ def blacklist_cancel(request, pk):
         entry.save(update_fields=['is_active', 'updated_at'])
         messages.success(request, f'Blacklist for {entry.plate_number} cancelled.')
     return redirect(request.POST.get('next', 'blacklist_list'))
+
+
+@login_required
+def blacklist_delete(request, pk):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    if not (request.user.is_admin() or request.user.is_guard()):
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    entry = get_object_or_404(BlacklistEntry, pk=pk)
+    if request.method == 'POST':
+        entry.archive(user=request.user)
+        messages.success(request, f'Blacklist entry for {entry.plate_number} archived.')
+    return redirect(request.POST.get('next', 'blacklist_list'))

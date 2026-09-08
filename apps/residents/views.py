@@ -48,6 +48,8 @@ def resident_list(request):
                 vehicle.resident = resident
                 vehicle.save()
                 messages.success(request, f'Vehicle {vehicle.plate_number} registered.')
+                if vehicle_form.reused_from_archive:
+                    messages.info(request, f'Note: plate {vehicle.plate_number} was previously used by an archived vehicle.')
                 return redirect('resident_list')
             messages.error(request, 'Failed to register vehicle. Please complete all required fields.')
 
@@ -115,6 +117,8 @@ def resident_vehicle_create_self(request):
         vehicle.approval_notes = ''
         vehicle.save()
         messages.success(request, f'Vehicle {vehicle.plate_number} submitted and pending admin approval.')
+        if form.reused_from_archive:
+            messages.info(request, f'Note: plate {vehicle.plate_number} was previously used by an archived vehicle.')
     else:
         for field_errors in form.errors.values():
             for err in field_errors:
@@ -160,15 +164,11 @@ def resident_edit(request, pk):
 def resident_delete(request, pk):
     resident = get_object_or_404(Resident, pk=pk)
     if request.method == 'POST':
-        resident.is_approved = False
-        resident.approval_reason = 'Archived by admin. Record retained.'
-        resident.approved_by = request.user
-        resident.approved_at = timezone.now()
-        resident.save(update_fields=['is_approved', 'approval_reason', 'approved_by', 'approved_at', 'updated_at'])
+        resident.archive(user=request.user)
         if resident.user:
             resident.user.is_active = False
             resident.user.save(update_fields=['is_active'])
-        messages.success(request, 'Resident record archived (deactivated).')
+        messages.success(request, 'Resident record archived.')
     return redirect('resident_list')
 
 
@@ -220,6 +220,8 @@ def vehicle_create(request, resident_pk):
             vehicle.approval_notes = ''
             vehicle.save()
             messages.success(request, f'Vehicle {vehicle.plate_number} registered.')
+            if form.reused_from_archive:
+                messages.info(request, f'Note: plate {vehicle.plate_number} was previously used by an archived vehicle.')
             return redirect('resident_list')
     else:
         form = VehicleForm()
@@ -228,9 +230,10 @@ def vehicle_create(request, resident_pk):
 
 @admin_required
 def vehicle_delete(request, pk):
-    _ = get_object_or_404(Vehicle, pk=pk)
+    vehicle = get_object_or_404(Vehicle, pk=pk)
     if request.method == 'POST':
-        messages.warning(request, 'Delete is disabled. Vehicle record was retained.')
+        vehicle.archive(user=request.user)
+        messages.success(request, f'Vehicle {vehicle.plate_number} archived.')
     return redirect('resident_list')
 
 
@@ -252,6 +255,8 @@ def vehicle_approval_list(request):
                 vehicle.approval_notes = ''
                 vehicle.save()
                 messages.success(request, f'Vehicle {vehicle.plate_number} registered for {resident.full_name}.')
+                if vehicle_form.reused_from_archive:
+                    messages.info(request, f'Note: plate {vehicle.plate_number} was previously used by an archived vehicle.')
                 return redirect('vehicle_approval_list')
             messages.error(request, 'Failed to register vehicle. Please complete all required fields.')
 

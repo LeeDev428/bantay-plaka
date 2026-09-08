@@ -247,7 +247,8 @@ def log_delete(request, pk):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    _ = get_object_or_404(VehicleLog, pk=pk)
+    log = get_object_or_404(VehicleLog, pk=pk)
     if request.method == 'POST':
-        messages.warning(request, f'Delete is disabled. Log #{pk} was retained.')
+        log.archive(user=request.user)
+        messages.success(request, f'Log #{pk} archived.')
     return redirect(request.POST.get('next', 'log_list'))

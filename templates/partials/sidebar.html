@@ -54,6 +54,9 @@
     <a href="{% url 'snapshot_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'snapshot_gallery' %}active{% endif %}">
       <i class="fa fa-image w-5 text-center"></i> Photos
     </a>
+    <a href="{% url 'archive:list' %}" class="sidebar-link {% if request.resolver_match.namespace == 'archive' %}active{% endif %}">
+      <i class="fa fa-box-archive w-5 text-center"></i> Archive
+    </a>
     <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-2 mt-5">User Management</p>
     <a href="{% url 'resident_list' %}" class="sidebar-link {% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-house-user w-5 text-center"></i> Residents

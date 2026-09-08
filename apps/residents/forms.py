@@ -93,8 +93,23 @@ class VehicleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.reused_from_archive = False
         for field_name in ['plate_number', 'vehicle_type', 'make', 'model', 'color']:
             self.fields[field_name].required = True
 
     def clean_plate_number(self):
-        return self.cleaned_data['plate_number'].upper().strip()
+        plate = self.cleaned_data['plate_number'].upper().strip()
+        active_qs = Vehicle.objects.filter(plate_number=plate, is_archived=False)
+        if self.instance.pk:
+            active_qs = active_qs.exclude(pk=self.instance.pk)
+        if active_qs.exists():
+            raise forms.ValidationError('This plate number is already registered to an active vehicle.')
+
+        # Not blocking — just lets the view know this plate previously belonged
+        # to an archived vehicle, so it can show a friendly heads-up.
+        archived_qs = Vehicle.all_objects.filter(plate_number=plate, is_archived=True)
+        if self.instance.pk:
+            archived_qs = archived_qs.exclude(pk=self.instance.pk)
+        self.reused_from_archive = archived_qs.exists()
+
+        return plate

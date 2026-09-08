@@ -153,6 +153,12 @@
                 data-reason="{{ entry.reason|escapejs }}"
                 data-remarks="{{ entry.remarks|escapejs }}"
               >Edit</button>
+              <button type="button"
+                class="btn btn-xs bg-red-100 hover:bg-red-200 border-0 text-red-700"
+                data-delete-blacklist
+                data-delete-url="{% url 'blacklist_delete' entry.pk %}"
+                data-plate="{{ entry.plate_number }}"
+              >Delete</button>
             </div>
           </td>
         </tr>
@@ -256,7 +262,28 @@
     </form>
   </div>
 </div>
-{% endblock %}
+
+<!-- Delete (Archive) Confirmation Modal -->
+<div id="blacklist-delete-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeBlacklistDeleteModal()"></div>
+  <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
+    <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+      <i class="fa fa-trash text-red-600"></i>
+    </div>
+    <h3 class="text-lg font-bold text-slate-800 mb-1">Archive blacklist entry?</h3>
+    <p class="text-sm text-slate-500 mb-6">This will deactivate <span id="delete-plate-name" class="font-semibold text-slate-700"></span> while retaining records.</p>
+    <form id="blacklist-delete-form" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeBlacklistDeleteModal()">Cancel</button>
+        <button type="submit" class="btn bg-amber-100 hover:bg-amber-200 border-0 text-amber-800">
+          <i class="fa fa-box-archive mr-1"></i> Archive
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 
 {% block extra_scripts %}
 <script>
@@ -293,9 +320,29 @@
     });
   });
 
+  // Delete (archive) modal
+  const deleteModal = document.getElementById('blacklist-delete-modal');
+  const deleteForm  = document.getElementById('blacklist-delete-form');
+  const deletePlate = document.getElementById('delete-plate-name');
+
+  window.closeBlacklistDeleteModal = function () {
+    deleteModal?.classList.add('hidden');
+    deleteModal?.classList.remove('flex');
+  };
+
+  document.querySelectorAll('[data-delete-blacklist]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      deleteForm.action = btn.dataset.deleteUrl;
+      deletePlate.textContent = btn.dataset.plate || 'this entry';
+      deleteModal.classList.remove('hidden');
+      deleteModal.classList.add('flex');
+    });
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       window.closeBlacklistEditModal();
+      window.closeBlacklistDeleteModal();
       document.getElementById('blacklist-add-modal')?.classList.add('hidden');
       document.getElementById('blacklist-add-modal')?.classList.remove('flex');
       document.getElementById('blacklist-export-modal')?.classList.add('hidden');
@@ -304,4 +351,5 @@
   });
 })();
 </script>
+{% endblock %}
 {% endblock %}

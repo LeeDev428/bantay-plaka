@@ -1,8 +1,9 @@
 from django.db import models
 from apps.accounts.models import User
+from apps.core.models import Archivable
 
 
-class VehicleLog(models.Model):
+class VehicleLog(Archivable, models.Model):
     SOURCE_CAMERA = 'CAMERA'
     SOURCE_MANUAL = 'MANUAL'
     SOURCE_CHOICES = [

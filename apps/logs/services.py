@@ -1,9 +1,13 @@
+import logging
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.utils import timezone
 import threading
 
 from apps.logs.models import VehicleLog
+
+logger = logging.getLogger(__name__)
 
 
 def get_active_blacklist_map(plates):
@@ -48,10 +52,13 @@ def _send_group_message(payload: dict):
     try:
         channel_layer = get_channel_layer()
         if not channel_layer:
+            logger.warning("Channel layer is not configured; broadcast skipped.")
             return
         async_to_sync(channel_layer.group_send)('vehicle_logs', payload)
     except Exception:
-        # Broadcast failures should never break normal HTTP request/response flow.
+        # Broadcast failures should never break normal HTTP request/response flow,
+        # but we still want to see why in the logs instead of failing silently.
+        logger.exception("Broadcast failed for payload type=%s", payload.get('type'))
         return
 
 

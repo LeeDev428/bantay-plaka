@@ -129,24 +129,23 @@ MEDIA_ROOT = BASE_DIR / 'media'
 MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
 (MEDIA_ROOT / 'resident_ids').mkdir(parents=True, exist_ok=True)
 (MEDIA_ROOT / 'snapshots').mkdir(parents=True, exist_ok=True)
+(MEDIA_ROOT / 'snapshots' / 'plates').mkdir(parents=True, exist_ok=True)
 
 CLOUDINARY_CLOUD_NAME = env('CLOUDINARY_CLOUD_NAME', default='').strip()
 CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default='').strip()
 CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default='').strip()
+USE_CLOUDINARY = env.bool('USE_CLOUDINARY', default=not DEBUG)
 
-if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
-    try:
-        import cloudinary
+if USE_CLOUDINARY and CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
+    import cloudinary
 
-        cloudinary.config(
-            cloud_name=CLOUDINARY_CLOUD_NAME,
-            api_key=CLOUDINARY_API_KEY,
-            api_secret=CLOUDINARY_API_SECRET,
-            secure=True,
-        )
-        DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-    except Exception:
-        pass
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -165,9 +164,15 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 # Cloud/runtime settings (safe defaults for local development)
 ANPR_DEVICE = (env('ANPR_DEVICE', default='auto') or 'auto').strip().lower()
 ANPR_FRAME_SKIP = env.int('ANPR_FRAME_SKIP', default=2)
-ANPR_RTSP_DRAIN_GRABS = env.int('ANPR_RTSP_DRAIN_GRABS', default=2)
+ANPR_RTSP_DRAIN_GRABS = env.int('ANPR_RTSP_DRAIN_GRABS', default=0)
 ANPR_STREAM_PROFILE = (env('ANPR_STREAM_PROFILE', default='sub') or 'sub').strip().lower()
 ANPR_HEARTBEAT_SECONDS = env.float('ANPR_HEARTBEAT_SECONDS', default=1.0)
+ANPR_RECORDINGS_DIR = Path(
+    env('ANPR_RECORDINGS_DIR', default=str(BASE_DIR / 'anpr_engine' / 'recordings'))
+).expanduser()
+ANPR_SNAPSHOT_DIR = Path(
+    env('ANPR_SNAPSHOT_DIR', default=str(MEDIA_ROOT / 'snapshots' / 'plates'))
+).expanduser()
 
 CAMERA_STREAM_MAX_WIDTH = env.int('CAMERA_STREAM_MAX_WIDTH', default=720)
 CAMERA_STREAM_JPEG_QUALITY = env.int('CAMERA_STREAM_JPEG_QUALITY', default=70)
@@ -192,6 +197,7 @@ ANPR_API_KEY = env('ANPR_API_KEY', default='')
 ENTRY_CAMERA_RTSP = env('ENTRY_CAMERA_RTSP', default='')
 EXIT_CAMERA_RTSP = env('EXIT_CAMERA_RTSP', default='')
 CAMERA_PREVIEW_ENABLED = env.bool('CAMERA_PREVIEW_ENABLED', default=DEBUG)
+ANPR_ALLOW_WEBCAM_HEARTBEATS = env.bool('ANPR_ALLOW_WEBCAM_HEARTBEATS', default=False)
 ANPR_INGEST_URL = env('ANPR_INGEST_URL', default='').strip()
 
 # Django Channels: Redis in cloud if REDIS_URL is configured; in-memory for local dev.

@@ -110,6 +110,22 @@ def broadcast_blacklist_alert(plate_number: str, tag: str = '', remarks: str = '
     })
 
 
+def broadcast_unrecognized_plate_alert(alert):
+    """Push a saved unrecognized-plate alert to connected dashboard clients."""
+    _send_group_message_async({
+        'type': 'blacklist_alert',
+        'data': {
+            'event_type': 'unrecognized_plate_alert',
+            'title': 'Plate Could Not Be Recognized',
+            'message': alert.reason,
+            'camera_role': alert.camera_role,
+            'snapshot_url': alert.snapshot.url if alert.snapshot else '',
+            'recording_url': alert.recording.video.url if alert.recording.video else '',
+            'alerts_url': '/logs/alerts/',
+        },
+    })
+
+
 def broadcast_camera_frame(
     camera_role: str,
     snapshot_url: str = '',

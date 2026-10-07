@@ -1,54 +1,55 @@
 ﻿#!/usr/bin/env python
 """
-BantayPlaka ANPR Engine
-=======================
-Reads frames from a real IP camera (or webcam) via RTSP/OpenCV,
-detects license plates, reads the plate text with EasyOCR, then
-POSTs the result to the running Django application.
+BantayPlaka ANPR Engine  (merged: ANPR + vehicle-triggered recording)
+=====================================================================
+Reads frames from an IP camera (or webcam) via RTSP/OpenCV and:
 
-TWO DETECTION MODES:
-  1. roboflow  (DEFAULT, RECOMMENDED)
-     Uses your friend's Roboflow "Plate Number Detection" v5 model
-     (98.8% mAP accuracy). Requires ROBOFLOW_API_KEY in .env.
-     On first run it downloads and caches the model locally.
-     After that it runs 100% offline -- no internet needed.
+  1. VEHICLE GATE (trigger):  a local YOLOv8 COCO model (yolov8n.pt) checks
+     "is a vehicle in view?" (car, motorcycle, bus, truck). Plate detection and
+     OCR only run while a vehicle is present, and only inside the vehicle region.
+  2. RECORDING (goal):  when a vehicle appears, a video clip starts recording.
+     It stops after the vehicle has been gone for GRACE seconds, followed by a
+     short cooldown. Each clip gets a .json sidecar listing the plates read.
+  3. PLATE READING:  plate box (Roboflow model or custom YOLO weights) -> crop ->
+     EasyOCR -> clean/validate -> vote -> debounce -> POST to Django.
+     A clean plate-crop screenshot is also saved locally for every accepted plate.
 
-  2. yolo
-     Uses a local YOLO .pt weights file. Less accurate but works
-     without a Roboflow account. Good as a fallback.
+DETECTION MODES (plate localisation, --mode):
+  roboflow (default)  Roboflow "Plate Number Detection" model (needs API key).
+  yolo                Custom plate-trained YOLO weights via --model path.
+  ocr                 No plate detector: OCR on the vehicle crop only.
+                      (Also the automatic fallback if the Roboflow model fails.)
 
-REQUIREMENTS:
-  pip install -r anpr_engine/anpr_requirements.txt
+Note: yolov8n.pt is ONLY used as the vehicle detector now. It cannot find plates.
 
-USAGE EXAMPLES:
-
-  # Recommended -- Roboflow mode with webcam test (no camera hardware needed yet):
+USAGE:
   python anpr_engine/anpr_engine.py --rtsp 0
+  python anpr_engine/anpr_engine.py --rtsp "rtsp://user:pass@192.168.1.108:554/Streaming/Channels/101" --camera-role ENTRY_CAM
+  python anpr_engine/anpr_engine.py --rtsp 0 --no-record            # plates only
+  python anpr_engine/anpr_engine.py --rtsp 0 --no-vehicle-gate      # old behaviour (no gate, no clips)
+  python anpr_engine/anpr_engine.py --rtsp 0 --no-preview           # headless
 
-  # Roboflow mode with real IP camera:
-  python anpr_engine/anpr_engine.py --rtsp "rtsp://admin:admin@192.168.1.108:554/stream1"
+  Put the camera URL in .env as ANPR_RTSP_URL to avoid typing credentials.
 
-  # YOLO fallback mode:
-  python anpr_engine/anpr_engine.py --rtsp 0 --mode yolo
-
-  # Headless (no GUI window, background service):
-  python anpr_engine/anpr_engine.py --rtsp "rtsp://..." --no-preview
-
-NOTE: TIME_IN / TIME_OUT is auto-determined by Django.
-      First scan = TIME_IN, second scan = TIME_OUT, and so on.
-    To enforce strict per-camera status, pass --camera-role ENTRY_CAM or EXIT_CAM.
+NOTE: TIME_IN / TIME_OUT is decided by Django. Pass --camera-role ENTRY_CAM or
+      EXIT_CAM to enforce a fixed status per camera.
 """
+
+from __future__ import annotations
 
 import argparse
 import base64
-from collections import defaultdict
+import json
 import logging
 import os
 import queue
 import re
+import signal
 import sys
 import threading
 import time
+from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -64,11 +65,10 @@ except Exception:
     torch = None
 
 # ---------------------------------------------------------------------------
-# Load environment variables from Django project's .env
+# Environment
 # ---------------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parent.parent / '.env')
 
-# We only use plate detection; disable optional Inference model families to avoid noisy warnings.
 os.environ.setdefault('CORE_MODEL_SAM_ENABLED', 'False')
 os.environ.setdefault('CORE_MODEL_SAM3_ENABLED', 'False')
 os.environ.setdefault('CORE_MODEL_GAZE_ENABLED', 'False')
@@ -107,57 +107,93 @@ def _resolve_runtime_device(requested: str) -> str:
     if choice not in {'auto', 'cpu', 'cuda'}:
         choice = 'auto'
 
-    cuda_ready = bool(torch and torch.cuda.is_available() and torch.version.cuda)
+    cuda_ready = bool(
+        torch
+        and torch.cuda.is_available()
+        and getattr(getattr(torch, 'version', None), 'cuda', None)
+    )
 
     if choice == 'cpu':
         return 'cpu'
-
     if choice == 'cuda':
         if cuda_ready:
             return 'cuda:0'
         log.warning("CUDA was explicitly requested but is unavailable. Falling back to CPU.")
         return 'cpu'
-
-    # auto
     return 'cuda:0' if cuda_ready else 'cpu'
 
-# Key used to authenticate with your Django app's /detection/ingest/ endpoint
+
+_BASE_DIR = Path(__file__).resolve().parent
+
 DJANGO_API_KEY = os.getenv('ANPR_API_KEY', '')
-
-# Your Roboflow API key -- get it from: Roboflow -> Settings -> API Keys
 ROBOFLOW_API_KEY = os.getenv('ROBOFLOW_API_KEY', '')
-
-# Roboflow model ID: "project-slug/version"
-# Your friend's model: workspace=kurt-4w5dv, project=plate-number-detection, version=5
 DEFAULT_RF_MODEL_ID = os.getenv('ROBOFLOW_MODEL_ID', 'plate-number-detection/5')
-
 DEFAULT_INGEST_URL = (os.getenv('ANPR_INGEST_URL', '') or '').strip() or 'http://127.0.0.1:8000/detection/ingest/'
-DEFAULT_YOLO_MODEL = 'yolov8n.pt'
 
-# Seconds before the same plate can be logged again (prevents duplicates)
+# Camera source can come from .env so credentials never live in code or shell history.
+DEFAULT_CAMERA_SOURCE = (os.getenv('ANPR_RTSP_URL', '') or '').strip()
+
+# Custom plate-trained YOLO weights (only for --mode yolo). yolov8n.pt is NOT valid here.
+DEFAULT_PLATE_YOLO_MODEL = (os.getenv('ANPR_PLATE_YOLO_MODEL', '') or '').strip()
+
+# ---------------------------------------------------------------------------
+# Vehicle gate + recording settings (merged from vehicle_triggered_recorder.py)
+# ---------------------------------------------------------------------------
+VEHICLE_GATE_DEFAULT = _env_bool('ANPR_VEHICLE_GATE', True)
+RECORD_CLIPS_DEFAULT = _env_bool('ANPR_RECORD_CLIPS', True)
+VEHICLE_MODEL_PATH = (os.getenv('ANPR_VEHICLE_MODEL', '') or '').strip() or 'yolov8n.pt'
+# COCO class IDs: 2=car, 3=motorcycle, 5=bus, 7=truck
+VEHICLE_CLASS_IDS = {2, 3, 5, 7}
+VEHICLE_CONFIDENCE = _env_float('ANPR_VEHICLE_CONFIDENCE', 0.50)
+# Consecutive vehicle detections required before a clip starts (filters one-frame false positives).
+VEHICLE_MIN_HITS = max(1, _env_int('ANPR_VEHICLE_MIN_HITS', 2))
+# A vehicle sighting must be this recent to start a clip (covers ML queue latency).
+VEHICLE_START_WINDOW_SECONDS = _env_float('ANPR_VEHICLE_START_WINDOW', 1.5)
+# Vehicle gone this long -> clip stops AND the "vehicle episode" ends.
+# Keep this larger than your worst-case ML latency per frame on CPU.
+GRACE_PERIOD_SECONDS = _env_float('ANPR_GRACE_SECONDS', 3.0)
+COOLDOWN_SECONDS = _env_float('ANPR_COOLDOWN_SECONDS', 5.0)
+RECORD_FPS = max(1, _env_int('ANPR_RECORD_FPS', 15))  # used only if the camera does not report FPS
+RECORDINGS_DIR = Path(
+    os.getenv('ANPR_RECORDINGS_DIR', '') or (_BASE_DIR / 'recordings')
+).expanduser()
+SNAPSHOT_DIR = Path(
+    os.getenv('ANPR_SNAPSHOT_DIR', '') or (_BASE_DIR.parent / 'media' / 'snapshots' / 'plates')
+).expanduser()
+SAVE_PLATE_SNAPSHOTS = _env_bool('ANPR_SAVE_PLATE_SNAPSHOTS', True)
+# Save a few "unread plate" crops per clip for manual review.
+MAX_REVIEW_CANDIDATES_PER_CLIP = max(0, _env_int('ANPR_REVIEW_CANDIDATES', 3))
+REVIEW_CANDIDATE_MIN_INTERVAL_SECONDS = 2.0
+# One accepted plate per vehicle episode. Stops a single car's OCR misreads becoming
+# extra log entries (and phantom TIME_OUTs). Needs the vehicle gate.
+ONE_PLATE_PER_EPISODE = _env_bool('ANPR_ONE_PLATE_PER_EPISODE', True)
+# Pad around the vehicle box before looking for the plate.
+VEHICLE_REGION_PAD_RATIO = 0.05
+OVERLAY_TTL_SECONDS = 1.5
+
+# ---------------------------------------------------------------------------
+# Plate reading settings
+# ---------------------------------------------------------------------------
 DEBOUNCE_SECONDS = 30
-
-# Minimum OCR confidence to accept a plate reading (0.0 - 1.0)
 MIN_OCR_CONFIDENCE = _env_float('ANPR_MIN_OCR_CONFIDENCE', 0.36)
-
-# Detector-path OCR still needs short temporal agreement to reduce one-frame misreads.
 DETECTOR_MIN_VOTE_CONFIDENCE = _env_float('ANPR_DETECTOR_VOTE_CONFIDENCE', 0.50)
-
-# Full-frame fallback OCR is noisier, so keep a higher confidence bar.
 FALLBACK_MIN_OCR_CONFIDENCE = _env_float('ANPR_FALLBACK_MIN_OCR_CONFIDENCE', 0.58)
 
-# Require short temporal agreement before posting a new plate to reduce OCR jitter.
 VOTE_WINDOW_SECONDS = 1.4
 MIN_VOTE_COUNT = 2
 HIGH_CONF_SINGLE_SHOT = 0.80
 DETECTOR_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DETECTOR_QUICK_ACCEPT_CONFIDENCE', 0.66)
 FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_FALLBACK_QUICK_ACCEPT_CONFIDENCE', 0.86)
 FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_FALLBACK_EVERY_N_FRAMES', 6))
+
 HEARTBEAT_SNAPSHOT_SECONDS = max(0.10, _env_float('ANPR_HEARTBEAT_SECONDS', 1.0))
 HEARTBEAT_SNAPSHOT_MAX_WIDTH = max(320, _env_int('ANPR_HEARTBEAT_MAX_WIDTH', 640))
 HEARTBEAT_SNAPSHOT_JPEG_QUALITY = min(85, max(30, _env_int('ANPR_HEARTBEAT_JPEG_QUALITY', 45)))
+# Plate-event evidence sent to Django is higher quality than the live-feed heartbeat.
+EVENT_SNAPSHOT_MAX_WIDTH = max(320, _env_int('ANPR_EVENT_SNAPSHOT_MAX_WIDTH', 1280))
+EVENT_SNAPSHOT_JPEG_QUALITY = min(95, max(40, _env_int('ANPR_EVENT_SNAPSHOT_JPEG_QUALITY', 80)))
 
-# Emergency demo profile for RTSP camera presentations.
+# Demo profile for RTSP presentations.
 DEMO_RTSP_MODE = _env_bool('ANPR_DEMO_RTSP_MODE', False)
 DEMO_FORCE_FULLFRAME_OCR = _env_bool('ANPR_DEMO_FORCE_FULLFRAME_OCR', False)
 DEMO_FOCUS_ROI_ONLY = _env_bool('ANPR_DEMO_FOCUS_ROI_ONLY', True)
@@ -172,20 +208,26 @@ DEMO_DETECTOR_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DEMO_DETECTOR_QUICK_ACC
 DEMO_FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DEMO_FALLBACK_QUICK_ACCEPT_CONFIDENCE', 0.84)
 DEMO_FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_DEMO_FALLBACK_EVERY_N_FRAMES', 4))
 
-# Detection confidence threshold for both Roboflow and YOLO modes
 DETECTION_CONFIDENCE = _env_float('ANPR_DETECTION_CONFIDENCE', 0.34)
 DEFAULT_ANPR_DEVICE = (os.getenv('ANPR_DEVICE', 'auto') or 'auto').strip().lower()
 VALID_CAMERA_ROLES = {'ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'}
+DEFAULT_RTSP_DRAIN_GRABS = 0
 
-# Runtime diagnostics + RTSP resilience tuning.
+# Runtime diagnostics + RTSP resilience.
 DIAGNOSTIC_INTERVAL_SECONDS = 5.0
-MAX_CONSECUTIVE_READ_FAILS = 20
+# RTSP reads may each block until their configured timeout; reconnect promptly
+# rather than spending tens of seconds retrying a dead/stalled stream.
+MAX_CONSECUTIVE_READ_FAILS = 3
 MAX_CONSECUTIVE_INVALID_FRAMES = 12
 MIN_VALID_FRAME_WIDTH = 160
 MIN_VALID_FRAME_HEIGHT = 120
+RECONNECT_DELAY_START = 0.8
+RECONNECT_DELAY_MAX = 15.0
+# Alternate stream paths can lock accounts and silently change resolution, so opt-in only.
+RTSP_TRY_FALLBACK_PATHS = _env_bool('ANPR_RTSP_FALLBACKS', False)
 
 # ---------------------------------------------------------------------------
-# Logging setup
+# Logging
 # ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -194,25 +236,32 @@ logging.basicConfig(
 )
 log = logging.getLogger('bantayplaka.anpr')
 
-_DIGIT_LIKE_MAP = {
-    'O': '0', 'Q': '0',
-    'I': '1', 'L': '1',
-    'B': '8',
-}
-
-_LETTER_LIKE_MAP = {
-    '0': 'O',
-    '1': 'I',
-    '8': 'B',
-}
+_DIGIT_LIKE_MAP = {'O': '0', 'Q': '0', 'I': '1', 'L': '1', 'B': '8'}
+_LETTER_LIKE_MAP = {'0': 'O', '1': 'I', '8': 'B'}
 
 _PLATE_PATTERNS = (
     re.compile(r'^[A-Z]{2,4}\d{3,4}$'),
     re.compile(r'^\d{3,4}[A-Z]{2,4}$'),
 )
 
-ALLOWED_PLATE_FORMAT = (os.getenv('ANPR_ALLOWED_PLATE_FORMAT', 'PH_3X3') or 'PH_3X3').strip().upper()
+ALLOWED_PLATE_FORMAT = (os.getenv('ANPR_ALLOWED_PLATE_FORMAT', 'PH_STRICT') or 'PH_STRICT').strip().upper()
 FALLBACK_MIN_NO_BOX_STREAK = max(1, _env_int('ANPR_FALLBACK_MIN_NO_BOX_STREAK', 10))
+
+
+# ---------------------------------------------------------------------------
+# URL helpers
+# ---------------------------------------------------------------------------
+
+def _redact_url(url) -> str:
+    """Hide credentials in RTSP URLs before they reach logs."""
+    text = str(url)
+    if '://' not in text:
+        return text
+    parsed = urlparse(text)
+    if '@' not in parsed.netloc:
+        return text
+    host = parsed.netloc.rsplit('@', 1)[1]
+    return urlunparse(parsed._replace(netloc=f'***:***@{host}'))
 
 
 def _normalize_rtsp_url(rtsp_url: str) -> str:
@@ -232,26 +281,22 @@ def _normalize_rtsp_url(rtsp_url: str) -> str:
 
 
 def _rtsp_candidates(rtsp_url: str) -> list[str]:
-    """Generate robust candidate URLs so engine can recover if one channel/path fails."""
+    """Candidate URLs. Only the given URL unless ANPR_RTSP_FALLBACKS is enabled."""
     source = _normalize_rtsp_url((rtsp_url or '').strip())
-    if not source or '://' not in source:
+    if not source or '://' not in source or not RTSP_TRY_FALLBACK_PATHS:
         return [source]
 
     candidates: list[str] = [source]
-    # Hikvision/HiLook main/sub channel fallback.
     if '/Streaming/Channels/101' in source:
         candidates.append(source.replace('/Streaming/Channels/101', '/Streaming/Channels/102'))
     elif '/Streaming/Channels/102' in source:
         candidates.append(source.replace('/Streaming/Channels/102', '/Streaming/Channels/101'))
 
-    # Generic fallback paths for some brands.
-    generic_paths = ('/stream1', '/live', '/h264')
     parsed = urlparse(source)
-    for path in generic_paths:
+    for path in ('/stream1', '/live', '/h264'):
         alt = urlunparse(parsed._replace(path=path, params='', query='', fragment=''))
         if alt not in candidates:
             candidates.append(alt)
-
     return candidates
 
 
@@ -261,39 +306,47 @@ def _derive_frame_ingest_url(ingest_url: str) -> str:
         return ''
     if '/detection/ingest/' in normalized:
         return normalized.replace('/detection/ingest/', '/detection/ingest-frame/')
-    if normalized.endswith('/ingest'):
-        return normalized[:-6] + '/ingest-frame'
     if normalized.endswith('/ingest/'):
-        return normalized[:-7] + '/ingest-frame/'
+        return normalized[:-len('ingest/')] + 'ingest-frame/'
+    if normalized.endswith('/ingest'):
+        return normalized + '-frame'
     return normalized
+
+
+def _derive_recording_ingest_url(ingest_url: str) -> str:
+    normalized = (ingest_url or '').strip()
+    if not normalized:
+        return ''
+    if '/detection/ingest/' in normalized:
+        return normalized.replace('/detection/ingest/', '/detection/ingest-recording/')
+    if normalized.endswith('/ingest/'):
+        return normalized[:-len('ingest/')] + 'ingest-recording/'
+    if normalized.endswith('/ingest'):
+        return normalized + '-recording'
+    return ''
 
 
 def validate_decoded_frame(frame: np.ndarray | None) -> tuple[bool, str]:
     """Validate decoded frames so None/corrupt frames are visible in logs and recovery flow."""
     if frame is None:
         return False, 'frame=None'
-
     if not isinstance(frame, np.ndarray):
         return False, f'invalid-type={type(frame).__name__}'
-
     if frame.size == 0:
         return False, 'empty-frame'
-
     if frame.ndim < 2:
         return False, f'invalid-ndim={frame.ndim}'
 
     h, w = frame.shape[:2]
     if w < MIN_VALID_FRAME_WIDTH or h < MIN_VALID_FRAME_HEIGHT:
         return False, f'too-small={w}x{h}'
-
     if frame.dtype != np.uint8:
         return False, f'unexpected-dtype={frame.dtype}'
-
     return True, f'{w}x{h}'
 
 
 def detect_plate_like_rectangles(frame: np.ndarray) -> list[tuple[int, int, int, int]]:
-    """Fast contour fallback for demo: find plate-like rectangles in lower frame area."""
+    """Fast contour fallback for demo: find plate-like rectangles in the lower image area."""
     try:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blur = cv2.bilateralFilter(gray, 7, 60, 60)
@@ -323,20 +376,16 @@ def detect_plate_like_rectangles(frame: np.ndarray) -> list[tuple[int, int, int,
         ar = w / float(h)
         if ar < 1.7 or ar > 7.0:
             continue
-
         if (w * h) > frame_area * 0.45:
             continue
-
-        cy = y + (h / 2.0)
-        if cy < fh * 0.35:
-            # Skip top overlay/timestamp region.
+        if y + (h / 2.0) < fh * 0.35:
             continue
 
         boxes.append((x, y, x + w, y + h))
 
-    # Keep biggest plausible rectangles first.
     boxes.sort(key=lambda b: (b[2] - b[0]) * (b[3] - b[1]), reverse=True)
     return boxes[:4]
+
 
 # ---------------------------------------------------------------------------
 # Plate text cleaning
@@ -366,7 +415,6 @@ def clean_plate_text(raw_text: str) -> str | None:
     if direct:
         return direct
 
-    # Try all bounded slices to remove one noisy prefix/suffix OCR character.
     slices: list[str] = []
     n = len(compact)
     for size in range(8, 4, -1):
@@ -428,7 +476,7 @@ def is_strict_plate(plate: str) -> bool:
 
 
 def is_demo_strict_plate(plate: str) -> bool:
-    # Demo profile: accept only 3x3 formats to suppress random text hits.
+    # Accept only 3x3 formats to suppress random text hits.
     return bool(re.fullmatch(r'(?:[A-Z]{3} \d{3}|\d{3} [A-Z]{3})', plate))
 
 
@@ -438,7 +486,6 @@ def is_allowed_plate_format(plate: str) -> bool:
         return is_strict_plate(plate)
     if ALLOWED_PLATE_FORMAT == 'PH_3X3':
         return is_demo_strict_plate(plate)
-    # PH_RELAXED: backwards-compatible strict mode.
     return is_strict_plate(plate)
 
 
@@ -464,14 +511,10 @@ def normalize_plate_variant_noise(plate: str) -> str:
 
     confusable_prefixes = {'I', 'L', 'G', 'T', 'J'}
 
-    # letters+digits format
     if left.isalpha() and right.isdigit() and len(left) == 4 and left[0] in confusable_prefixes:
         return f'{left[1:]} {right}'
-
-    # digits+letters format
     if left.isdigit() and right.isalpha() and len(right) == 4 and right[0] in confusable_prefixes:
         return f'{left} {right[1:]}'
-
     return plate
 
 
@@ -479,7 +522,6 @@ def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
     """Create multiple image variants to improve OCR hit rate under blur/lighting noise."""
     variants: list[np.ndarray] = [plate_crop]
 
-    # Upscale small crops to help OCR read distant/thin characters.
     h0, w0 = plate_crop.shape[:2]
     if w0 < 420:
         scale = max(1.0, 420.0 / max(1, w0))
@@ -494,19 +536,17 @@ def build_ocr_variants(plate_crop: np.ndarray) -> list[np.ndarray]:
     gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
     variants.append(gray)
 
-    # Keep OCR variants lightweight to reduce per-frame latency.
     _, th_otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     variants.append(th_otsu)
     return variants
 
 
 def build_fast_fullframe_ocr_variants(frame: np.ndarray) -> list[np.ndarray]:
-    """Low-cost full-frame OCR variants to keep RTSP processing responsive."""
+    """Low-cost region OCR variants to keep RTSP processing responsive."""
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     variants: list[np.ndarray] = [gray]
 
-    # Fast contrast bump for difficult lighting without expensive multi-pass filters.
-    normalized = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
+    normalized = cv2.normalize(gray, gray.copy(), 0, 255, cv2.NORM_MINMAX)
     variants.append(normalized)
 
     _, otsu = cv2.threshold(normalized, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -560,11 +600,9 @@ def extract_plate_candidates_from_ocr(ocr_results) -> list[tuple[str, float, tup
         seen.add(key)
         candidates.append((plate, conf_value, bbox_value))
 
-    # Direct token candidates first.
     for item in items:
         add_candidate(item['raw'], item['conf'], item['bbox'])
 
-    # Combine adjacent same-line split tokens.
     for i, left in enumerate(items):
         for j, right in enumerate(items):
             if i == j:
@@ -597,59 +635,117 @@ def extract_plate_candidates_from_ocr(ocr_results) -> list[tuple[str, float, tup
 
 
 # ---------------------------------------------------------------------------
-# Plate Detectors
+# Detectors
 # ---------------------------------------------------------------------------
+
+class VehicleDetector:
+    """
+    Pre-filter: pretrained YOLOv8 (COCO) answering "is a vehicle in this frame?".
+    Returns the largest confident car/motorcycle/bus/truck box.
+    """
+
+    def __init__(self, model_path: str, device: str = 'cpu'):
+        try:
+            from ultralytics import YOLO
+        except ImportError as exc:
+            raise RuntimeError("The 'ultralytics' package is not installed. Run: pip install ultralytics") from exc
+
+        log.info("Loading vehicle detector: %s (first run auto-downloads yolov8n.pt)", model_path)
+        self._model = YOLO(model_path)
+        self._device = device if device in {'cpu', 'cuda:0'} else 'cpu'
+        self._infer_calls = 0
+        if self._device.startswith('cuda'):
+            try:
+                self._model.to(self._device)
+            except Exception as exc:
+                log.warning("Vehicle detector CUDA init failed (%s). Falling back to CPU.", exc)
+                self._device = 'cpu'
+        log.info("Vehicle detector ready on %s.", self._device)
+
+    def _predict(self, frame: np.ndarray, device: str):
+        return self._model.predict(
+            frame,
+            conf=VEHICLE_CONFIDENCE,
+            classes=sorted(VEHICLE_CLASS_IDS),
+            device=device,
+            verbose=False,
+        )[0]
+
+    def detect_largest(self, frame: np.ndarray) -> tuple[int, int, int, int] | None:
+        self._infer_calls += 1
+        try:
+            result = self._predict(frame, self._device)
+        except Exception as exc:
+            if self._device.startswith('cuda'):
+                log.warning("Vehicle CUDA inference failed (%s). Switching to CPU.", exc)
+                self._device = 'cpu'
+                try:
+                    result = self._predict(frame, 'cpu')
+                except Exception as cpu_exc:
+                    log.warning("Vehicle detection error: %s", cpu_exc)
+                    return None
+            else:
+                log.warning("Vehicle detection error: %s", exc)
+                return None
+
+        best_box = None
+        best_area = 0
+        for box in (result.boxes or []):
+            class_id = int(box.cls[0])
+            if class_id not in VEHICLE_CLASS_IDS:
+                continue
+            if float(box.conf[0]) < VEHICLE_CONFIDENCE:
+                continue
+            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+            area = max(0, x2 - x1) * max(0, y2 - y1)
+            if area > best_area:
+                best_box = (x1, y1, x2, y2)
+                best_area = area
+        return best_box
+
+
+class NullDetector:
+    """No plate localisation: the engine OCRs the vehicle crop directly (--mode ocr, or Roboflow failure)."""
+
+    def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int]]:
+        return []
+
+    def get_debug_stats(self) -> dict[str, object]:
+        return {'infer_calls': 0, 'zero_box_calls': None, 'no_box_streak': None, 'last_variant': 'ocr-only'}
+
 
 class RoboflowDetector:
     """
-    Detects license plates using the Roboflow-trained model.
-    Accuracy: 98.8% mAP (Plate Number Detection v5).
-
-    First run: downloads and caches the model locally (~30 seconds, needs internet).
-    After that: runs completely offline, no internet needed.
+    Detects license plates using the Roboflow-trained model (Plate Number Detection v5).
+    First run downloads and caches the model; after that it runs offline.
+    Raises RuntimeError on setup problems so the engine can decide how to degrade.
     """
 
     def __init__(self, model_id: str, api_key: str, device: str = 'cpu'):
         try:
             from inference import get_model
-        except ImportError:
-            log.error(
-                "The 'inference' package is not installed.\n"
-                "  Run:  pip install inference"
-            )
-            sys.exit(1)
+        except ImportError as exc:
+            raise RuntimeError("The 'inference' package is not installed. Run: pip install inference") from exc
 
         if not api_key:
-            log.error(
-                "ROBOFLOW_API_KEY is not set in your .env file.\n"
-                "  1. Go to Roboflow -> click your profile -> Settings -> API Keys\n"
-                "  2. Copy the API key\n"
-                "  3. Add to .env:  ROBOFLOW_API_KEY=paste_your_key_here"
+            raise RuntimeError(
+                "ROBOFLOW_API_KEY is not set in .env (Roboflow -> Settings -> API Keys)."
             )
-            sys.exit(1)
 
         self._device = device
         log.info(f"Loading Roboflow model: {model_id}")
         log.info("First run downloads and caches the model (~30 sec). Next runs are instant.")
-        # Pass device explicitly so CUDA is used when available.
         try:
             self._model = get_model(model_id=model_id, api_key=api_key, device=self._device)
         except TypeError:
-            # Older inference builds don't accept device param — fall back silently.
             self._model = get_model(model_id=model_id, api_key=api_key)
         self._infer_calls = 0
         self._zero_box_calls = 0
         self._last_variant = 'none'
         self._no_box_streak = 0
-        log.info("Roboflow model ready. Accuracy: 98.8% mAP on license plates.")
+        log.info("Roboflow model ready.")
 
-    def _infer_variant(
-        self,
-        image: np.ndarray,
-        scale_back: float,
-        parse_predictions,
-        variant_label: str,
-    ) -> list[tuple[int, int, int, int]]:
+    def _infer_variant(self, image: np.ndarray, scale_back: float, parse_predictions, variant_label: str):
         self._infer_calls += 1
         results = self._model.infer(image, confidence=DETECTION_CONFIDENCE)
         boxes = parse_predictions(results, scale_back=scale_back)
@@ -693,32 +789,26 @@ class RoboflowDetector:
                     w = getattr(prediction, 'width', None)
                     h = getattr(prediction, 'height', None)
 
-                if None in (x, y, w, h):
+                if x is None or y is None or w is None or h is None:
                     continue
 
-                x1 = int((x - w / 2) * scale_back)
-                y1 = int((y - h / 2) * scale_back)
-                x2 = int((x + w / 2) * scale_back)
-                y2 = int((y + h / 2) * scale_back)
-                parsed.append((x1, y1, x2, y2))
+                parsed.append((
+                    int((x - w / 2) * scale_back),
+                    int((y - h / 2) * scale_back),
+                    int((x + w / 2) * scale_back),
+                    int((y + h / 2) * scale_back),
+                ))
             return parsed
 
         try:
             boxes = self._infer_variant(frame, 1.0, parse_predictions, 'bgr')
 
-            # Some RTSP decoders produce color layouts that behave better after explicit BGR->RGB conversion.
-            if not boxes and frame.ndim == 3 and frame.shape[2] == 3:
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                boxes = self._infer_variant(rgb_frame, 1.0, parse_predictions, 'rgb')
-
-            # For CCTV feeds where plates are tiny in the full frame, retry on upscaled image.
-            # Run this on no-box streaks to keep throughput stable while still probing tiny plates.
             if not boxes:
                 self._no_box_streak += 1
                 h, w = frame.shape[:2]
                 max_dim = max(h, w)
-                should_try_upscale = self._no_box_streak % 3 == 0
-                if should_try_upscale and max_dim < 1600:
+                # Vehicle crops are small, so probe an upscaled copy on no-box streaks.
+                if self._no_box_streak % 3 == 0 and max_dim < 1600:
                     scale = min(2.0, 1600.0 / max(1.0, float(max_dim)))
                     upscaled = cv2.resize(
                         frame,
@@ -726,15 +816,6 @@ class RoboflowDetector:
                         interpolation=cv2.INTER_CUBIC,
                     )
                     boxes = self._infer_variant(upscaled, 1.0 / scale, parse_predictions, 'upscaled-bgr')
-
-                    if not boxes and upscaled.ndim == 3 and upscaled.shape[2] == 3:
-                        upscaled_rgb = cv2.cvtColor(upscaled, cv2.COLOR_BGR2RGB)
-                        boxes = self._infer_variant(
-                            upscaled_rgb,
-                            1.0 / scale,
-                            parse_predictions,
-                            'upscaled-rgb',
-                        )
             else:
                 self._no_box_streak = 0
 
@@ -746,41 +827,33 @@ class RoboflowDetector:
 
 
 class YOLODetector:
-    """
-    Detects plates using a local YOLO .pt weights file.
-    Less accurate than the Roboflow model but works without an API key.
-    Use this only as a fallback (--mode yolo).
-    """
+    """Plate detector using CUSTOM plate-trained YOLO weights (--mode yolo --model plates.pt)."""
 
     def __init__(self, model_path: str, device: str = 'cpu'):
         try:
             from ultralytics import YOLO
-        except ImportError:
-            log.error("The 'ultralytics' package is not installed. Run: pip install ultralytics")
-            sys.exit(1)
+        except ImportError as exc:
+            raise RuntimeError("The 'ultralytics' package is not installed. Run: pip install ultralytics") from exc
 
-        if model_path == DEFAULT_YOLO_MODEL:
-            log.warning(
-                "Using generic yolov8n.pt -- NOT trained on license plates.\n"
-                "  This model will have poor plate detection accuracy.\n"
-                "  Use --mode roboflow for the proper trained model."
+        if not model_path:
+            raise RuntimeError(
+                "--mode yolo needs plate-trained weights (--model path/to/plates.pt). "
+                "yolov8n.pt is only used as the VEHICLE detector and cannot find plates."
             )
-        elif not os.path.exists(model_path):
-            log.error(f"YOLO model file not found: {model_path}")
-            sys.exit(1)
+        if not os.path.exists(model_path):
+            raise RuntimeError(f"YOLO plate model file not found: {model_path}")
 
-        log.info(f"Loading YOLO model: {model_path}")
+        log.info(f"Loading YOLO plate model: {model_path}")
         self._model = YOLO(model_path)
         self._device = device if device in {'cpu', 'cuda:0'} else 'cpu'
         self._infer_calls = 0
         if self._device.startswith('cuda'):
             try:
                 self._model.to(self._device)
-                log.info("YOLO device set to %s", self._device)
             except Exception as exc:
                 log.warning("YOLO CUDA init failed (%s). Falling back to CPU.", exc)
                 self._device = 'cpu'
-        log.info("YOLO model loaded.")
+        log.info("YOLO plate model loaded on %s.", self._device)
 
     def get_debug_stats(self) -> dict[str, object]:
         return {
@@ -788,37 +861,121 @@ class YOLODetector:
             'zero_box_calls': None,
             'no_box_streak': None,
             'last_variant': 'yolo',
-            'device': self._device,
         }
 
-    def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int]]:
+    def _run(self, frame: np.ndarray, device: str) -> list[tuple[int, int, int, int]]:
         boxes = []
+        results = self._model(frame, conf=DETECTION_CONFIDENCE, verbose=False, device=device)
+        for result in results:
+            if result.boxes is None:
+                continue
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                boxes.append((x1, y1, x2, y2))
+        return boxes
+
+    def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int]]:
+        self._infer_calls += 1
         try:
-            self._infer_calls += 1
-            results = self._model(frame, conf=DETECTION_CONFIDENCE, verbose=False, device=self._device)
-            for result in results:
-                if result.boxes is None:
-                    continue
-                for box in result.boxes:
-                    x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-                    boxes.append((x1, y1, x2, y2))
+            return self._run(frame, self._device)
         except Exception as e:
             if self._device.startswith('cuda'):
                 log.warning("YOLO CUDA inference failed (%s). Retrying on CPU.", e)
                 self._device = 'cpu'
                 try:
-                    results = self._model(frame, conf=DETECTION_CONFIDENCE, verbose=False, device='cpu')
-                    for result in results:
-                        if result.boxes is None:
-                            continue
-                        for box in result.boxes:
-                            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-                            boxes.append((x1, y1, x2, y2))
+                    return self._run(frame, 'cpu')
                 except Exception as cpu_exc:
                     log.warning(f"YOLO detection error: {cpu_exc}")
             else:
                 log.warning(f"YOLO detection error: {e}")
-        return boxes
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Clip recorder (merged from vehicle_triggered_recorder.py)
+# ---------------------------------------------------------------------------
+
+class ClipRecorder:
+    """Writes one vehicle clip (.mp4) plus a .json sidecar listing plates read during it."""
+
+    def __init__(self, output_dir: Path, camera_role: str):
+        self.output_dir = Path(output_dir)
+        self.camera_role = camera_role
+        self._writer = None
+        self._path: Path | None = None
+        self._size: tuple[int, int] | None = None
+        self._fps = float(RECORD_FPS)
+        self._started_wall = 0.0
+        self._started_iso = ''
+        self._frames = 0
+
+    @property
+    def active(self) -> bool:
+        return self._writer is not None
+
+    @property
+    def started_at(self) -> float:
+        return self._started_wall
+
+    def start(self, frame: np.ndarray, fps: float) -> Path | None:
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        h, w = frame.shape[:2]
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        path = self.output_dir / f'vehicle_{stamp}_{self.camera_role.lower()}.mp4'
+        writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+        if not writer.isOpened():
+            writer.release()
+            log.error("Could not open video writer for %s", path)
+            return None
+        self._writer = writer
+        self._path = path
+        self._size = (w, h)
+        self._fps = fps
+        self._started_wall = time.time()
+        self._started_iso = datetime.now().isoformat(timespec='seconds')
+        self._frames = 0
+        snapshot_path = path.with_suffix('.jpg')
+        if not cv2.imwrite(str(snapshot_path), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90]):
+            log.error("Could not save vehicle alert snapshot for %s", path)
+        return path
+
+    def write(self, frame: np.ndarray) -> bool:
+        if self._writer is None:
+            return False
+        h, w = frame.shape[:2]
+        if self._size != (w, h):
+            return False
+        self._writer.write(frame)
+        self._frames += 1
+        return True
+
+    def stop(self, events: list[dict], reason: str) -> tuple[Path | None, float]:
+        if self._writer is None:
+            return None, 0.0
+        self._writer.release()
+        path = self._path
+        duration = time.time() - self._started_wall
+        meta = {
+            'clip': path.name if path else None,
+            'camera_role': self.camera_role,
+            'started_at': self._started_iso,
+            'ended_at': datetime.now().isoformat(timespec='seconds'),
+            'duration_seconds': round(duration, 1),
+            'fps': self._fps,
+            'frames_written': self._frames,
+            'stop_reason': reason,
+            'plates': events,
+            'unrecognized_plate_alert': not bool(events),
+        }
+        try:
+            if path:
+                path.with_suffix('.json').write_text(json.dumps(meta, indent=2), encoding='utf-8')
+        except Exception as exc:
+            log.warning("Could not write clip sidecar: %s", exc)
+        self._writer = None
+        self._path = None
+        self._size = None
+        return path, duration
 
 
 # ---------------------------------------------------------------------------
@@ -835,14 +992,22 @@ class ANPREngine:
         camera_role: str = 'UNKNOWN',
         device: str = DEFAULT_ANPR_DEVICE,
         rf_model_id: str = DEFAULT_RF_MODEL_ID,
-        yolo_model_path: str = DEFAULT_YOLO_MODEL,
+        yolo_model_path: str = DEFAULT_PLATE_YOLO_MODEL,
         debounce_seconds: int = DEBOUNCE_SECONDS,
         frame_skip: int = 2,
-        rtsp_drain_grabs: int = 2,
+        rtsp_drain_grabs: int = DEFAULT_RTSP_DRAIN_GRABS,
         heartbeat_seconds: float = HEARTBEAT_SNAPSHOT_SECONDS,
+        vehicle_gate: bool = VEHICLE_GATE_DEFAULT,
+        record_clips: bool = RECORD_CLIPS_DEFAULT,
+        vehicle_model_path: str = VEHICLE_MODEL_PATH,
+        recordings_dir: Path = RECORDINGS_DIR,
+        snapshot_dir: Path = SNAPSHOT_DIR,
+        grace_seconds: float = GRACE_PERIOD_SECONDS,
+        cooldown_seconds: float = COOLDOWN_SECONDS,
     ):
         self.ingest_url = ingest_url
         self.ingest_frame_url = _derive_frame_ingest_url(ingest_url)
+        self.ingest_recording_url = _derive_recording_ingest_url(ingest_url)
         self._is_rtsp_source = isinstance(rtsp_url, str) and '://' in rtsp_url
         requested_role = (camera_role or 'UNKNOWN').strip().upper()
         self.camera_role = requested_role if requested_role in VALID_CAMERA_ROLES else 'UNKNOWN'
@@ -870,15 +1035,22 @@ class ANPREngine:
             self.min_vote_count = max(1, DEMO_MIN_VOTE_COUNT)
             self.high_conf_single_shot = min(HIGH_CONF_SINGLE_SHOT, DEMO_HIGH_CONF_SINGLE_SHOT)
             self.detector_quick_accept_confidence = min(
-                DETECTOR_QUICK_ACCEPT_CONFIDENCE,
-                DEMO_DETECTOR_QUICK_ACCEPT_CONFIDENCE,
-            )
+                DETECTOR_QUICK_ACCEPT_CONFIDENCE, DEMO_DETECTOR_QUICK_ACCEPT_CONFIDENCE)
             self.fallback_quick_accept_confidence = min(
-                FALLBACK_QUICK_ACCEPT_CONFIDENCE,
-                DEMO_FALLBACK_QUICK_ACCEPT_CONFIDENCE,
-            )
+                FALLBACK_QUICK_ACCEPT_CONFIDENCE, DEMO_FALLBACK_QUICK_ACCEPT_CONFIDENCE)
             self.fallback_every_n_frames = max(1, DEMO_FALLBACK_EVERY_N_FRAMES)
 
+        # Vehicle gate / recording configuration
+        self.grace_seconds = max(0.5, float(grace_seconds))
+        self.cooldown_seconds = max(0.0, float(cooldown_seconds))
+        self.vehicle_min_hits = VEHICLE_MIN_HITS
+        self.vehicle_start_window = VEHICLE_START_WINDOW_SECONDS
+        self.snapshot_dir = Path(snapshot_dir)
+        self.save_plate_snapshots = SAVE_PLATE_SNAPSHOTS
+        self.record_enabled = bool(record_clips)
+        self.vehicle_detector: VehicleDetector | None = None
+
+        # Counters / state
         self._last_logged: dict[str, float] = {}
         self._vote_history: dict[str, list[tuple[float, float]]] = defaultdict(list)
         self._frames_no_box = 0
@@ -893,52 +1065,118 @@ class ANPREngine:
         self._accepted_plates = 0
         self._dropped_by_confidence = 0
         self._dropped_by_debounce = 0
+        self._dropped_by_episode = 0
+        self._vehicle_frames = 0
+        self._gate_skipped = 0
+        self._clips_saved = 0
         self._last_heartbeat_post_ts = 0.0
         self._active_source = str(rtsp_url)
         self._last_diag_ts = time.time()
+        self._source_fps = 0.0
+        self._post_backoff_until = 0.0
 
-        # Initialize plate detector. On restricted Windows clients, Roboflow model
-        # package loading can fail due to symlink privileges; fallback keeps webcam
-        # preview and pipeline running.
+        # Shared between the ML worker thread and the capture loop.
+        self._state_lock = threading.Lock()
+        self._vehicle_last_seen: float | None = None
+        self._vehicle_hits = 0
+        self._episode_id = 0
+        self._episode_logged = False
+        self._overlays: dict[str, tuple[float, list[tuple[tuple[int, int, int, int], str, tuple[int, int, int]]]]] = {}
+        self._clip_events: list[dict] = []
+        self._review_saved_this_clip = 0
+        self._last_review_ts = 0.0
+        self._cooldown_until = 0.0
+
+        self._recorder = ClipRecorder(Path(recordings_dir), self.camera_role)
+        self._recording_upload_queue: queue.Queue[Path] = queue.Queue(maxsize=10)
+        self._recording_upload_enabled = bool(self.ingest_recording_url and DJANGO_API_KEY)
+        if self._recording_upload_enabled:
+            threading.Thread(
+                target=self._recording_upload_loop,
+                name=f'{self.camera_role}-recording-uploader',
+                daemon=True,
+            ).start()
+
+        # --- Vehicle gate (YOLO COCO pre-filter) ---
+        if vehicle_gate:
+            try:
+                self.vehicle_detector = VehicleDetector(vehicle_model_path, device=self.runtime_device)
+            except Exception as exc:
+                log.error("Vehicle detector failed to initialize: %s", exc)
+                sys.exit(1)
+        else:
+            log.warning("Vehicle gate DISABLED: plate OCR runs on every frame region and no clips are recorded.")
+            if self.record_enabled:
+                log.warning("Recording needs the vehicle gate as its trigger, so recording is turned off.")
+                self.record_enabled = False
+
+        # --- Plate detector ---
         if mode == 'roboflow':
             try:
                 self.detector = RoboflowDetector(rf_model_id, ROBOFLOW_API_KEY, device=self.runtime_device)
-            except BaseException as exc:
-                if isinstance(exc, KeyboardInterrupt):
-                    raise
+            except Exception as exc:
                 log.error("Roboflow detector failed to initialize: %s", exc)
-                log.warning("Falling back to YOLO detector for compatibility.")
-                try:
-                    self.detector = YOLODetector(yolo_model_path, device=self.runtime_device)
-                except BaseException as yolo_exc:
-                    log.error("YOLO fallback failed to initialize: %s", yolo_exc)
-                    sys.exit(1)
+                self.detector = self._fallback_plate_detector(yolo_model_path)
         elif mode == 'yolo':
-            self.detector = YOLODetector(yolo_model_path, device=self.runtime_device)
+            try:
+                self.detector = YOLODetector(yolo_model_path, device=self.runtime_device)
+            except Exception as exc:
+                log.error("YOLO plate detector failed to initialize: %s", exc)
+                sys.exit(1)
+        elif mode == 'ocr':
+            self.detector = NullDetector()
+            log.warning("OCR-only mode: no plate localisation. Accuracy will be lower.")
         else:
-            log.error(f"Unknown mode '{mode}'. Use 'roboflow' or 'yolo'.")
+            log.error(f"Unknown mode '{mode}'. Use 'roboflow', 'yolo' or 'ocr'.")
             sys.exit(1)
 
-        # EasyOCR reads the text from the cropped plate image
+        # --- EasyOCR ---
         use_gpu = self.runtime_device.startswith('cuda')
-        if use_gpu:
-            log.info("Runtime device: %s. EasyOCR GPU mode enabled.", self.runtime_device)
-        else:
-            log.info("Runtime device: CPU. EasyOCR CPU mode enabled.")
+        log.info("Runtime device: %s. EasyOCR %s mode.", self.runtime_device, 'GPU' if use_gpu else 'CPU')
         log.info("Loading EasyOCR (first run downloads ~200 MB, then cached locally)...")
         self.ocr = easyocr.Reader(['en'], gpu=use_gpu)
         log.info("EasyOCR ready.")
         log.info(
-            "Thresholds: detector=%.2f ocr=%.2f fallback_ocr=%.2f vote=%.2f",
-            DETECTION_CONFIDENCE,
-            self.min_ocr_confidence,
-            self.fallback_min_ocr_confidence,
-            self.detector_vote_confidence,
+            "Thresholds: detector=%.2f ocr=%.2f fallback_ocr=%.2f vote=%.2f | gate=%s record=%s grace=%.1fs cooldown=%.1fs",
+            DETECTION_CONFIDENCE, self.min_ocr_confidence, self.fallback_min_ocr_confidence,
+            self.detector_vote_confidence, bool(self.vehicle_detector), self.record_enabled,
+            self.grace_seconds, self.cooldown_seconds,
         )
         if self.demo_mode:
-            log.warning(
-                "DEMO RTSP MODE ENABLED: aggressive full-frame OCR and relaxed vote thresholds are active."
-            )
+            log.warning("DEMO RTSP MODE ENABLED: aggressive OCR and relaxed vote thresholds are active.")
+        if not DJANGO_API_KEY:
+            log.warning("ANPR_API_KEY is not set in .env: plates will be read/recorded but NOT sent to Django.")
+
+    def _fallback_plate_detector(self, yolo_model_path: str):
+        """Roboflow failed: use custom plate weights if given, otherwise OCR on the vehicle crop."""
+        if yolo_model_path:
+            try:
+                log.warning("Falling back to custom YOLO plate weights: %s", yolo_model_path)
+                return YOLODetector(yolo_model_path, device=self.runtime_device)
+            except Exception as exc:
+                log.error("YOLO plate fallback failed: %s", exc)
+        log.warning(
+            "*** NO PLATE DETECTOR ACTIVE *** Falling back to OCR-only on the vehicle crop. "
+            "Fix the Roboflow setup for full accuracy."
+        )
+        return NullDetector()
+
+    # ------------------------------------------------------------------
+    # Diagnostics / housekeeping
+    # ------------------------------------------------------------------
+
+    def _prune_state(self, now: float):
+        horizon = max(self.debounce_seconds * 4, 300)
+        for plate in [p for p, ts in self._last_logged.items() if now - ts > horizon]:
+            self._last_logged.pop(plate, None)
+        for plate in list(self._vote_history.keys()):
+            votes = [(ts, c) for (ts, c) in self._vote_history[plate] if now - ts <= self.vote_window_seconds]
+            if votes:
+                self._vote_history[plate] = votes
+            else:
+                self._vote_history.pop(plate, None)
+        with self._state_lock:
+            self._clip_events = self._clip_events[-50:]
 
     def _maybe_log_diagnostics(self, force: bool = False):
         now = time.time()
@@ -953,27 +1191,27 @@ class ANPREngine:
                 detector_debug = {}
 
         log.info(
-            "[DIAG] role=%s source=%s frames_read=%d processed=%d read_fail=%d invalid=%d "
+            "[DIAG] role=%s source=%s vehicle_gate=%s frames_read=%d processed=%d read_fail=%d invalid=%d "
+            "vehicle_frames=%d gate_skipped=%d recording=%s clips=%d "
             "detector_frames=%d detector_box_frames=%d detector_boxes=%d ocr_candidates=%d "
-            "accepted_plates=%d dropped_confidence=%d dropped_debounce=%d rf_calls=%s rf_zero_box=%s rf_variant=%s",
-            self.camera_role,
-            self._active_source,
-            self._frames_read,
-            self._processed_frames,
-            self._read_failures,
-            self._invalid_frames,
-            self._detector_frames,
-            self._detector_box_frames,
-            self._detector_box_count,
-            self._ocr_candidates,
-            self._accepted_plates,
-            self._dropped_by_confidence,
-            self._dropped_by_debounce,
-            detector_debug.get('infer_calls', '?'),
-            detector_debug.get('zero_box_calls', '?'),
+            "accepted=%d drop_conf=%d drop_debounce=%d drop_episode=%d rf_calls=%s rf_zero_box=%s rf_variant=%s",
+            self.camera_role, _redact_url(self._active_source),
+            'on' if self.vehicle_detector is not None else 'off',
+            self._frames_read, self._processed_frames,
+            self._read_failures, self._invalid_frames, self._vehicle_frames, self._gate_skipped,
+            self._recorder.active, self._clips_saved,
+            self._detector_frames, self._detector_box_frames, self._detector_box_count,
+            self._ocr_candidates, self._accepted_plates, self._dropped_by_confidence,
+            self._dropped_by_debounce, self._dropped_by_episode,
+            detector_debug.get('infer_calls', '?'), detector_debug.get('zero_box_calls', '?'),
             detector_debug.get('last_variant', '?'),
         )
+        self._prune_state(now)
         self._last_diag_ts = now
+
+    # ------------------------------------------------------------------
+    # Debounce / voting
+    # ------------------------------------------------------------------
 
     def _is_debounced(self, plate: str) -> bool:
         return (time.time() - self._last_logged.get(plate, 0)) < self.debounce_seconds
@@ -991,7 +1229,6 @@ class ANPREngine:
             return True
         if len(votes) < self.min_vote_count:
             return False
-
         avg_conf = sum(conf for _, conf in votes) / len(votes)
         return avg_conf >= min_conf
 
@@ -1000,28 +1237,27 @@ class ANPREngine:
             return True
         return self._has_vote_consensus(plate, confidence, min_conf)
 
-    def _build_snapshot_b64(self, frame: np.ndarray) -> str:
-        snapshot_b64 = ''
+    # ------------------------------------------------------------------
+    # Snapshots / Django posts
+    # ------------------------------------------------------------------
+
+    def _build_snapshot_b64(
+        self,
+        frame: np.ndarray,
+        max_width: int = HEARTBEAT_SNAPSHOT_MAX_WIDTH,
+        quality: int = HEARTBEAT_SNAPSHOT_JPEG_QUALITY,
+    ) -> str:
         try:
-            preview_for_upload = frame
-            max_width = HEARTBEAT_SNAPSHOT_MAX_WIDTH
+            image = frame
             if frame.shape[1] > max_width:
                 scale = max_width / frame.shape[1]
-                preview_for_upload = cv2.resize(
-                    frame,
-                    (max_width, int(frame.shape[0] * scale)),
-                    interpolation=cv2.INTER_AREA,
-                )
-            ok, encoded = cv2.imencode(
-                '.jpg',
-                preview_for_upload,
-                [int(cv2.IMWRITE_JPEG_QUALITY), HEARTBEAT_SNAPSHOT_JPEG_QUALITY],
-            )
+                image = cv2.resize(frame, (max_width, int(frame.shape[0] * scale)), interpolation=cv2.INTER_AREA)
+            ok, encoded = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
             if ok:
-                snapshot_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
+                return base64.b64encode(encoded.tobytes()).decode('ascii')
         except Exception:
-            snapshot_b64 = ''
-        return snapshot_b64
+            pass
+        return ''
 
     def _post_to_django(self, plate: str, snapshot_b64: str = '') -> bool:
         """POST the detected plate to Django. Returns True on success."""
@@ -1031,25 +1267,18 @@ class ANPREngine:
         try:
             resp = requests.post(
                 self.ingest_url,
-                json={
-                    'plate_number': plate,
-                    'camera_role': self.camera_role,
-                    'snapshot_b64': snapshot_b64,
-                },
+                json={'plate_number': plate, 'camera_role': self.camera_role, 'snapshot_b64': snapshot_b64},
                 headers={'Content-Type': 'application/json', 'X-Api-Key': DJANGO_API_KEY},
                 timeout=5,
             )
             if resp.status_code == 200:
                 result = resp.json()
-                assigned_status = result.get('status', '?')
                 log.info(
-                    f"[LOGGED] '{plate}' ({self.camera_role}) -> {assigned_status} "
+                    f"[LOGGED] '{plate}' ({self.camera_role}) -> {result.get('status', '?')} "
                     f"(Log ID {result.get('log_id')})"
                 )
                 return True
-            else:
-                log.error(f"[REJECTED] Django returned {resp.status_code}: {resp.text}")
-                return False
+            log.error(f"[REJECTED] Django returned {resp.status_code}: {resp.text}")
         except requests.exceptions.ConnectionError:
             log.error("Cannot reach Django at %s -- is Daphne running?", self.ingest_url)
         except requests.exceptions.Timeout:
@@ -1058,67 +1287,253 @@ class ANPREngine:
             log.error("Unexpected error posting to Django: %s", e)
         return False
 
-    def _post_frame_heartbeat(self, snapshot_b64: str) -> bool:
-        if not snapshot_b64 or not DJANGO_API_KEY:
+    def _post_frame_heartbeat(self, snapshot_b64: str, camera_source: str) -> bool:
+        if (
+            self.camera_role not in {'ENTRY_CAM', 'EXIT_CAM'}
+            or not snapshot_b64
+            or not DJANGO_API_KEY
+            or not self.ingest_frame_url
+        ):
             return False
-        if not self.ingest_frame_url:
-            return False
-
         try:
             resp = requests.post(
                 self.ingest_frame_url,
                 json={
                     'camera_role': self.camera_role,
+                    'camera_source': camera_source,
                     'snapshot_b64': snapshot_b64,
                 },
                 headers={'Content-Type': 'application/json', 'X-Api-Key': DJANGO_API_KEY},
                 timeout=5,
             )
-            return resp.status_code == 200
-        except Exception:
+        except requests.exceptions.RequestException as exc:
+            log.warning("Camera heartbeat request failed: %s", exc)
             return False
+        if resp.status_code != 200:
+            log.warning("Camera heartbeat rejected by Django (HTTP %d): %s", resp.status_code, resp.text[:300])
+            return False
+        return True
+
+    def _save_image(self, prefix: str, label: str, image: np.ndarray | None) -> str | None:
+        """Save a local JPEG evidence image. Returns the path or None."""
+        if image is None or image.size == 0:
+            return None
+        try:
+            self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+            safe = re.sub(r'[^A-Z0-9]+', '_', label.upper()).strip('_')
+            name = f'{prefix}_{stamp}_{safe}.jpg' if safe else f'{prefix}_{stamp}.jpg'
+            path = self.snapshot_dir / name
+            if cv2.imwrite(str(path), image, [int(cv2.IMWRITE_JPEG_QUALITY), 90]):
+                return str(path)
+        except Exception as exc:
+            log.warning("Could not save %s image: %s", prefix, exc)
+        return None
+
+    def _maybe_save_review_candidate(self, plate_crop: np.ndarray):
+        """Plate box found but nothing readable: keep a few crops per clip for manual review."""
+        if MAX_REVIEW_CANDIDATES_PER_CLIP <= 0 or not self.save_plate_snapshots:
+            return
+        now = time.time()
+        with self._state_lock:
+            if self._review_saved_this_clip >= MAX_REVIEW_CANDIDATES_PER_CLIP:
+                return
+            if (now - self._last_review_ts) < REVIEW_CANDIDATE_MIN_INTERVAL_SECONDS:
+                return
+            self._review_saved_this_clip += 1
+            self._last_review_ts = now
+        path = self._save_image('unread', '', plate_crop)
+        if path:
+            log.info("[PLATE NUMBER NOT READ] Candidate saved for review -> %s", path)
+
+    # ------------------------------------------------------------------
+    # Vehicle state, overlays, clip events
+    # ------------------------------------------------------------------
+
+    def _set_overlay(self, key: str, items: list[tuple[tuple[int, int, int, int], str, tuple[int, int, int]]]):
+        with self._state_lock:
+            self._overlays[key] = (time.time(), items)
+
+    def _update_vehicle_state(self, vbox: tuple[int, int, int, int] | None):
+        now = time.time()
+        with self._state_lock:
+            if vbox is None:
+                self._vehicle_hits = 0
+                return
+            # A vehicle returning after the grace period starts a NEW episode.
+            if self._vehicle_last_seen is None or (now - self._vehicle_last_seen) > self.grace_seconds:
+                self._episode_id += 1
+                self._episode_logged = False
+            self._vehicle_last_seen = now
+            self._vehicle_hits += 1
+            self._vehicle_frames += 1
+        self._set_overlay('vehicle', [(vbox, 'VEHICLE', (255, 160, 0))])
+
+    def _episode_blocks_logging(self) -> bool:
+        if not (ONE_PLATE_PER_EPISODE and self.vehicle_detector is not None):
+            return False
+        with self._state_lock:
+            return self._episode_logged
+
+    def _mark_episode_logged(self):
+        with self._state_lock:
+            self._episode_logged = True
+
+    def _note_clip_event(self, plate: str, confidence: float, snapshot_path: str | None, sent: bool, source: str):
+        with self._state_lock:
+            self._clip_events.append({
+                'time': datetime.now().isoformat(timespec='seconds'),
+                'ts': time.time(),
+                'plate': plate,
+                'ocr_confidence': round(float(confidence), 3),
+                'source': source,
+                'sent_to_django': sent,
+                'snapshot': snapshot_path,
+            })
+
+    def _padded_region(self, frame: np.ndarray, vbox: tuple[int, int, int, int]):
+        h, w = frame.shape[:2]
+        x1, y1, x2, y2 = vbox
+        pad_x = int((x2 - x1) * VEHICLE_REGION_PAD_RATIO)
+        pad_y = int((y2 - y1) * VEHICLE_REGION_PAD_RATIO)
+        x1 = max(0, x1 - pad_x)
+        y1 = max(0, y1 - pad_y)
+        x2 = min(w, x2 + pad_x)
+        y2 = min(h, y2 + pad_y)
+        return frame[y1:y2, x1:x2], x1, y1
+
+    # ------------------------------------------------------------------
+    # Plate logging (shared by detector path and fallback path)
+    # ------------------------------------------------------------------
+
+    def _try_log_plate(
+        self,
+        frame: np.ndarray,
+        plate: str,
+        confidence: float,
+        bbox: tuple[int, int, int, int] | None,
+        plate_crop: np.ndarray | None,
+        source: str,
+    ) -> str:
+        """Returns one of: 'posted', 'failed', 'debounced', 'episode', 'backoff'."""
+        if self._episode_blocks_logging():
+            self._dropped_by_episode += 1
+            return 'episode'
+
+        if self._is_debounced(plate):
+            # Refresh so a car sitting in view is not re-logged when the window lapses.
+            self._record_logged(plate)
+            self._dropped_by_debounce += 1
+            log.info("Skipping '%s' -- debounced (%ss).", plate, self.debounce_seconds)
+            return 'debounced'
+
+        if time.time() < self._post_backoff_until:
+            return 'backoff'
+
+        log.info("%s plate: '%s' (OCR conf: %.2f)", 'Fallback' if source == 'fallback' else 'Detector',
+                 plate, confidence)
+
+        annotated = frame.copy()
+        try:
+            if bbox:
+                x1, y1, x2, y2 = bbox
+                cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(annotated, plate, (int(x1), max(20, int(y1) - 10)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            else:
+                cv2.putText(annotated, plate, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        except Exception:
+            pass
+
+        if bbox:
+            self._set_overlay('plate', [(bbox, plate, (0, 255, 0))])
+
+        snapshot_path = None
+        if self.save_plate_snapshots:
+            snapshot_path = self._save_image('plate', plate, plate_crop if plate_crop is not None else annotated)
+            if snapshot_path:
+                log.info("[PLATE CAPTURED] '%s' -> saved %s", plate, snapshot_path)
+
+        snapshot_b64 = self._build_snapshot_b64(
+            annotated, max_width=EVENT_SNAPSHOT_MAX_WIDTH, quality=EVENT_SNAPSHOT_JPEG_QUALITY)
+
+        sent = self._post_to_django(plate, snapshot_b64=snapshot_b64)
+        self._note_clip_event(plate, confidence, snapshot_path, sent, source)
+        if sent:
+            self._record_logged(plate)
+            self._accepted_plates += 1
+            self._mark_episode_logged()
+            return 'posted'
+
+        self._post_backoff_until = time.time() + 3.0
+        return 'failed'
+
+    # ------------------------------------------------------------------
+    # Per-frame ML pipeline (runs on the ML worker thread)
+    # ------------------------------------------------------------------
 
     def _process_frame(self, frame: np.ndarray):
-        """Detect plates in this frame, read text, post to Django if valid."""
+        """Vehicle gate -> plate detection inside the vehicle region -> OCR -> validate -> post."""
         self._processed_frames += 1
+        ox = oy = 0
+        region = frame
+
+        if self.vehicle_detector is not None:
+            vbox = self.vehicle_detector.detect_largest(frame)
+            self._update_vehicle_state(vbox)
+            if vbox is None:
+                self._gate_skipped += 1
+                self._frames_no_box = 0  # no vehicle means no meaningful no-box streak
+                return
+            region, ox, oy = self._padded_region(frame, vbox)
+            if region.size == 0:
+                return
+
         self._detector_frames += 1
+        self._read_plates(frame, region, ox, oy)
+
+    def _read_plates(self, frame: np.ndarray, region: np.ndarray, ox: int, oy: int):
         h, w = frame.shape[:2]
         pad = 10
 
         if self.demo_mode and DEMO_SKIP_RF_DETECTOR:
-            # Fast path for demo: skip expensive model inference and use contour boxes directly.
-            boxes = detect_plate_like_rectangles(frame)
+            raw_boxes = detect_plate_like_rectangles(region)
         else:
-            boxes = self.detector.detect(frame)
-            if self.demo_mode and not boxes:
-                # Emergency demo fallback when model misses plates on noisy RTSP frames.
-                boxes = detect_plate_like_rectangles(frame)
+            raw_boxes = self.detector.detect(region)
+            if self.demo_mode and not raw_boxes:
+                raw_boxes = detect_plate_like_rectangles(region)
+
+        # Convert region coordinates back to full-frame coordinates.
+        boxes: list[tuple[int, int, int, int]] = []
+        for (bx1, by1, bx2, by2) in raw_boxes:
+            fx1 = max(0, min(w, bx1 + ox))
+            fy1 = max(0, min(h, by1 + oy))
+            fx2 = max(0, min(w, bx2 + ox))
+            fy2 = max(0, min(h, by2 + oy))
+            if fx2 - fx1 > 1 and fy2 - fy1 > 1:
+                boxes.append((fx1, fy1, fx2, fy2))
+
         if boxes:
             self._frames_no_box = 0
             self._detector_box_frames += 1
             self._detector_box_count += len(boxes)
-            for (bx1, by1, bx2, by2) in boxes:
-                # Draw raw detector output so operator can see detector activity.
-                cv2.rectangle(frame, (max(0, bx1), max(0, by1)), (min(w, bx2), min(h, by2)), (0, 215, 255), 1)
+            self._set_overlay('plate_raw', [(b, 'plate?', (0, 215, 255)) for b in boxes])
         else:
             self._frames_no_box += 1
             if self._frames_no_box % 30 == 0:
                 log.info("No plate boxes detected in last %s processed frames.", self._frames_no_box)
 
         for (x1, y1, x2, y2) in boxes:
-            # Expand bounding box slightly for better OCR
             x1 = max(0, x1 - pad)
             y1 = max(0, y1 - pad)
             x2 = min(w, x2 + pad)
             y2 = min(h, y2 + pad)
 
-            plate_crop = frame[y1:y2, x1:x2]
+            # Clean crop taken from the untouched frame (no drawn overlays inside it).
+            plate_crop = frame[y1:y2, x1:x2].copy()
             if plate_crop.size == 0:
                 continue
 
-            posted = False
-            frame_seen: set[str] = set()
-            best_conf_by_plate: dict[str, float] = {}
             if self.demo_mode:
                 gray_crop = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
                 _, th_crop = cv2.threshold(gray_crop, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -1126,9 +1541,8 @@ class ANPREngine:
             else:
                 ocr_variants = build_ocr_variants(plate_crop)
 
+            best_conf_by_plate: dict[str, float] = {}
             for candidate in ocr_variants:
-                if posted:
-                    break
                 ocr_results = self.ocr.readtext(
                     candidate,
                     allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
@@ -1138,166 +1552,256 @@ class ANPREngine:
                 for (plate, confidence, _) in extract_plate_candidates_from_ocr(ocr_results):
                     self._ocr_candidates += 1
                     plate = normalize_plate_variant_noise(plate)
-                    if plate in frame_seen:
-                        continue
-                    frame_seen.add(plate)
-
                     if not is_allowed_plate_format(plate):
                         continue
                     if confidence < self.min_ocr_confidence:
                         self._dropped_by_confidence += 1
                         continue
-
-                    previous = best_conf_by_plate.get(plate)
-                    if previous is None or confidence > previous:
+                    # Keep the best read across variants (a weak early read must not block a strong later one).
+                    if confidence > best_conf_by_plate.get(plate, 0.0):
                         best_conf_by_plate[plate] = confidence
 
-            ranked_candidates = sorted(
-                best_conf_by_plate.items(),
-                key=lambda item: item[1],
-                reverse=True,
-            )
-            for plate, confidence in ranked_candidates:
+                # Early exit once a variant gives a confident read: saves OCR passes.
+                if best_conf_by_plate and max(best_conf_by_plate.values()) >= self.detector_quick_accept_confidence:
+                    break
+
+            if not best_conf_by_plate:
+                self._maybe_save_review_candidate(plate_crop)
+                continue
+
+            ranked = sorted(best_conf_by_plate.items(), key=lambda item: item[1], reverse=True)
+            for plate, confidence in ranked:
                 if not self._passes_consensus(
-                    plate,
-                    confidence,
-                    self.detector_vote_confidence,
-                    self.detector_quick_accept_confidence,
+                    plate, confidence, self.detector_vote_confidence, self.detector_quick_accept_confidence
                 ):
                     continue
-
-                log.info(f"Plate: '{plate}' (OCR conf: {confidence:.2f})")
-
-                if self._is_debounced(plate):
-                    log.info(f"Skipping '{plate}' -- debounced ({self.debounce_seconds}s).")
-                    self._dropped_by_debounce += 1
-                    continue
-
-                # Draw box + plate text on preview window
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, plate, (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
-                snapshot_b64 = self._build_snapshot_b64(frame)
-
-                if self._post_to_django(plate, snapshot_b64=snapshot_b64):
-                    self._record_logged(plate)
-                    self._accepted_plates += 1
-                posted = True
+                # Act on the top consensus candidate only; lower-ranked ones are usually OCR variants of it.
+                self._try_log_plate(frame, plate, confidence, (x1, y1, x2, y2), plate_crop, 'detector')
                 break
 
-        # Fallback: if detector found no box, run OCR on whole frame every few processed frames.
-        # This keeps CPU manageable while recovering from weak detector outputs.
+        # Fallback: detector found no plate box, so OCR the region itself every few processed frames.
+        # With the vehicle gate on, this is limited to the vehicle crop (far fewer false hits).
         fallback_every = 1 if (self.demo_mode and DEMO_FORCE_FULLFRAME_OCR) else self.fallback_every_n_frames
         if (
             not boxes
             and self._frames_no_box >= FALLBACK_MIN_NO_BOX_STREAK
             and self._processed_frames % fallback_every == 0
         ):
-            frame_variants: list[tuple[np.ndarray, int, int]] = []
+            self._fallback_region_ocr(frame, region, ox, oy)
 
-            # Demo mode: keep fallback OCR very lightweight to avoid CPU stalls.
-            if self.demo_mode:
-                fh, fw = frame.shape[:2]
-                roi_specs = [
-                    # Primary area where a held plate is expected during demo.
-                    (0.22, 0.52, 0.82, 0.93),
-                ]
-                for x1r, y1r, x2r, y2r in roi_specs:
-                    rx1 = max(0, min(fw - 1, int(fw * x1r)))
-                    ry1 = max(0, min(fh - 1, int(fh * y1r)))
-                    rx2 = max(rx1 + 1, min(fw, int(fw * x2r)))
-                    ry2 = max(ry1 + 1, min(fh, int(fh * y2r)))
-                    roi = frame[ry1:ry2, rx1:rx2]
-                    if roi.size == 0:
-                        continue
-                    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-                    frame_variants.append((gray, rx1, ry1))
-                    _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                    frame_variants.append((th, rx1, ry1))
+    def _fallback_region_ocr(self, frame: np.ndarray, region: np.ndarray, ox: int, oy: int):
+        h, w = frame.shape[:2]
+        variants: list[tuple[np.ndarray, int, int]] = []
 
-                # Scan most of the frame while excluding the top timestamp overlay strip.
-                safe_top = int(fh * 0.22)
-                if safe_top < fh - 10:
-                    safe_frame = frame[safe_top:, :]
-                    safe_gray = cv2.cvtColor(safe_frame, cv2.COLOR_BGR2GRAY)
-                    frame_variants.append((safe_gray, 0, safe_top))
-                    _, safe_th = cv2.threshold(safe_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                    frame_variants.append((safe_th, 0, safe_top))
+        if self.demo_mode:
+            fh, fw = region.shape[:2]
+            rx1 = max(0, min(fw - 1, int(fw * 0.22)))
+            ry1 = max(0, min(fh - 1, int(fh * 0.52)))
+            rx2 = max(rx1 + 1, min(fw, int(fw * 0.82)))
+            ry2 = max(ry1 + 1, min(fh, int(fh * 0.93)))
+            roi = region[ry1:ry2, rx1:rx2]
+            if roi.size:
+                gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+                variants.append((gray, rx1, ry1))
+                _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                variants.append((th, rx1, ry1))
 
-            if not (self.demo_mode and DEMO_FOCUS_ROI_ONLY):
-                for variant in build_fast_fullframe_ocr_variants(frame):
-                    frame_variants.append((variant, 0, 0))
+            # Skip the top timestamp overlay strip when scanning the full (ungated) frame.
+            safe_top = int(fh * 0.22) if self.vehicle_detector is None else 0
+            if safe_top < fh - 10:
+                safe_region = region[safe_top:, :]
+                safe_gray = cv2.cvtColor(safe_region, cv2.COLOR_BGR2GRAY)
+                variants.append((safe_gray, 0, safe_top))
+                _, safe_th = cv2.threshold(safe_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                variants.append((safe_th, 0, safe_top))
 
-            frame_seen: set[str] = set()
-            for candidate, offset_x, offset_y in frame_variants:
-                ocr_results = self.ocr.readtext(
-                    candidate,
-                    allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
-                    detail=1,
-                    paragraph=False,
-                )
-                for (plate, confidence, bbox_xyxy) in extract_plate_candidates_from_ocr(ocr_results):
-                    if bbox_xyxy:
-                        x1b, y1b, x2b, y2b = bbox_xyxy
-                        bbox_xyxy = (x1b + offset_x, y1b + offset_y, x2b + offset_x, y2b + offset_y)
+        if not (self.demo_mode and DEMO_FOCUS_ROI_ONLY):
+            for variant in build_fast_fullframe_ocr_variants(region):
+                variants.append((variant, 0, 0))
 
-                    self._ocr_candidates += 1
-                    plate = normalize_plate_variant_noise(plate)
-                    if plate in frame_seen:
-                        continue
-                    frame_seen.add(plate)
+        frame_seen: set[str] = set()
+        for candidate, off_x, off_y in variants:
+            ocr_results = self.ocr.readtext(
+                candidate,
+                allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+                detail=1,
+                paragraph=False,
+            )
+            for (plate, confidence, bbox_xyxy) in extract_plate_candidates_from_ocr(ocr_results):
+                if bbox_xyxy:
+                    bx1, by1, bx2, by2 = bbox_xyxy
+                    bbox_xyxy = (bx1 + off_x + ox, by1 + off_y + oy, bx2 + off_x + ox, by2 + off_y + oy)
 
-                    if not is_allowed_plate_format(plate):
-                        continue
-                    if not is_plausible_plate_bbox(bbox_xyxy):
-                        continue
-                    if confidence < self.fallback_min_ocr_confidence:
-                        self._dropped_by_confidence += 1
-                        continue
-                    if not self._passes_consensus(
-                        plate,
-                        confidence,
-                        self.fallback_min_ocr_confidence,
-                        self.fallback_quick_accept_confidence,
-                    ):
-                        continue
+                self._ocr_candidates += 1
+                plate = normalize_plate_variant_noise(plate)
+                if plate in frame_seen:
+                    continue
+                if not is_allowed_plate_format(plate):
+                    continue
+                if not is_plausible_plate_bbox(bbox_xyxy):
+                    continue
+                if confidence < self.fallback_min_ocr_confidence:
+                    self._dropped_by_confidence += 1
+                    continue
+                # Count one vote per frame per plate, and only for reads that cleared every check.
+                frame_seen.add(plate)
+                if not self._passes_consensus(
+                    plate, confidence, self.fallback_min_ocr_confidence, self.fallback_quick_accept_confidence
+                ):
+                    continue
 
-                    if self._is_debounced(plate):
-                        log.info("Fallback OCR plate '%s' skipped (debounced).", plate)
-                        self._dropped_by_debounce += 1
-                        return
+                plate_crop = None
+                if bbox_xyxy:
+                    cx1, cy1, cx2, cy2 = bbox_xyxy
+                    cx1, cy1 = max(0, cx1), max(0, cy1)
+                    cx2, cy2 = min(w, cx2), min(h, cy2)
+                    if cx2 > cx1 and cy2 > cy1:
+                        plate_crop = frame[cy1:cy2, cx1:cx2].copy()
 
-                    log.info("Fallback OCR hit: '%s' (conf: %.2f)", plate, confidence)
+                self._try_log_plate(frame, plate, confidence, bbox_xyxy, plate_crop, 'fallback')
+                return
 
-                    # Draw OCR-based bounding polygon so fallback detections still show visual evidence.
-                    try:
-                        if bbox_xyxy:
-                            x1, y1, x2, y2 = bbox_xyxy
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                            x, y = x1, y1
-                        else:
-                            x, y = 20, 40
-                        cv2.putText(
-                            frame,
-                            plate,
-                            (int(x), max(20, int(y) - 10)),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.8,
-                            (0, 255, 0),
-                            2,
+    # ------------------------------------------------------------------
+    # Recording control (runs on the capture loop thread)
+    # ------------------------------------------------------------------
+
+    def _clip_fps(self) -> float:
+        fps = self._source_fps
+        return fps if 5.0 <= fps <= 60.0 else float(RECORD_FPS)
+
+    def _manage_recording(self, frame: np.ndarray, now: float):
+        if not self.record_enabled:
+            return
+
+        with self._state_lock:
+            last_seen = self._vehicle_last_seen
+            hits = self._vehicle_hits
+
+        if not self._recorder.active:
+            fresh = last_seen is not None and (now - last_seen) <= self.vehicle_start_window
+            if not (fresh and hits >= self.vehicle_min_hits and now >= self._cooldown_until):
+                return
+            path = self._recorder.start(frame, self._clip_fps())
+            if path is None:
+                self._cooldown_until = now + self.cooldown_seconds
+                return
+            with self._state_lock:
+                self._review_saved_this_clip = 0
+            log.info("[RECORDING STARTED] Vehicle detected -> %s", path)
+
+        if not self._recorder.write(frame):
+            self._stop_clip('frame size changed or write failed')
+            return
+
+        gone_for = (now - last_seen) if last_seen else 0.0
+        if gone_for > self.grace_seconds:
+            self._stop_clip('vehicle left')
+
+    def _stop_clip(self, reason: str):
+        if not self._recorder.active:
+            return
+        started = self._recorder.started_at
+        with self._state_lock:
+            events = [{k: v for k, v in e.items() if k != 'ts'} for e in self._clip_events if e['ts'] >= started]
+        path, duration = self._recorder.stop(events, reason)
+        self._cooldown_until = time.time() + self.cooldown_seconds
+        if path:
+            self._clips_saved += 1
+            log.info("[RECORDING STOPPED] %s (%.1fs, %d plate event(s)) -> %s",
+                     reason, duration, len(events), path)
+            if self._recording_upload_enabled:
+                try:
+                    self._recording_upload_queue.put_nowait(path)
+                except queue.Full:
+                    log.error("Recording upload queue is full; clip remains on disk and was not uploaded: %s", path)
+
+    def _recording_upload_loop(self):
+        while True:
+            path = self._recording_upload_queue.get()
+            try:
+                self._upload_recording(path)
+            finally:
+                self._recording_upload_queue.task_done()
+
+    def _upload_recording(self, path: Path):
+        metadata_path = path.with_suffix('.json')
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError) as exc:
+            log.error("Cannot upload recording without valid metadata (%s): %s", metadata_path, exc)
+            return
+
+        for attempt in range(1, 3):
+            try:
+                with path.open('rb') as video_file:
+                    upload_files = {'recording': (path.name, video_file, 'video/mp4')}
+                    snapshot_path = path.with_suffix('.jpg')
+                    if metadata.get('unrecognized_plate_alert') and snapshot_path.is_file():
+                        with snapshot_path.open('rb') as snapshot_file:
+                            upload_files['alert_snapshot'] = (
+                                snapshot_path.name,
+                                snapshot_file,
+                                'image/jpeg',
+                            )
+                            response = requests.post(
+                                self.ingest_recording_url,
+                                data={
+                                    'camera_role': self.camera_role,
+                                    'metadata': json.dumps(metadata),
+                                },
+                                files=upload_files,
+                                headers={'X-Api-Key': DJANGO_API_KEY},
+                                timeout=(10, 180),
+                            )
+                    else:
+                        response = requests.post(
+                            self.ingest_recording_url,
+                            data={
+                                'camera_role': self.camera_role,
+                                'metadata': json.dumps(metadata),
+                            },
+                            files=upload_files,
+                            headers={'X-Api-Key': DJANGO_API_KEY},
+                            timeout=(10, 180),
                         )
-                    except Exception:
-                        pass
-
-                    snapshot_b64 = self._build_snapshot_b64(frame)
-                    if self._post_to_django(plate, snapshot_b64=snapshot_b64):
-                        self._record_logged(plate)
-                        self._accepted_plates += 1
+                if response.status_code == 200:
+                    log.info("Uploaded recording to hosted gallery: %s", path.name)
                     return
+                log.error(
+                    "Recording upload rejected (HTTP %d, attempt %d/2): %s",
+                    response.status_code,
+                    attempt,
+                    response.text[:300],
+                )
+                if response.status_code < 500:
+                    return
+            except (OSError, requests.exceptions.RequestException) as exc:
+                log.error("Recording upload failed (attempt %d/2): %s", attempt, exc)
+        log.error("Recording upload exhausted retries; local copy retained: %s", path)
+
+    # ------------------------------------------------------------------
+    # Preview
+    # ------------------------------------------------------------------
+
+    def _draw_preview(self, frame: np.ndarray):
+        now = time.time()
+        with self._state_lock:
+            overlays = [items for (ts, items) in self._overlays.values() if (now - ts) <= OVERLAY_TTL_SECONDS]
+        for items in overlays:
+            for (bbox, label, color) in items:
+                x1, y1, x2, y2 = bbox
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                cv2.putText(frame, label, (x1, max(18, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        if self._recorder.active:
+            cv2.circle(frame, (24, 24), 8, (0, 0, 255), -1)
+            cv2.putText(frame, 'REC', (40, 31), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+    # ------------------------------------------------------------------
+    # Capture loop
+    # ------------------------------------------------------------------
 
     def run(self, show_preview: bool = True):
-        """Open the camera and run ANPR loop until stopped."""
+        """Open the camera and run the vehicle-gated ANPR loop until stopped."""
         source: str | int = self._active_source
         is_rtsp = isinstance(source, str) and '://' in source
         webcam_sources: list[int] = []
@@ -1319,16 +1823,13 @@ class ANPREngine:
                 webcam_sources.append(1)
             if source != 0:
                 webcam_sources.append(0)
-            # preserve order while removing duplicates
             webcam_sources = list(dict.fromkeys(webcam_sources))
             log.info(f"Opening webcam index {source} (your laptop/PC built-in camera)")
         else:
-            log.info(f"Connecting to RTSP stream: {source}")
+            log.info(f"Connecting to RTSP stream: {_redact_url(source)}")
 
         def _open_capture(src):
-            backend_attempts = [
-                ('FFMPEG', lambda: cv2.VideoCapture(src, cv2.CAP_FFMPEG)),
-            ] if is_rtsp else []
+            backend_attempts = [('FFMPEG', lambda: cv2.VideoCapture(src, cv2.CAP_FFMPEG))] if is_rtsp else []
             if not is_rtsp:
                 backend_attempts.extend([
                     ('DSHOW', lambda: cv2.VideoCapture(src, cv2.CAP_DSHOW)),
@@ -1357,13 +1858,8 @@ class ANPREngine:
                     width = int(cap_local.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
                     height = int(cap_local.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
                     fps = float(cap_local.get(cv2.CAP_PROP_FPS) or 0.0)
-                    log.info(
-                        "Opened source using backend=%s (%sx%s @ %.2f fps)",
-                        backend_name,
-                        width,
-                        height,
-                        fps,
-                    )
+                    self._source_fps = fps
+                    log.info("Opened source using backend=%s (%sx%s @ %.2f fps)", backend_name, width, height, fps)
                     return cap_local
 
                 cap_local.release()
@@ -1376,7 +1872,7 @@ class ANPREngine:
         for candidate in candidate_sources:
             active_source = candidate
             self._active_source = str(candidate)
-            log.info("Trying camera source: %s", candidate)
+            log.info("Trying camera source: %s", _redact_url(candidate))
             cap = _open_capture(candidate)
             if cap.isOpened():
                 break
@@ -1386,8 +1882,7 @@ class ANPREngine:
             log.error(
                 "Cannot open camera!\n"
                 "  Webcam:    Make sure no other app is using it. Try index 1 if 0 fails.\n"
-                "  IP camera: Check RTSP URL + username/password. Test in VLC first.\n"
-                "             Media -> Open Network Stream -> paste RTSP URL -> Play"
+                "  IP camera: Check RTSP URL + username/password. Test in VLC first."
             )
             sys.exit(1)
 
@@ -1395,7 +1890,6 @@ class ANPREngine:
         if show_preview:
             log.info("Preview window open. Press 'q' inside it to quit.")
 
-        # --- Background worker threads so ML inference never stalls the read loop ---
         _ml_queue: queue.Queue = queue.Queue(maxsize=1)
         _hb_queue: queue.Queue = queue.Queue(maxsize=1)
 
@@ -1415,9 +1909,22 @@ class ANPREngine:
                 if item is None:
                     break
                 try:
-                    self._post_frame_heartbeat(item)
+                    snapshot_b64, camera_source = item
+                    self._post_frame_heartbeat(snapshot_b64, camera_source)
                 except Exception as _exc:
                     log.warning("Heartbeat worker error: %s", _exc)
+
+        def _stop_worker(q: queue.Queue):
+            # Never block on shutdown: clear any pending item, then send the stop signal.
+            try:
+                while True:
+                    q.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                q.put_nowait(None)
+            except queue.Full:
+                pass
 
         ml_thread = threading.Thread(target=_ml_worker, daemon=True, name='anpr-ml')
         ml_thread.start()
@@ -1429,11 +1936,13 @@ class ANPREngine:
         frame_count = 0
         consecutive_read_fails = 0
         consecutive_invalid_frames = 0
+        reconnect_delay = RECONNECT_DELAY_START
 
         try:
             while True:
-                if is_rtsp:
-                    # Drop stale buffered frames to keep OCR close to real-time.
+                if is_rtsp and not self._recorder.active:
+                    # Optional extra grabs are synchronous; keep them disabled by default
+                    # so slow RTSP reads do not stall the capture loop.
                     for _ in range(self.rtsp_drain_grabs):
                         cap.grab()
 
@@ -1446,26 +1955,27 @@ class ANPREngine:
                         self._maybe_log_diagnostics()
                         continue
 
-                    log.warning(
-                        "Lost camera feed after %d failed reads. Reconnecting...",
-                        consecutive_read_fails,
-                    )
+                    log.warning("Lost camera feed after %d failed reads. Reconnecting...", consecutive_read_fails)
+                    self._stop_clip('camera feed lost')
                     cap.release()
-                    time.sleep(0.8)
+                    time.sleep(reconnect_delay)
 
                     reopened = False
                     for candidate in candidate_sources:
                         active_source = candidate
                         self._active_source = str(candidate)
-                        log.info("Reconnecting with source: %s", candidate)
+                        log.info("Reconnecting with source: %s", _redact_url(candidate))
                         cap = _open_capture(candidate)
                         if cap.isOpened():
                             reopened = True
                             break
                         cap.release()
 
-                    if not reopened:
-                        log.warning("All camera source candidates failed; keeping retry loop active.")
+                    if reopened:
+                        reconnect_delay = RECONNECT_DELAY_START
+                    else:
+                        log.warning("All camera source candidates failed; retrying in %.1fs.", reconnect_delay)
+                        reconnect_delay = min(reconnect_delay * 2, RECONNECT_DELAY_MAX)
                     consecutive_read_fails = 0
                     self._maybe_log_diagnostics()
                     continue
@@ -1482,9 +1992,9 @@ class ANPREngine:
                     if consecutive_invalid_frames >= MAX_CONSECUTIVE_INVALID_FRAMES:
                         log.warning(
                             "Too many consecutive invalid frames (%d). Reinitializing source %s",
-                            consecutive_invalid_frames,
-                            active_source,
+                            consecutive_invalid_frames, _redact_url(active_source),
                         )
+                        self._stop_clip('invalid frames')
                         cap.release()
                         cap = _open_capture(active_source)
                         consecutive_invalid_frames = 0
@@ -1495,40 +2005,43 @@ class ANPREngine:
                 consecutive_invalid_frames = 0
 
                 if frame.ndim == 2:
-                    # Some decoders can return grayscale frames; normalize to BGR for detector/OCR.
                     frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
 
                 frame_count += 1
+                now_ts = time.time()
+
                 if frame_count % frame_interval == 0:
-                    # Non-blocking: drop frame if ML worker is still busy with previous one.
                     try:
                         _ml_queue.put_nowait(frame.copy())
                     except queue.Full:
-                        pass  # ML is still busy; skip this frame — no stall
+                        pass  # ML still busy; skip this frame, no stall
 
-                now_ts = time.time()
-                if (now_ts - self._last_heartbeat_post_ts) >= self.heartbeat_seconds:
+                # Record the CLEAN frame (before any overlay is drawn on it).
+                self._manage_recording(frame, now_ts)
+
+                if (now_ts - self._last_heartbeat_post_ts) >= self.heartbeat_seconds and not _hb_queue.full():
+                    self._last_heartbeat_post_ts = now_ts
                     heartbeat_b64 = self._build_snapshot_b64(frame)
                     try:
-                        _hb_queue.put_nowait(heartbeat_b64)
-                        self._last_heartbeat_post_ts = now_ts
+                        _hb_queue.put_nowait((heartbeat_b64, str(active_source)))
                     except queue.Full:
-                        pass  # heartbeat upload in flight; skip this tick
+                        pass
 
                 self._maybe_log_diagnostics()
 
                 if show_preview:
+                    self._draw_preview(frame)
                     cv2.imshow('BantayPlaka ANPR  [Q = quit]', frame)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         break
 
         except KeyboardInterrupt:
-            log.info("Stopped by user (Ctrl+C).")
+            log.info("Stopped by user (Ctrl+C / SIGTERM).")
         finally:
+            self._stop_clip('engine stopped')
             cap.release()
-            # Signal worker threads to exit cleanly
-            _ml_queue.put(None)
-            _hb_queue.put(None)
+            _stop_worker(_ml_queue)
+            _stop_worker(_hb_queue)
             ml_thread.join(timeout=5)
             hb_thread.join(timeout=3)
             self._maybe_log_diagnostics(force=True)
@@ -1541,46 +2054,68 @@ class ANPREngine:
 # CLI
 # ---------------------------------------------------------------------------
 
+def _sigterm_handler(signum, frame):
+    raise KeyboardInterrupt
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='BantayPlaka ANPR Engine',
+        description='BantayPlaka ANPR Engine (vehicle-gated recording + plate reading)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Quick start (no camera hardware needed):
   python anpr_engine/anpr_engine.py --rtsp 0
 
-With IP camera:
-  python anpr_engine/anpr_engine.py --rtsp "rtsp://admin:admin@192.168.1.108:554/stream1"
+With IP camera (credentials via .env ANPR_RTSP_URL, or pass --rtsp):
+  python anpr_engine/anpr_engine.py --rtsp "rtsp://user:pass@192.168.1.108:554/Streaming/Channels/101" --camera-role ENTRY_CAM
 
-TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
+TIME_IN / TIME_OUT is decided by Django unless --camera-role is ENTRY_CAM or EXIT_CAM.
         """
     )
-    parser.add_argument('--rtsp', required=True,
-        help='Camera source: RTSP URL for IP cameras, or "0" for webcam.')
-    parser.add_argument('--mode', choices=['roboflow', 'yolo'], default='roboflow',
-        help='Detection mode. Default: roboflow (recommended, 98.8%% accuracy)')
+    parser.add_argument('--rtsp', default=DEFAULT_CAMERA_SOURCE,
+        help='Camera source: RTSP URL, or "0" for webcam. Default: ANPR_RTSP_URL from .env')
+    parser.add_argument('--mode', choices=['roboflow', 'yolo', 'ocr'], default='roboflow',
+        help='Plate localisation: roboflow (default), yolo (custom plate weights via --model), ocr (vehicle-crop OCR only)')
     parser.add_argument('--model-id', default=DEFAULT_RF_MODEL_ID,
         help=f'Roboflow model ID (project-slug/version). Default: {DEFAULT_RF_MODEL_ID}')
-    parser.add_argument('--model', default=DEFAULT_YOLO_MODEL,
-        help='YOLO .pt file path (only for --mode yolo). Default: yolov8n.pt')
+    parser.add_argument('--model', default=DEFAULT_PLATE_YOLO_MODEL,
+        help='Custom plate-trained YOLO .pt file (for --mode yolo, or as Roboflow fallback). Not yolov8n.pt.')
+    parser.add_argument('--vehicle-model', default=VEHICLE_MODEL_PATH,
+        help=f'Vehicle pre-filter weights (COCO). Default: {VEHICLE_MODEL_PATH}')
+    parser.add_argument('--no-vehicle-gate', action='store_true',
+        help='Disable the vehicle pre-filter (also disables clip recording).')
+    parser.add_argument('--no-record', action='store_true',
+        help='Do not record video clips (plates are still read and sent).')
+    parser.add_argument('--record-dir', default=str(RECORDINGS_DIR),
+        help=f'Where clips are saved. Default: {RECORDINGS_DIR}')
+    parser.add_argument('--snapshot-dir', default=str(SNAPSHOT_DIR),
+        help=f'Where plate screenshots are saved. Default: {SNAPSHOT_DIR}')
+    parser.add_argument('--grace', type=float, default=GRACE_PERIOD_SECONDS,
+        help=f'Seconds without a vehicle before a clip stops. Default: {GRACE_PERIOD_SECONDS}')
+    parser.add_argument('--cooldown', type=float, default=COOLDOWN_SECONDS,
+        help=f'Seconds after a clip before a new one may start. Default: {COOLDOWN_SECONDS}')
     parser.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default=DEFAULT_ANPR_DEVICE,
-        help='Runtime device selection for OCR/YOLO. auto=prefer CUDA when available. Default: ANPR_DEVICE env or auto')
+        help='Runtime device for OCR/YOLO. auto=prefer CUDA when available.')
     parser.add_argument('--url', default=DEFAULT_INGEST_URL,
         help='Django ingest URL. Default: ANPR_INGEST_URL env or http://127.0.0.1:8000/detection/ingest/')
     parser.add_argument('--camera-role', choices=['ENTRY_CAM', 'EXIT_CAM', 'UNKNOWN'], default='UNKNOWN',
         help='Camera role for status mapping. ENTRY_CAM -> TIME_IN, EXIT_CAM -> TIME_OUT')
-    parser.add_argument('--no-preview', action='store_true',
-        help='Run without any GUI window.')
+    parser.add_argument('--no-preview', action='store_true', help='Run without any GUI window.')
     parser.add_argument('--debounce', type=int, default=DEBOUNCE_SECONDS,
-        help=f'Seconds before same plate can be logged again. Default: {DEBOUNCE_SECONDS}')
+        help=f'Seconds before the same plate can be logged again. Default: {DEBOUNCE_SECONDS}')
     parser.add_argument('--frame-skip', type=int, default=2,
-        help='Process every Nth frame. Lower is faster detection but higher CPU/GPU usage. Default: 2')
-    parser.add_argument('--rtsp-drain-grabs', type=int, default=3,
-        help='How many buffered RTSP frames to grab/drop before each read. Higher lowers latency but can reduce decode stability. Default: 3')
+        help='Send every Nth frame to the ML worker. Lower = faster detection, higher CPU/GPU use. Default: 2')
+    parser.add_argument('--rtsp-drain-grabs', type=int, default=DEFAULT_RTSP_DRAIN_GRABS,
+        help=f'Buffered RTSP frames dropped before each read (not used while recording). Default: {DEFAULT_RTSP_DRAIN_GRABS}')
     parser.add_argument('--heartbeat-seconds', type=float, default=HEARTBEAT_SNAPSHOT_SECONDS,
-        help=f'Seconds between live frame heartbeat uploads for dashboard feed fallback. Default: {HEARTBEAT_SNAPSHOT_SECONDS}')
+        help=f'Seconds between live-frame heartbeat uploads. Default: {HEARTBEAT_SNAPSHOT_SECONDS}')
 
     args = parser.parse_args()
+
+    if not str(args.rtsp).strip():
+        parser.error("No camera source. Pass --rtsp or set ANPR_RTSP_URL in .env.")
+
+    signal.signal(signal.SIGTERM, _sigterm_handler)
 
     engine = ANPREngine(
         rtsp_url=args.rtsp,
@@ -1594,6 +2129,13 @@ TIME_IN / TIME_OUT is auto-determined by Django (alternates per plate).
         frame_skip=args.frame_skip,
         rtsp_drain_grabs=args.rtsp_drain_grabs,
         heartbeat_seconds=args.heartbeat_seconds,
+        vehicle_gate=(VEHICLE_GATE_DEFAULT and not args.no_vehicle_gate),
+        record_clips=(RECORD_CLIPS_DEFAULT and not args.no_record),
+        vehicle_model_path=args.vehicle_model,
+        recordings_dir=Path(args.record_dir),
+        snapshot_dir=Path(args.snapshot_dir),
+        grace_seconds=args.grace,
+        cooldown_seconds=args.cooldown,
     )
     engine.run(show_preview=not args.no_preview)
 

@@ -27,6 +27,7 @@ static_collected/
 
 # ─── ANPR / ML model weights & cache ─────────────────────────────────────────
 anpr_engine/__pycache__/
+anpr_engine/recordings/
 *.pt
 *.onnx
 *.weights

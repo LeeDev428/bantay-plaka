@@ -41,6 +41,33 @@
   </div>
 </div>
 
+{% if latest_unrecognized_alerts %}
+<section id="unrecognized-alerts" class="page-card border-l-4 border-amber-400 mb-6 p-4">
+  <div class="flex items-center justify-between gap-3 mb-3">
+    <div>
+      <h2 class="font-semibold text-amber-800"><i class="fa fa-triangle-exclamation mr-1"></i> Plate Recognition Alerts</h2>
+      <p class="text-xs text-slate-500">{{ unrecognized_alert_count }} vehicle clip{{ unrecognized_alert_count|pluralize }} have no readable plate.</p>
+    </div>
+    <a href="{% url 'alert_gallery' %}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">View all alerts &rarr;</a>
+  </div>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    {% for alert in latest_unrecognized_alerts %}
+    <a href="{% url 'alert_gallery' %}" class="flex items-center gap-3 rounded-lg bg-amber-50 p-3 hover:bg-amber-100">
+      {% if alert.snapshot %}
+      <img src="{{ alert.snapshot.url }}" alt="" class="h-14 w-20 rounded object-cover">
+      {% else %}
+      <span class="h-14 w-20 rounded bg-amber-100 flex items-center justify-center text-amber-600"><i class="fa fa-triangle-exclamation"></i></span>
+      {% endif %}
+      <span class="min-w-0">
+        <span class="block text-sm font-semibold text-slate-700">{{ alert.get_camera_role_display }} &middot; Plate unreadable</span>
+        <span class="block text-xs text-slate-500">{{ alert.created_at|date:"M d, h:i A" }}</span>
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <!-- Guard Export Modal -->
 <div id="guard-export-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeGuardExportModal()"></div>
@@ -111,7 +138,7 @@
     <div class="p-4">
       <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
         {% if has_entry_camera_stream %}
-          <img id="entry-feed-image" data-live-stream="true" data-live-snapshot="ENTRY_CAM" src="{% url 'camera_preview' 'ENTRY_CAM' %}" alt="Entry camera live feed" class="w-full h-full object-cover" />
+          <img id="entry-feed-image" data-live-snapshot="ENTRY_CAM" src="{% url 'camera_frame' 'ENTRY_CAM' %}" alt="Entry camera live feed" class="w-full h-full object-cover" />
         {% elif entry_live_snapshot and entry_live_snapshot.snapshot %}
           <img id="entry-feed-image" data-live-snapshot="ENTRY_CAM" src="{{ entry_live_snapshot.snapshot.url }}" alt="Entry camera live snapshot" class="w-full h-full object-cover" />
         {% elif entry_feed and entry_feed.snapshot %}
@@ -146,7 +173,7 @@
     <div class="p-4">
       <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
         {% if has_exit_camera_stream %}
-          <img id="exit-feed-image" data-live-stream="true" data-live-snapshot="EXIT_CAM" src="{% url 'camera_preview' 'EXIT_CAM' %}" alt="Exit camera live feed" class="w-full h-full object-cover" />
+          <img id="exit-feed-image" data-live-snapshot="EXIT_CAM" src="{% url 'camera_frame' 'EXIT_CAM' %}" alt="Exit camera live feed" class="w-full h-full object-cover" />
         {% elif exit_live_snapshot and exit_live_snapshot.snapshot %}
           <img id="exit-feed-image" data-live-snapshot="EXIT_CAM" src="{{ exit_live_snapshot.snapshot.url }}" alt="Exit camera live snapshot" class="w-full h-full object-cover" />
         {% elif exit_feed and exit_feed.snapshot %}

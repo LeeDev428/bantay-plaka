@@ -42,7 +42,13 @@
       <i class="fa fa-ban w-5 text-center"></i> Blacklist
     </a>
     <a href="{% url 'snapshot_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'snapshot_gallery' %}active{% endif %}">
-      <i class="fa fa-image w-5 text-center"></i> Photos
+      <i class="fa fa-image w-5 text-center"></i> Snapshots
+    </a>
+    <a href="{% url 'video_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'video_gallery' %}active{% endif %}">
+      <i class="fa fa-video w-5 text-center"></i> Recorded Videos
+    </a>
+    <a href="{% url 'alert_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'alert_gallery' %}active{% endif %}">
+      <i class="fa fa-triangle-exclamation w-5 text-center"></i> Alerts
     </a>
     {% endif %}
 
@@ -52,7 +58,13 @@
       <i class="fa fa-ban w-5 text-center"></i> Blacklist
     </a>
     <a href="{% url 'snapshot_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'snapshot_gallery' %}active{% endif %}">
-      <i class="fa fa-image w-5 text-center"></i> Photos
+      <i class="fa fa-image w-5 text-center"></i> Snapshots
+    </a>
+    <a href="{% url 'video_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'video_gallery' %}active{% endif %}">
+      <i class="fa fa-video w-5 text-center"></i> Recorded Videos
+    </a>
+    <a href="{% url 'alert_gallery' %}" class="sidebar-link {% if request.resolver_match.url_name == 'alert_gallery' %}active{% endif %}">
+      <i class="fa fa-triangle-exclamation w-5 text-center"></i> Alerts
     </a>
     <a href="{% url 'archive:list' %}" class="sidebar-link {% if request.resolver_match.namespace == 'archive' %}active{% endif %}">
       <i class="fa fa-box-archive w-5 text-center"></i> Archive

@@ -9,9 +9,12 @@ from django.contrib.auth.decorators import login_required
 import json
 import base64
 import binascii
+import logging
 import time
 import os
 import threading
+from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlparse, unquote
 
 try:
@@ -21,12 +24,13 @@ except Exception:
 import requests
 from requests.auth import HTTPDigestAuth, HTTPBasicAuth
 
-from apps.logs.models import VehicleLog, CameraFeedSnapshot
-from apps.logs.services import broadcast_log, broadcast_blacklist_alert
+from apps.logs.models import VehicleLog, CameraFeedSnapshot, VideoRecording, UnrecognizedPlateAlert
+from apps.logs.services import broadcast_log, broadcast_blacklist_alert, broadcast_unrecognized_plate_alert
 from apps.logs.views import resolve_plate
 from apps.visitors.models import BlacklistEntry
 from django.utils import timezone
 
+logger = logging.getLogger(__name__)
 
 _FRAME_CACHE: dict[str, tuple[bytes, float]] = {}
 _FRAME_CACHE_LOCK = threading.Lock()
@@ -36,6 +40,7 @@ _LAST_LIVE_SNAPSHOT_PERSIST_TS: dict[str, float] = {}
 _LAST_LIVE_SNAPSHOT_PERSIST_LOCK = threading.Lock()
 MIN_GLOBAL_PLATE_RELOG_SECONDS = 30
 MAX_FRESH_CACHE_SECONDS = 1.5
+MAX_RECORDING_UPLOAD_BYTES = 200 * 1024 * 1024
 LIVE_HEARTBEAT_PERSIST_SECONDS = max(
     5.0,
     float(getattr(settings, 'LIVE_HEARTBEAT_PERSIST_SECONDS', 12.0) or 12.0),
@@ -82,6 +87,111 @@ def _check_api_key(request):
         return False
     incoming_key = request.headers.get('X-Api-Key', '')
     return incoming_key == expected_key
+
+
+def _cloud_media_storage_ready() -> bool:
+    return bool(
+        getattr(settings, 'USE_CLOUDINARY', False)
+        and getattr(settings, 'CLOUDINARY_CLOUD_NAME', '')
+        and getattr(settings, 'CLOUDINARY_API_KEY', '')
+        and getattr(settings, 'CLOUDINARY_API_SECRET', '')
+    )
+
+
+@csrf_exempt
+def ingest_recording(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    if not _check_api_key(request):
+        return JsonResponse({'error': 'Unauthorized — invalid or missing API key'}, status=401)
+
+    if not settings.DEBUG and not _cloud_media_storage_ready():
+        logger.error('Rejected recording upload: durable Cloudinary media storage is not configured.')
+        return JsonResponse({'error': 'Durable media storage is not configured'}, status=503)
+
+    uploaded = request.FILES.get('recording')
+    if uploaded is None:
+        return JsonResponse({'error': 'recording file required'}, status=400)
+    if uploaded.size > MAX_RECORDING_UPLOAD_BYTES:
+        return JsonResponse({'error': 'recording exceeds the 200 MB upload limit'}, status=413)
+
+    filename = Path(uploaded.name.replace('\\', '/')).name
+    if not filename or Path(filename).suffix.lower() != '.mp4':
+        return JsonResponse({'error': 'recording must be an MP4 file'}, status=400)
+
+    camera_role = _normalize_camera_role(request.POST.get('camera_role', ''))
+    if camera_role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
+        return JsonResponse({'error': 'camera_role must be ENTRY_CAM or EXIT_CAM'}, status=400)
+
+    try:
+        metadata = json.loads(request.POST.get('metadata', '{}'))
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'metadata must be valid JSON'}, status=400)
+    if not isinstance(metadata, dict):
+        return JsonResponse({'error': 'metadata must be a JSON object'}, status=400)
+
+    existing = VideoRecording.objects.filter(source_filename=filename).first()
+    if existing:
+        return JsonResponse({'ok': True, 'duplicate': True, 'recording_id': existing.pk})
+
+    try:
+        started_at = datetime.fromisoformat(str(metadata['started_at'])) if metadata.get('started_at') else None
+    except ValueError:
+        return JsonResponse({'error': 'metadata.started_at must be an ISO-8601 datetime'}, status=400)
+    if started_at and timezone.is_naive(started_at):
+        started_at = timezone.make_aware(started_at, timezone.get_current_timezone())
+
+    try:
+        duration_seconds = float(metadata['duration_seconds']) if metadata.get('duration_seconds') is not None else None
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'metadata.duration_seconds must be numeric'}, status=400)
+    if duration_seconds is not None and duration_seconds < 0:
+        return JsonResponse({'error': 'metadata.duration_seconds cannot be negative'}, status=400)
+
+    plates = metadata.get('plates', [])
+    if not isinstance(plates, list):
+        return JsonResponse({'error': 'metadata.plates must be a list'}, status=400)
+    plate_search = ' '.join(
+        str(event['plate']) for event in plates
+        if isinstance(event, dict) and event.get('plate')
+    )
+    alert_image = request.FILES.get('alert_snapshot')
+    if alert_image is not None and alert_image.size > 10 * 1024 * 1024:
+        return JsonResponse({'error': 'alert snapshot exceeds the 10 MB limit'}, status=413)
+    if alert_image is not None and Path(alert_image.name).suffix.lower() not in {'.jpg', '.jpeg'}:
+        return JsonResponse({'error': 'alert snapshot must be a JPEG image'}, status=400)
+
+    recording = VideoRecording.objects.create(
+        source_filename=filename,
+        video=uploaded,
+        camera_role=camera_role,
+        started_at=started_at,
+        duration_seconds=duration_seconds,
+        size_bytes=uploaded.size,
+        plates=plates,
+        plate_search=plate_search,
+        metadata=metadata,
+    )
+    alert_created = False
+    if metadata.get('unrecognized_plate_alert') is True:
+        alert = UnrecognizedPlateAlert.objects.create(
+            recording=recording,
+            snapshot=alert_image,
+            camera_role=camera_role,
+        )
+        alert_created = True
+        broadcast_unrecognized_plate_alert(alert)
+        if alert_image is None:
+            logger.error(
+                'Recording %s requested an unrecognized-plate alert but included no snapshot.',
+                filename,
+            )
+
+    return JsonResponse({
+        'ok': True,
+        'recording_id': recording.pk,
+        'alert_created': alert_created,
+    })
 
 
 def _normalize_camera_role(camera_role: str) -> str:
@@ -149,6 +259,31 @@ def _camera_rtsp_for_role(camera_role: str) -> str:
     if camera_role == VehicleLog.CAMERA_ROLE_EXIT:
         return _normalize_rtsp_url(getattr(settings, 'EXIT_CAMERA_RTSP', '').strip())
     return ''
+
+
+def _heartbeat_source_allowed(camera_role: str, camera_source: str) -> bool:
+    source = (camera_source or '').strip()
+    source_parts = urlparse(source)
+    if source_parts.scheme.lower() not in {'rtsp', 'rtsps'}:
+        return bool(getattr(settings, 'ANPR_ALLOW_WEBCAM_HEARTBEATS', False))
+
+    expected_parts = urlparse(_camera_rtsp_for_role(camera_role))
+    if not expected_parts.hostname:
+        return True
+    if not source_parts.hostname:
+        return False
+
+    try:
+        expected_port = expected_parts.port or (322 if expected_parts.scheme.lower() == 'rtsps' else 554)
+        source_port = source_parts.port or (322 if source_parts.scheme.lower() == 'rtsps' else 554)
+    except ValueError:
+        return False
+
+    return (
+        source_parts.scheme.lower() == expected_parts.scheme.lower()
+        and source_parts.hostname.casefold() == expected_parts.hostname.casefold()
+        and source_port == expected_port
+    )
 
 
 def _rtsp_candidates(rtsp_url: str) -> list[str]:
@@ -454,8 +589,6 @@ def camera_frame(request, camera_role: str):
     if not rtsp_url:
         return JsonResponse({'error': f'RTSP URL not configured for {role}'}, status=400)
 
-    _ensure_camera_worker(role, rtsp_url)
-
     stale_frame_bytes = None
     with _FRAME_CACHE_LOCK:
         cached = _FRAME_CACHE.get(role)
@@ -541,18 +674,28 @@ def ingest_plate(request):
             visitor_name=resolved.get('visitor_name', ''),
         )
 
-        if snapshot_b64:
+        snapshot_saved = False
+        if snapshot_b64 and (settings.DEBUG or _cloud_media_storage_ready()):
             try:
                 image_bytes = base64.b64decode(snapshot_b64, validate=True)
                 safe_plate = ''.join(c for c in plate if c.isalnum())[:12] or 'plate'
                 filename = f'{camera_role.lower()}_{safe_plate}_{log.pk}.jpg'
                 log.snapshot.save(filename, ContentFile(image_bytes), save=True)
+                snapshot_saved = True
                 _update_live_camera_snapshot(camera_role, image_bytes)
             except (binascii.Error, ValueError):
                 pass
+        elif snapshot_b64:
+            logger.error('Skipped plate snapshot upload because durable Cloudinary media storage is not configured.')
 
         broadcast_log(log)
-        return JsonResponse({'ok': True, 'log_id': log.pk, 'status': status, 'camera_role': camera_role})
+        return JsonResponse({
+            'ok': True,
+            'log_id': log.pk,
+            'status': status,
+            'camera_role': camera_role,
+            'snapshot_saved': snapshot_saved,
+        })
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON body'}, status=400)
@@ -575,12 +718,21 @@ def ingest_camera_frame(request):
     try:
         data = json.loads(request.body)
         camera_role = _normalize_camera_role(data.get('camera_role', ''))
+        camera_source = str(data.get('camera_source', '') or '').strip()
         snapshot_b64 = (data.get('snapshot_b64', '') or '').strip()
 
         if camera_role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
             return JsonResponse({'error': 'camera_role must be ENTRY_CAM or EXIT_CAM'}, status=400)
+        if not _heartbeat_source_allowed(camera_role, camera_source):
+            source_kind = 'webcam/unknown' if '://' not in camera_source else 'unconfigured RTSP camera'
+            logger.warning("Rejected %s heartbeat from %s source", camera_role, source_kind)
+            return JsonResponse({'error': 'Camera source does not match the configured camera for this role'}, status=409)
         if not snapshot_b64:
             return JsonResponse({'error': 'snapshot_b64 required'}, status=400)
+
+        image_bytes = base64.b64decode(snapshot_b64, validate=True)
+        with _FRAME_CACHE_LOCK:
+            _FRAME_CACHE[camera_role] = (image_bytes, time.time())
 
         # Persisting every heartbeat frame to media storage adds jitter (especially on cloud storage).
         # Keep a persistent snapshot occasionally, but stream live updates over WebSocket every tick.
@@ -592,13 +744,13 @@ def ingest_camera_frame(request):
             if (now_ts - last_persist_ts) >= LIVE_HEARTBEAT_PERSIST_SECONDS:
                 _LAST_LIVE_SNAPSHOT_PERSIST_TS[camera_role] = now_ts
                 should_persist = True
-
-        if should_persist:
-            image_bytes = base64.b64decode(snapshot_b64, validate=True)
+        if should_persist and (settings.DEBUG or _cloud_media_storage_ready()):
             _update_live_camera_snapshot(camera_role, image_bytes)
             snap = CameraFeedSnapshot.objects.filter(camera_role=camera_role).first()
             if snap and snap.snapshot:
                 snapshot_url = snap.snapshot.url
+        elif should_persist:
+            logger.error('Skipped live camera snapshot upload because durable Cloudinary media storage is not configured.')
 
         # Push WebSocket event so browser refreshes immediately using inline frame payload.
         try:
@@ -613,9 +765,9 @@ def ingest_camera_frame(request):
 
         return JsonResponse({'ok': True, 'camera_role': camera_role})
 
-    except (binascii.Error, ValueError):
-        return JsonResponse({'error': 'Invalid snapshot_b64'}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+    except (binascii.Error, ValueError):
+        return JsonResponse({'error': 'Invalid snapshot_b64'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

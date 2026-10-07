@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from apps.accounts.forms import LoginForm, UserCreateForm, UserEditForm, ResidentSignupForm
 from apps.accounts.models import User
-from apps.logs.models import VehicleLog, CameraFeedSnapshot
+from apps.logs.models import VehicleLog, CameraFeedSnapshot, UnrecognizedPlateAlert
 from apps.logs.forms import ManualLogForm
 from apps.logs.services import attach_blacklist_metadata, broadcast_log
 from apps.residents.models import Resident, Vehicle
@@ -167,6 +167,8 @@ def admin_dashboard(request):
         'today_out': VehicleLog.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end, status=VehicleLog.STATUS_OUT).count(),
         'recent_logs': recent_logs,
         'daily_data': daily_data,
+        'latest_unrecognized_alerts': UnrecognizedPlateAlert.objects.select_related('recording')[:3],
+        'unrecognized_alert_count': UnrecognizedPlateAlert.objects.count(),
     }
     return render(request, 'dashboard/admin/index.html', context)
 
@@ -312,6 +314,8 @@ def guard_dashboard(request):
     context = {
         'recent_logs': recent_logs,
         'manual_form': manual_form,
+        'latest_unrecognized_alerts': UnrecognizedPlateAlert.objects.select_related('recording')[:3],
+        'unrecognized_alert_count': UnrecognizedPlateAlert.objects.count(),
     }
     context.update(_camera_feed_context())
     return render(request, 'dashboard/guard/index.html', context)

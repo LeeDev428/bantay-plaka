@@ -71,8 +71,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--rtsp-drain-grabs',
             type=int,
-            default=int(getattr(settings, 'ANPR_RTSP_DRAIN_GRABS', 2) or 2),
-            help='Buffered RTSP frame grabs before read. Default: ANPR_RTSP_DRAIN_GRABS or 2',
+            default=int(getattr(settings, 'ANPR_RTSP_DRAIN_GRABS', 0)),
+            help='Extra RTSP frame grabs before each read; each grab may block. Default: ANPR_RTSP_DRAIN_GRABS or 0',
         )
         parser.add_argument(
             '--heartbeat-seconds',
@@ -88,9 +88,12 @@ class Command(BaseCommand):
         strict_roles = bool(options.get('strict_roles'))
         anpr_device = str(options.get('device') or 'auto').strip().lower()
         frame_skip = max(1, int(options.get('frame_skip') or 2))
-        rtsp_drain_grabs = max(0, int(options.get('rtsp_drain_grabs') or 2))
+        drain_grabs_option = options.get('rtsp_drain_grabs')
+        rtsp_drain_grabs = max(0, int(drain_grabs_option if drain_grabs_option is not None else 0))
         heartbeat_seconds = max(0.10, float(options.get('heartbeat_seconds') or 1.0))
         stream_profile = str(getattr(settings, 'ANPR_STREAM_PROFILE', 'sub') or 'sub').strip().lower()
+        recordings_dir = str(settings.ANPR_RECORDINGS_DIR)
+        snapshot_dir = str(settings.ANPR_SNAPSHOT_DIR)
 
         entry_rtsp = (getattr(settings, 'ENTRY_CAMERA_RTSP', '') or '').strip()
         exit_rtsp = (getattr(settings, 'EXIT_CAMERA_RTSP', '') or '').strip()
@@ -157,10 +160,11 @@ class Command(BaseCommand):
                 'anpr_engine/anpr_engine.py',
                 '--rtsp', webcam_index,
                 '--url', ingest_url,
-                '--mode', 'yolo',
                 '--device', anpr_device,
                 '--frame-skip', str(frame_skip),
                 '--heartbeat-seconds', str(heartbeat_seconds),
+                '--record-dir', recordings_dir,
+                '--snapshot-dir', snapshot_dir,
             ]
             if strict_roles:
                 entry_cmd.extend(['--camera-role', 'ENTRY_CAM'])
@@ -176,6 +180,8 @@ class Command(BaseCommand):
                 '--frame-skip', str(frame_skip),
                 '--rtsp-drain-grabs', str(rtsp_drain_grabs),
                 '--heartbeat-seconds', str(heartbeat_seconds),
+                '--record-dir', recordings_dir,
+                '--snapshot-dir', snapshot_dir,
                 '--no-preview',
             ]
             exit_cmd = [
@@ -187,6 +193,8 @@ class Command(BaseCommand):
                 '--frame-skip', str(frame_skip),
                 '--rtsp-drain-grabs', str(rtsp_drain_grabs),
                 '--heartbeat-seconds', str(heartbeat_seconds),
+                '--record-dir', recordings_dir,
+                '--snapshot-dir', snapshot_dir,
                 '--no-preview',
             ]
             if strict_roles:

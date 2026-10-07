@@ -1,17 +1,25 @@
 import datetime
+import json
+import logging
+from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.conf import settings
 from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
+from django.http import FileResponse, Http404
+from django.urls import reverse
 from django.utils import timezone
 
-from apps.logs.models import VehicleLog
+from apps.logs.models import VehicleLog, VideoRecording, UnrecognizedPlateAlert
 from apps.logs.forms import ManualLogForm, LogEditForm
 from apps.logs.services import broadcast_log, attach_blacklist_metadata
 from apps.residents.models import Vehicle
 from apps.visitors.models import BlacklistEntry, Visitor
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_plate(plate_number: str) -> dict:
@@ -217,6 +225,139 @@ def snapshot_gallery(request):
         'date_from_q': date_from_q,
         'date_to_q': date_to_q,
     })
+
+
+@login_required
+def alert_gallery(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    alerts = UnrecognizedPlateAlert.objects.select_related('recording').all()
+    camera_q = request.GET.get('camera', '').strip().upper()
+    if camera_q in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
+        alerts = alerts.filter(camera_role=camera_q)
+    else:
+        camera_q = ''
+
+    return render(request, 'logs/alert_gallery.html', {
+        'alerts': Paginator(alerts, 18).get_page(request.GET.get('page', 1)),
+        'camera_q': camera_q,
+    })
+
+
+@login_required
+def video_gallery(request):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    recordings_dir = Path(settings.ANPR_RECORDINGS_DIR)
+    query = request.GET.get('q', '').strip().lower()
+    camera_q = request.GET.get('camera', '').strip().upper()
+    if camera_q not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
+        camera_q = ''
+
+    recordings = []
+    cloud_recordings = VideoRecording.objects.all()
+    if camera_q:
+        cloud_recordings = cloud_recordings.filter(camera_role=camera_q)
+    if query:
+        cloud_recordings = cloud_recordings.filter(
+            Q(source_filename__icontains=query) | Q(plate_search__icontains=query)
+        )
+
+    for recording in cloud_recordings:
+        plates = recording.plates if isinstance(recording.plates, list) else []
+        plate_numbers = [
+            str(event.get('plate', ''))
+            for event in plates
+            if isinstance(event, dict) and event.get('plate')
+        ]
+        recordings.append({
+            'name': recording.source_filename,
+            'role': recording.camera_role,
+            'role_label': recording.get_camera_role_display(),
+            'plates': plate_numbers,
+            'started_at': recording.started_at,
+            'duration_seconds': recording.duration_seconds,
+            'size_bytes': recording.size_bytes,
+            'modified_at': recording.uploaded_at,
+            'url': recording.video.url,
+            'is_cloud': True,
+        })
+
+    if recordings_dir.is_dir():
+        for path in recordings_dir.glob('*.mp4'):
+            if not path.is_file():
+                continue
+            if any(item['name'] == path.name for item in recordings):
+                continue
+            metadata = {}
+            metadata_path = path.with_suffix('.json')
+            if metadata_path.is_file():
+                try:
+                    loaded_metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+                    if isinstance(loaded_metadata, dict):
+                        metadata = loaded_metadata
+                except (OSError, json.JSONDecodeError) as exc:
+                    logger.warning("Could not read recording metadata %s: %s", metadata_path, exc)
+
+            role = str(metadata.get('camera_role', '')).upper()
+            if role not in {VehicleLog.CAMERA_ROLE_ENTRY, VehicleLog.CAMERA_ROLE_EXIT}:
+                role = VehicleLog.CAMERA_ROLE_UNKNOWN
+            plates = metadata.get('plates', [])
+            plate_numbers = [
+                str(event.get('plate', ''))
+                for event in plates
+                if isinstance(event, dict) and event.get('plate')
+            ] if isinstance(plates, list) else []
+
+            if camera_q and role != camera_q:
+                continue
+            if query and query not in path.name.lower() and not any(
+                query in plate.lower() for plate in plate_numbers
+            ):
+                continue
+
+            stat = path.stat()
+            recordings.append({
+                'name': path.name,
+                'role': role,
+                'role_label': dict(VehicleLog.CAMERA_ROLE_CHOICES).get(role, role),
+                'plates': plate_numbers,
+                'started_at': metadata.get('started_at', ''),
+                'duration_seconds': metadata.get('duration_seconds'),
+                'size_bytes': stat.st_size,
+                'modified_at': timezone.make_aware(
+                    datetime.datetime.fromtimestamp(stat.st_mtime),
+                    timezone.get_current_timezone(),
+                ),
+                'url': reverse('recording_file', args=[path.name]),
+                'is_cloud': False,
+            })
+
+    recordings.sort(key=lambda item: item['modified_at'], reverse=True)
+    page = Paginator(recordings, 12).get_page(request.GET.get('page', 1))
+    return render(request, 'logs/video_gallery.html', {
+        'recordings': page,
+        'q': request.GET.get('q', '').strip(),
+        'camera_q': camera_q,
+    })
+
+
+@login_required
+def recording_file(request, filename: str):
+    if request.user.is_resident():
+        raise Http404
+    if Path(filename).name != filename or Path(filename).suffix.lower() != '.mp4':
+        raise Http404
+
+    recordings_dir = Path(settings.ANPR_RECORDINGS_DIR).resolve()
+    recording_path = (recordings_dir / filename).resolve()
+    if recording_path.parent != recordings_dir or not recording_path.is_file():
+        raise Http404
+    return FileResponse(recording_path.open('rb'), content_type='video/mp4')
 
 
 @login_required

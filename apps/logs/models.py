@@ -1,4 +1,5 @@
 from django.db import models
+from apps.logs.storage import VideoMediaStorage
 from apps.accounts.models import User
 from apps.core.models import Archivable
 
@@ -101,3 +102,47 @@ class CameraFeedSnapshot(models.Model):
 
     def __str__(self):
         return f'{self.camera_role} @ {self.updated_at:%Y-%m-%d %H:%M:%S}'
+
+
+class VideoRecording(models.Model):
+    CAMERA_ROLE_CHOICES = [
+        (VehicleLog.CAMERA_ROLE_ENTRY, 'Entry Camera'),
+        (VehicleLog.CAMERA_ROLE_EXIT, 'Exit Camera'),
+    ]
+
+    source_filename = models.CharField(max_length=255, unique=True)
+    video = models.FileField(upload_to='recordings/', storage=VideoMediaStorage())
+    camera_role = models.CharField(max_length=20, choices=CAMERA_ROLE_CHOICES, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    duration_seconds = models.FloatField(null=True, blank=True)
+    size_bytes = models.PositiveBigIntegerField(default=0)
+    plates = models.JSONField(default=list, blank=True)
+    plate_search = models.TextField(blank=True, db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'video_recordings'
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f'{self.source_filename} ({self.camera_role})'
+
+
+class UnrecognizedPlateAlert(models.Model):
+    recording = models.OneToOneField(
+        VideoRecording,
+        on_delete=models.CASCADE,
+        related_name='unrecognized_alert',
+    )
+    snapshot = models.ImageField(upload_to='alerts/', null=True, blank=True)
+    camera_role = models.CharField(max_length=20, choices=VideoRecording.CAMERA_ROLE_CHOICES, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    reason = models.CharField(max_length=255, default='Vehicle detected but plate could not be recognized')
+
+    class Meta:
+        db_table = 'unrecognized_plate_alerts'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Unrecognized plate alert: {self.camera_role} @ {self.created_at:%Y-%m-%d %H:%M:%S}'

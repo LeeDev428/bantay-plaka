@@ -113,6 +113,34 @@
     }, 9000);
   }
 
+  function showUnrecognizedPlateAlert(data) {
+    const old = document.getElementById('unrecognized-plate-alert-banner');
+    if (old) old.remove();
+    const banner = document.createElement('div');
+    banner.id = 'unrecognized-plate-alert-banner';
+    banner.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[92%] max-w-2xl rounded-xl border border-amber-300 bg-amber-50 shadow-lg';
+    const camera = data.camera_role === 'ENTRY_CAM' ? 'Entry' : data.camera_role === 'EXIT_CAM' ? 'Exit' : 'Camera';
+    const evidenceMessage = data.snapshot_url
+      ? 'Video and snapshot saved.'
+      : 'Video saved; evidence snapshot unavailable.';
+    banner.innerHTML = `
+      <div class="px-5 py-4">
+        <div class="flex items-start gap-3">
+          <i class="fa fa-triangle-exclamation text-amber-600 text-2xl mt-0.5"></i>
+          <div class="flex-1">
+            <p class="text-amber-800 font-bold text-lg leading-tight">${escapeHtml(data.title || 'Plate Could Not Be Recognized')}</p>
+            <p class="text-amber-800 text-sm mt-1">${escapeHtml(camera)} camera detected a vehicle without a readable plate. ${escapeHtml(evidenceMessage)}</p>
+            ${data.snapshot_url ? `<img src="${escapeHtml(data.snapshot_url)}" alt="Unrecognized plate evidence" class="mt-2 max-h-32 rounded-lg border border-amber-200">` : ''}
+            <a class="inline-block mt-2 text-sm font-semibold text-blue-700 hover:text-blue-800" href="${escapeHtml(data.alerts_url || '/logs/alerts/')}">Review alert and evidence &rarr;</a>
+          </div>
+          <button id="close-unrecognized-alert" class="text-amber-600 hover:text-amber-800" aria-label="Dismiss alert"><i class="fa fa-xmark text-lg"></i></button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(banner);
+    document.getElementById('close-unrecognized-alert')?.addEventListener('click', () => banner.remove());
+  }
+
   function highlightRecentRows() {
     // Clear existing highlights
     tbody.querySelectorAll('tr.highlight-in, tr.highlight-out').forEach(r => {
@@ -186,6 +214,10 @@
       showBlacklistAlert(data);
       return;
     }
+    if (data.event_type === 'unrecognized_plate_alert') {
+      showUnrecognizedPlateAlert(data);
+      return;
+    }
 
     // Live camera heartbeat frame: update image immediately via WebSocket push.
     if (data.event_type === 'camera_frame_update') {
@@ -202,6 +234,8 @@
       }
       return;
     }
+
+    if (!tbody) return;
 
     const typeBadge = data.entry_type === 'RESIDENT'
       ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Resident</span>'

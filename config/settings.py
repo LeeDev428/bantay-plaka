@@ -166,7 +166,7 @@ ANPR_DEVICE = (env('ANPR_DEVICE', default='auto') or 'auto').strip().lower()
 ANPR_FRAME_SKIP = env.int('ANPR_FRAME_SKIP', default=2)
 ANPR_RTSP_DRAIN_GRABS = env.int('ANPR_RTSP_DRAIN_GRABS', default=0)
 ANPR_STREAM_PROFILE = (env('ANPR_STREAM_PROFILE', default='sub') or 'sub').strip().lower()
-ANPR_HEARTBEAT_SECONDS = env.float('ANPR_HEARTBEAT_SECONDS', default=1.0)
+ANPR_HEARTBEAT_SECONDS = env.float('ANPR_HEARTBEAT_SECONDS', default=0.125)
 ANPR_RECORDINGS_DIR = Path(
     env('ANPR_RECORDINGS_DIR', default=str(BASE_DIR / 'anpr_engine' / 'recordings'))
 ).expanduser()

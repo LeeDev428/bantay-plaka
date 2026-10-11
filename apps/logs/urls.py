@@ -8,6 +8,7 @@ urlpatterns = [
     path('videos/', views.video_gallery, name='video_gallery'),
     path('alerts/', views.alert_gallery, name='alert_gallery'),
     path('videos/<str:filename>/', views.recording_file, name='recording_file'),
+    path('videos/<str:filename>/download/', views.recording_download, name='recording_download'),
     path('', views.log_list, name='log_list'),
     path('<int:pk>/edit/', views.log_edit, name='log_edit'),
     path('<int:pk>/delete/', views.log_delete, name='log_delete'),

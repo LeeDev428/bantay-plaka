@@ -30,9 +30,12 @@
   {% for alert in alerts %}
   <article class="page-card overflow-hidden border-l-4 border-amber-400">
     {% if alert.snapshot %}
-    <a href="{{ alert.snapshot.url }}" target="_blank" rel="noopener noreferrer" class="block bg-slate-100">
-      <img src="{{ alert.snapshot.url }}" alt="Unrecognized plate evidence from {{ alert.get_camera_role_display }}" class="w-full h-56 object-cover">
-    </a>
+    <button type="button" data-media-preview data-preview-type="image"
+            data-preview-url="{{ alert.snapshot.url }}"
+            data-preview-title="Unrecognized plate — {{ alert.get_camera_role_display }}"
+            class="block w-full bg-slate-100">
+      <img src="{{ alert.snapshot.url }}" alt="Unrecognized plate evidence from {{ alert.get_camera_role_display }}" class="w-full h-56 object-contain">
+    </button>
     {% else %}
     <div class="h-56 bg-slate-100 flex items-center justify-center text-slate-400">Evidence snapshot unavailable</div>
     {% endif %}
@@ -43,9 +46,12 @@
       </div>
       <p class="text-sm text-slate-600">{{ alert.reason }}</p>
       <p class="text-xs text-slate-400">{{ alert.created_at|date:"M d, Y h:i:s A" }}</p>
-      <a href="{{ alert.recording.video.url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
+      <button type="button" data-media-preview data-preview-type="video"
+              data-preview-url="{{ alert.recording.video.url }}"
+              data-preview-title="Recorded clip — {{ alert.get_camera_role_display }}"
+              class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
         <i class="fa fa-video"></i> Review recorded video
-      </a>
+      </button>
     </div>
   </article>
   {% endfor %}
@@ -74,4 +80,5 @@
   </div>
 </div>
 {% endif %}
+{% include 'logs/partials/media_preview_modal.html' %}
 {% endblock %}

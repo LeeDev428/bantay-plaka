@@ -1,0 +1,73 @@
+<div id="media-preview-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 p-4"
+     role="dialog" aria-modal="true" aria-labelledby="media-preview-title">
+  <div class="relative w-full max-w-5xl rounded-xl bg-slate-950 shadow-2xl">
+    <div class="flex items-center justify-between gap-4 px-4 py-3">
+      <h2 id="media-preview-title" class="min-w-0 truncate text-sm font-semibold text-white"></h2>
+      <button type="button" id="media-preview-close" class="shrink-0 rounded p-2 text-white hover:bg-white/10"
+              aria-label="Close preview">
+        <i class="fa fa-xmark"></i>
+      </button>
+    </div>
+    <div class="flex max-h-[80vh] min-h-32 items-center justify-center overflow-auto px-3 pb-3">
+      <img id="media-preview-image" class="hidden max-h-[76vh] max-w-full object-contain" alt="">
+      <video id="media-preview-video" class="hidden max-h-[76vh] max-w-full" controls playsinline></video>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const modal = document.getElementById('media-preview-modal');
+  if (!modal || modal.dataset.initialized === 'true') return;
+  modal.dataset.initialized = 'true';
+
+  const title = document.getElementById('media-preview-title');
+  const image = document.getElementById('media-preview-image');
+  const video = document.getElementById('media-preview-video');
+
+  function resetVideo() {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.classList.add('hidden');
+  }
+
+  function closePreview() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    resetVideo();
+    image.removeAttribute('src');
+    image.classList.add('hidden');
+  }
+
+  document.querySelectorAll('[data-media-preview]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const url = button.dataset.previewUrl;
+      if (!url) return;
+
+      title.textContent = button.dataset.previewTitle || 'Media preview';
+      resetVideo();
+      if (button.dataset.previewType === 'video') {
+        video.src = url;
+        video.classList.remove('hidden');
+        image.classList.add('hidden');
+        video.load();
+      } else {
+        image.src = url;
+        image.alt = button.dataset.previewTitle || 'Image preview';
+        image.classList.remove('hidden');
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    });
+  });
+
+  document.getElementById('media-preview-close').addEventListener('click', closePreview);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closePreview();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !modal.classList.contains('hidden')) closePreview();
+  });
+})();
+</script>

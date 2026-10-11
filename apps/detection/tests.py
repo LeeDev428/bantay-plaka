@@ -1,5 +1,6 @@
 import base64
 import json
+import threading
 import time
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -160,3 +161,63 @@ class RecordingIngestTests(SimpleTestCase):
         response = self._post_recording()
 
         self.assertEqual(response.status_code, 503)
+
+
+class ANPRClipEventTests(SimpleTestCase):
+    def test_recognized_plate_blocked_by_episode_limit_is_not_an_unreadable_alert(self):
+        from anpr_engine.anpr_engine import ANPREngine
+
+        engine = ANPREngine.__new__(ANPREngine)
+        engine._state_lock = threading.Lock()
+        engine._clip_events = []
+        engine._episode_id = 2
+        engine.vehicle_detector = object()
+        engine._episode_logged = True
+        engine._dropped_by_episode = 0
+
+        with patch('anpr_engine.anpr_engine.ONE_PLATE_PER_EPISODE', True):
+            result = engine._try_log_plate(None, 'ABC1234', 0.92, None, None, 'detector')
+
+        self.assertEqual(result, 'episode')
+        self.assertEqual(len(engine._clip_events), 1)
+        self.assertEqual(engine._clip_events[0]['plate'], 'ABC1234')
+        self.assertFalse(engine._clip_events[0]['sent_to_django'])
+        unrecognized_plate_alert = not bool(engine._clip_events)
+        self.assertFalse(unrecognized_plate_alert)
+
+    def test_event_before_recording_start_is_associated_with_its_vehicle_episode(self):
+        from anpr_engine.anpr_engine import ANPREngine
+
+        class RecorderStub:
+            active = True
+            started_at = 100.0
+
+            def stop(self, events, reason):
+                self.events = events
+                return None, 0.0
+
+        engine = ANPREngine.__new__(ANPREngine)
+        engine._state_lock = threading.Lock()
+        engine._clip_events = [{
+            'time': '2026-10-08T07:00:00',
+            'ts': 99.0,
+            'plate': 'ABC1234',
+            'ocr_confidence': 0.92,
+            'source': 'detector',
+            'sent_to_django': True,
+            'snapshot': None,
+            'episode_id': 2,
+        }]
+        engine._recording_episode_id = 2
+        engine._recorder = RecorderStub()
+        engine.cooldown_seconds = 0.0
+        engine._cooldown_until = 0.0
+        engine._recording_upload_enabled = False
+        engine._clips_saved = 0
+
+        engine._stop_clip('vehicle left')
+
+        self.assertEqual(len(engine._recorder.events), 1)
+        self.assertEqual(engine._recorder.events[0]['plate'], 'ABC1234')
+        self.assertNotIn('episode_id', engine._recorder.events[0])
+        self.assertIsNone(engine._recording_episode_id)

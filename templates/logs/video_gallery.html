@@ -35,10 +35,13 @@
 <div class="grid sm:grid-cols-1 xl:grid-cols-2 gap-4">
   {% for recording in recordings %}
     <div class="page-card overflow-hidden">
-      <video class="w-full bg-slate-950 aspect-video" controls preload="metadata">
-        <source src="{{ recording.url }}" type="video/mp4">
-        Your browser does not support MP4 playback.
-      </video>
+      <button type="button" data-media-preview data-preview-type="video"
+              data-preview-url="{{ recording.url }}"
+              data-preview-title="{{ recording.name }}"
+              class="flex aspect-video w-full flex-col items-center justify-center gap-2 bg-slate-950 text-white hover:bg-slate-900">
+        <i class="fa fa-circle-play text-5xl"></i>
+        <span class="text-sm">Play recording</span>
+      </button>
       <div class="p-4 space-y-2">
         <div class="flex items-start justify-between gap-3">
           <p class="font-medium text-slate-800 break-all">{{ recording.name }}</p>
@@ -56,7 +59,7 @@
         {% else %}
           <p class="text-xs text-slate-400">No plate was logged for this clip.</p>
         {% endif %}
-        <a href="{{ recording.url }}" download class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700">
+        <a href="{% url 'recording_download' recording.name %}" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700">
           <i class="fa fa-download"></i> Download video
         </a>
       </div>
@@ -87,4 +90,5 @@
     </div>
   </div>
 {% endif %}
+{% include 'logs/partials/media_preview_modal.html' %}
 {% endblock %}

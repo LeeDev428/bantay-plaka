@@ -52,16 +52,22 @@
 <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
   {% for log in snapshots %}
     <div class="page-card overflow-hidden">
-      <a href="{{ log.snapshot.url }}" target="_blank" class="block bg-slate-100">
-        <img src="{{ log.snapshot.url }}" alt="Snapshot {{ log.plate_number }}" class="w-full h-48 object-cover">
-      </a>
+      <button type="button" data-media-preview data-preview-type="image"
+              data-preview-url="{{ log.snapshot.url }}"
+              data-preview-title="Plate snapshot — {{ log.plate_number }}"
+              class="block w-full bg-slate-100">
+        <img src="{{ log.snapshot.url }}" alt="Snapshot {{ log.plate_number }}" class="w-full h-48 object-contain">
+      </button>
       <div class="p-4 space-y-1">
         <p class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</p>
         <p class="text-xs text-slate-500">{{ log.get_entry_type_display }} • {{ log.get_status_display }} • {{ log.get_camera_role_display }}</p>
         <p class="text-xs text-slate-400">{{ log.local_time|date:"M d, Y h:i:s A" }}</p>
-        <a href="{{ log.snapshot.url }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-2">
-          <i class="fa fa-up-right-from-square text-[10px]"></i> Open Full Image
-        </a>
+        <button type="button" data-media-preview data-preview-type="image"
+                data-preview-url="{{ log.snapshot.url }}"
+                data-preview-title="Plate snapshot — {{ log.plate_number }}"
+                class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-2">
+          <i class="fa fa-magnifying-glass-plus text-[10px]"></i> View Full Image
+        </button>
       </div>
     </div>
   {% endfor %}
@@ -88,4 +94,5 @@
     </div>
   </div>
 {% endif %}
+{% include 'logs/partials/media_preview_modal.html' %}
 {% endblock %}

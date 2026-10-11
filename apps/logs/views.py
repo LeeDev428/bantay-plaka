@@ -361,6 +361,51 @@ def recording_file(request, filename: str):
 
 
 @login_required
+def recording_download(request, filename: str):
+    if request.user.is_resident():
+        raise Http404
+    if Path(filename).name != filename or Path(filename).suffix.lower() != '.mp4':
+        raise Http404
+
+    recording = VideoRecording.objects.filter(source_filename=filename).first()
+    if recording:
+        storage = recording.video.storage
+        backend = getattr(storage, 'backend', storage)
+        from cloudinary_storage.storage import VideoMediaCloudinaryStorage
+
+        if isinstance(backend, VideoMediaCloudinaryStorage):
+            import cloudinary.utils
+
+            public_id = backend._prepend_prefix(recording.video.name)
+            download_url, _ = cloudinary.utils.cloudinary_url(
+                public_id,
+                resource_type='video',
+                secure=True,
+                flags=f'attachment:{filename}',
+                format='mp4',
+            )
+            return redirect(download_url)
+
+        return FileResponse(
+            recording.video.open('rb'),
+            as_attachment=True,
+            filename=filename,
+            content_type='video/mp4',
+        )
+
+    recordings_dir = Path(settings.ANPR_RECORDINGS_DIR).resolve()
+    recording_path = (recordings_dir / filename).resolve()
+    if recording_path.parent != recordings_dir or not recording_path.is_file():
+        raise Http404
+    return FileResponse(
+        recording_path.open('rb'),
+        as_attachment=True,
+        filename=filename,
+        content_type='video/mp4',
+    )
+
+
+@login_required
 def log_edit(request, pk):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')

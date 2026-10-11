@@ -186,7 +186,7 @@ DETECTOR_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_DETECTOR_QUICK_ACCEPT_CONFID
 FALLBACK_QUICK_ACCEPT_CONFIDENCE = _env_float('ANPR_FALLBACK_QUICK_ACCEPT_CONFIDENCE', 0.86)
 FALLBACK_EVERY_N_FRAMES = max(1, _env_int('ANPR_FALLBACK_EVERY_N_FRAMES', 6))
 
-HEARTBEAT_SNAPSHOT_SECONDS = max(0.10, _env_float('ANPR_HEARTBEAT_SECONDS', 1.0))
+HEARTBEAT_SNAPSHOT_SECONDS = max(0.10, _env_float('ANPR_HEARTBEAT_SECONDS', 0.125))
 HEARTBEAT_SNAPSHOT_MAX_WIDTH = max(320, _env_int('ANPR_HEARTBEAT_MAX_WIDTH', 640))
 HEARTBEAT_SNAPSHOT_JPEG_QUALITY = min(85, max(30, _env_int('ANPR_HEARTBEAT_JPEG_QUALITY', 45)))
 # Plate-event evidence sent to Django is higher quality than the live-feed heartbeat.
@@ -1083,6 +1083,7 @@ class ANPREngine:
         self._episode_logged = False
         self._overlays: dict[str, tuple[float, list[tuple[tuple[int, int, int, int], str, tuple[int, int, int]]]]] = {}
         self._clip_events: list[dict] = []
+        self._recording_episode_id: int | None = None
         self._review_saved_this_clip = 0
         self._last_review_ts = 0.0
         self._cooldown_until = 0.0
@@ -1379,9 +1380,17 @@ class ANPREngine:
         with self._state_lock:
             self._episode_logged = True
 
-    def _note_clip_event(self, plate: str, confidence: float, snapshot_path: str | None, sent: bool, source: str):
+    def _note_clip_event(
+        self, plate: str, confidence: float, snapshot_path: str | None, sent: bool, source: str,
+    ) -> dict:
         with self._state_lock:
-            self._clip_events.append({
+            episode_id = self._episode_id if self.vehicle_detector is not None else None
+            if episode_id is not None:
+                for event in reversed(self._clip_events):
+                    if event.get('episode_id') == episode_id and event['plate'] == plate:
+                        return event
+
+            event = {
                 'time': datetime.now().isoformat(timespec='seconds'),
                 'ts': time.time(),
                 'plate': plate,
@@ -1389,7 +1398,10 @@ class ANPREngine:
                 'source': source,
                 'sent_to_django': sent,
                 'snapshot': snapshot_path,
-            })
+                'episode_id': episode_id,
+            }
+            self._clip_events.append(event)
+            return event
 
     def _padded_region(self, frame: np.ndarray, vbox: tuple[int, int, int, int]):
         h, w = frame.shape[:2]
@@ -1416,6 +1428,8 @@ class ANPREngine:
         source: str,
     ) -> str:
         """Returns one of: 'posted', 'failed', 'debounced', 'episode', 'backoff'."""
+        event = self._note_clip_event(plate, confidence, None, False, source)
+
         if self._episode_blocks_logging():
             self._dropped_by_episode += 1
             return 'episode'
@@ -1458,7 +1472,9 @@ class ANPREngine:
             annotated, max_width=EVENT_SNAPSHOT_MAX_WIDTH, quality=EVENT_SNAPSHOT_JPEG_QUALITY)
 
         sent = self._post_to_django(plate, snapshot_b64=snapshot_b64)
-        self._note_clip_event(plate, confidence, snapshot_path, sent, source)
+        with self._state_lock:
+            event['sent_to_django'] = sent
+            event['snapshot'] = snapshot_path
         if sent:
             self._record_logged(plate)
             self._accepted_plates += 1
@@ -1687,6 +1703,7 @@ class ANPREngine:
                 return
             with self._state_lock:
                 self._review_saved_this_clip = 0
+                self._recording_episode_id = self._episode_id if self.vehicle_detector is not None else None
             log.info("[RECORDING STARTED] Vehicle detected -> %s", path)
 
         if not self._recorder.write(frame):
@@ -1702,8 +1719,15 @@ class ANPREngine:
             return
         started = self._recorder.started_at
         with self._state_lock:
-            events = [{k: v for k, v in e.items() if k != 'ts'} for e in self._clip_events if e['ts'] >= started]
+            episode_id = self._recording_episode_id
+            events = [
+                {k: v for k, v in e.items() if k not in {'ts', 'episode_id'}}
+                for e in self._clip_events
+                if e['ts'] >= started or (episode_id is not None and e.get('episode_id') == episode_id)
+            ]
         path, duration = self._recorder.stop(events, reason)
+        with self._state_lock:
+            self._recording_episode_id = None
         self._cooldown_until = time.time() + self.cooldown_seconds
         if path:
             self._clips_saved += 1

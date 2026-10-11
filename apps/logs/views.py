@@ -383,6 +383,7 @@ def recording_download(request, filename: str):
                 secure=True,
                 flags=f'attachment:{filename}',
                 format='mp4',
+                video_codec='h264',
             )
             return redirect(download_url)
 

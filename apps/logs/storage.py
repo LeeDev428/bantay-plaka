@@ -38,4 +38,18 @@ class VideoMediaStorage(Storage):
         return self.backend.size(name)
 
     def url(self, name):
-        return self.backend.url(name)
+        backend = self.backend
+        from cloudinary_storage.storage import VideoMediaCloudinaryStorage
+
+        if not isinstance(backend, VideoMediaCloudinaryStorage):
+            return backend.url(name)
+
+        import cloudinary.utils
+
+        return cloudinary.utils.cloudinary_url(
+            backend._prepend_prefix(name),
+            resource_type='video',
+            secure=True,
+            format='mp4',
+            video_codec='h264',
+        )[0]

@@ -151,6 +151,8 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertEqual(response['Location'], 'https://media.example/attachment.mp4')
         self.assertEqual(build_url.call_args.kwargs['resource_type'], 'video')
         self.assertEqual(build_url.call_args.kwargs['flags'], 'attachment:hosted_entry.mp4')
+        self.assertEqual(build_url.call_args.kwargs['format'], 'mp4')
+        self.assertEqual(build_url.call_args.kwargs['video_codec'], 'h264')
 
     def test_alert_gallery_renders_snapshot_and_clip_links(self):
         alert = SimpleNamespace(
@@ -229,4 +231,13 @@ class VideoGalleryTests(SimpleTestCase):
     def test_video_field_uses_cloudinary_video_resource_type(self):
         storage = VideoRecording._meta.get_field('video').storage
 
-        self.assertEqual(storage.backend.RESOURCE_TYPE, 'video')
+        with patch(
+            'cloudinary.utils.cloudinary_url',
+            return_value=('https://media.example/hosted_entry_h264.mp4', {}),
+        ) as build_url:
+            url = storage.url('recordings/hosted_entry.mp4')
+
+        self.assertEqual(url, 'https://media.example/hosted_entry_h264.mp4')
+        self.assertEqual(build_url.call_args.kwargs['resource_type'], 'video')
+        self.assertEqual(build_url.call_args.kwargs['format'], 'mp4')
+        self.assertEqual(build_url.call_args.kwargs['video_codec'], 'h264')

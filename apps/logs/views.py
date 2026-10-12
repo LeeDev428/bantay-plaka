@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 from pathlib import Path
+from urllib.parse import quote
 
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -9,9 +10,10 @@ from django.conf import settings
 from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.urls import reverse
 from django.utils import timezone
+import requests
 
 from apps.logs.models import VehicleLog, VideoRecording, UnrecognizedPlateAlert
 from apps.logs.forms import ManualLogForm, LogEditForm
@@ -374,18 +376,33 @@ def recording_download(request, filename: str):
         from cloudinary_storage.storage import VideoMediaCloudinaryStorage
 
         if isinstance(backend, VideoMediaCloudinaryStorage):
-            import cloudinary.utils
+            upstream_response: requests.Response | None = None
+            try:
+                upstream_response = requests.get(
+                    recording.video.url,
+                    stream=True,
+                    timeout=(10, 60),
+                )
+                upstream_response.raise_for_status()
+            except requests.exceptions.RequestException:
+                if upstream_response is not None:
+                    upstream_response.close()
+                logger.exception("Could not retrieve Cloudinary recording %s for download", filename)
+                return HttpResponse('Video download is temporarily unavailable.', status=502)
 
-            public_id = backend._prepend_prefix(recording.video.name)
-            download_url, _ = cloudinary.utils.cloudinary_url(
-                public_id,
-                resource_type='video',
-                secure=True,
-                flags=f'attachment:{filename}',
-                format='mp4',
-                video_codec='h264',
-            )
-            return redirect(download_url)
+            def stream_video():
+                assert upstream_response is not None
+                try:
+                    yield from upstream_response.iter_content(chunk_size=64 * 1024)
+                finally:
+                    upstream_response.close()
+
+            response = StreamingHttpResponse(stream_video(), content_type='video/mp4')
+            response['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename, safe='')}"
+            content_length = upstream_response.headers.get('Content-Length')
+            if content_length:
+                response['Content-Length'] = content_length
+            return response
 
         return FileResponse(
             recording.video.open('rb'),

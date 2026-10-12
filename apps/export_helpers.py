@@ -20,7 +20,7 @@ LIGHT = 'BFDBFE'
 def build_excel_response(filename_base, sheet_title, headers, col_widths,
                          rows, highlight_fn=None, mono_cols=None,
                          center_cols=None, summary_rows=None,
-                         date_from='', date_to=''):
+                         date_from='', date_to='', chart_data=None):
     """
     Returns an HttpResponse with an .xlsx attachment.
     rows: list of lists (first column should be row #)
@@ -140,6 +140,74 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
             lc.border = vc.border = border
             ws2.row_dimensions[i].height = 18
 
+        if chart_data is not None:
+            from openpyxl.chart import BarChart, PieChart, Reference
+
+            def add_chart_or_na(title, values, anchor, chart_type):
+                if values:
+                    start_row = max(25, len(summary_rows) + 3)
+                    data_col = 1 if chart_type == 'pie' else 4
+                    label_col = data_col + 1
+                    ws2.cell(row=start_row, column=data_col, value=title)
+                    ws2.cell(row=start_row, column=label_col, value='Records')
+                    for offset, (label, value) in enumerate(values, 1):
+                        ws2.cell(row=start_row + offset, column=data_col, value=label)
+                        ws2.cell(row=start_row + offset, column=label_col, value=value)
+
+                    data = Reference(
+                        ws2,
+                        min_col=label_col,
+                        min_row=start_row,
+                        max_row=start_row + len(values),
+                    )
+                    categories = Reference(
+                        ws2,
+                        min_col=data_col,
+                        min_row=start_row + 1,
+                        max_row=start_row + len(values),
+                    )
+                    if chart_type == 'pie':
+                        chart = PieChart()
+                        chart.add_data(data, titles_from_data=True)
+                        chart.set_categories(categories)
+                        chart.height = 8
+                        chart.width = 13
+                        chart.style = 10
+                    else:
+                        chart = BarChart()
+                        chart.type = 'col'
+                        chart.style = 10
+                        chart.title = title
+                        chart.y_axis.title = 'Records'
+                        chart.x_axis.title = 'Date'
+                        chart.add_data(data, titles_from_data=True)
+                        chart.set_categories(categories)
+                        chart.height = 8
+                        chart.width = 18
+                        chart.legend = None
+                        chart.x_axis.tickLblSkip = max(1, math.ceil(len(values) / 12))
+                    if chart_type == 'pie':
+                        chart.title = title
+                    ws2.add_chart(chart, anchor)
+                else:
+                    cell = ws2[anchor]
+                    cell.value = f'{title}: N/A'
+                    cell.font = Font(name='Calibri', bold=True, size=12, color=SLATE)
+                    cell.alignment = center
+
+            add_chart_or_na(
+                'Time In vs. Time Out',
+                chart_data.get('status', []),
+                'D2',
+                'pie',
+            )
+            add_chart_or_na(
+                'Records per Day',
+                chart_data.get('daily', []),
+                'L2',
+                'bar',
+            )
+
     resp = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
@@ -150,7 +218,7 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
 
 def build_pdf_response(filename_base, report_title, headers, col_widths_mm,
                        rows, highlight_fn=None, mono_col_idx=None,
-                       date_from='', date_to=''):
+                       date_from='', date_to='', chart_data=None):
     """
     Returns an HttpResponse with a landscape A4 PDF attachment.
     col_widths_mm: list of mm values matching headers length.
@@ -160,6 +228,9 @@ def build_pdf_response(filename_base, report_title, headers, col_widths_mm,
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.graphics.charts.barcharts import VerticalBarChart
+    from reportlab.graphics.charts.piecharts import Pie
+    from reportlab.graphics.shapes import Drawing, String
 
     resp = HttpResponse(content_type='application/pdf')
     resp['Content-Disposition'] = (
@@ -185,6 +256,93 @@ def build_pdf_response(filename_base, report_title, headers, col_widths_mm,
         Paragraph(f'Generated: {timezone.localdate()}  |  Total: {len(rows)}{date_label}', sub_style),
         Spacer(1, 5*mm),
     ]
+
+    if chart_data is not None:
+        chart_width = (landscape(A4)[0] - 24*mm) / 2
+        chart_height = 160
+        chart_colors = [
+            colors.HexColor('#2563EB'),
+            colors.HexColor('#10B981'),
+            colors.HexColor('#F59E0B'),
+            colors.HexColor('#8B5CF6'),
+        ]
+
+        def make_chart(title, values, is_pie=False):
+            drawing = Drawing(chart_width, chart_height)
+            drawing.add(String(
+                8,
+                chart_height - 14,
+                title,
+                fontName='Helvetica-Bold',
+                fontSize=9,
+                fillColor=colors.HexColor(f'#{NAVY}'),
+            ))
+            if not values:
+                drawing.add(String(
+                    chart_width / 2,
+                    chart_height / 2,
+                    'N/A',
+                    fontName='Helvetica-Bold',
+                    fontSize=18,
+                    textAnchor='middle',
+                    fillColor=colors.HexColor('#64748B'),
+                ))
+                return drawing
+
+            chart_data_values = [value for _, value in values]
+            chart_labels = [label for label, _ in values]
+            if is_pie:
+                chart = Pie()
+                chart.x = (chart_width - 140) / 2
+                chart.y = 18
+                chart.width = 140
+                chart.height = 120
+                chart.data = chart_data_values
+                chart.labels = chart_labels
+                chart.slices.strokeWidth = 0.5
+                for index, _ in enumerate(chart_data_values):
+                    chart.slices[index].fillColor = chart_colors[index % len(chart_colors)]
+                drawing.add(chart)
+            else:
+                chart = VerticalBarChart()
+                chart.x = 38
+                chart.y = 40
+                chart.width = chart_width - 50
+                chart.height = chart_height - 68
+                chart.data = [chart_data_values]
+                chart.categoryAxis.categoryNames = [
+                    label if len(chart_labels) <= 14 or index % math.ceil(len(chart_labels) / 14) == 0 else ''
+                    for index, label in enumerate(chart_labels)
+                ]
+                chart.categoryAxis.labels.fontName = 'Helvetica'
+                chart.categoryAxis.labels.fontSize = 6
+                chart.categoryAxis.labels.angle = 35
+                chart.categoryAxis.labels.dy = -4
+                chart.valueAxis.valueMin = 0
+                chart.valueAxis.valueMax = max(chart_data_values) or 1
+                chart.valueAxis.valueStep = max(1, math.ceil(max(chart_data_values) / 5))
+                chart.valueAxis.labels.fontName = 'Helvetica'
+                chart.valueAxis.labels.fontSize = 6
+                chart.bars[0].fillColor = chart_colors[0]
+                chart.barSpacing = 2
+                drawing.add(chart)
+            return drawing
+
+        charts_table = Table(
+            [[
+                make_chart('Time In vs. Time Out', chart_data.get('status', []), is_pie=True),
+                make_chart('Records per Day', chart_data.get('daily', [])),
+            ]],
+            colWidths=[chart_width, chart_width],
+        )
+        charts_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        elems.extend([charts_table, Spacer(1, 5*mm)])
 
     data = [headers] + [[str(v) if v is not None else '' for v in r] for r in rows]
     table = Table(data, colWidths=[w*mm for w in col_widths_mm], repeatRows=1)

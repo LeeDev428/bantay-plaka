@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from django.http import Http404
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from apps.logs.views import alert_gallery, recording_download, recording_file, snapshot_gallery, video_gallery
 from apps.logs.models import VehicleLog, VideoRecording
@@ -128,18 +128,25 @@ class VideoGalleryTests(SimpleTestCase):
         CLOUDINARY_API_KEY='test-key',
         CLOUDINARY_API_SECRET='test-secret',
     )
-    def test_cloud_recording_download_uses_attachment_delivery(self):
+    def test_cloud_recording_download_streams_playable_video_as_attachment(self):
         storage = VideoRecording._meta.get_field('video').storage
         cloud_recording = SimpleNamespace(
             source_filename='hosted_entry.mp4',
-            video=SimpleNamespace(name='recordings/hosted_entry', storage=storage),
+            video=SimpleNamespace(
+                name='recordings/hosted_entry',
+                storage=storage,
+                url='https://media.example/hosted_entry_h264.mp4',
+            ),
+        )
+        upstream_response = SimpleNamespace(
+            headers={'Content-Length': '10'},
+            iter_content=Mock(return_value=iter([b'video', b'-data'])),
+            raise_for_status=Mock(),
+            close=Mock(),
         )
         with (
             patch('apps.logs.views.VideoRecording.objects.filter') as filter_recordings,
-            patch(
-                'cloudinary.utils.cloudinary_url',
-                return_value=('https://media.example/attachment.mp4', {}),
-            ) as build_url,
+            patch('apps.logs.views.requests.get', return_value=upstream_response) as get_video,
         ):
             filter_recordings.return_value.first.return_value = cloud_recording
             response = recording_download(
@@ -147,12 +154,20 @@ class VideoGalleryTests(SimpleTestCase):
                 'hosted_entry.mp4',
             )
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], 'https://media.example/attachment.mp4')
-        self.assertEqual(build_url.call_args.kwargs['resource_type'], 'video')
-        self.assertEqual(build_url.call_args.kwargs['flags'], 'attachment:hosted_entry.mp4')
-        self.assertEqual(build_url.call_args.kwargs['format'], 'mp4')
-        self.assertEqual(build_url.call_args.kwargs['video_codec'], 'h264')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'video/mp4')
+        self.assertEqual(
+            response['Content-Disposition'],
+            "attachment; filename*=UTF-8''hosted_entry.mp4",
+        )
+        self.assertEqual(response['Content-Length'], '10')
+        self.assertEqual(b''.join(response.streaming_content), b'video-data')
+        get_video.assert_called_once_with(
+            'https://media.example/hosted_entry_h264.mp4',
+            stream=True,
+            timeout=(10, 60),
+        )
+        upstream_response.close.assert_called_once()
 
     def test_alert_gallery_renders_snapshot_and_clip_links(self):
         alert = SimpleNamespace(

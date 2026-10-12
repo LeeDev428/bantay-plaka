@@ -4,6 +4,8 @@
     path('export/pdf/',   export_views.export_logs_pdf,   name='logs_export_pdf'),
 """
 import datetime
+from collections import Counter
+
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -53,6 +55,22 @@ def _rows(logs, bl_map):
     return out
 
 
+def _chart_data(logs):
+    status_counts = Counter(log.status for log in logs)
+    daily_counts = Counter(
+        timezone.localtime(log.timestamp).date().isoformat()
+        for log in logs
+    )
+    status_values = [
+        ('Time In', status_counts.get(VehicleLog.STATUS_IN, 0)),
+        ('Time Out', status_counts.get(VehicleLog.STATUS_OUT, 0)),
+    ]
+    return {
+        'status': [(label, count) for label, count in status_values if count] if logs else [],
+        'daily': sorted(daily_counts.items()),
+    }
+
+
 @login_required
 def export_logs_excel(request):
     if request.user.is_resident():
@@ -60,6 +78,7 @@ def export_logs_excel(request):
         return redirect('resident_dashboard')
     date_from, date_to, qs = _parse_range(request)
     logs = list(qs)
+    chart_data = _chart_data(logs)
     bl_map = get_active_blacklist_map([l.plate_number for l in logs])
     rows = _rows(logs, bl_map)
     return build_excel_response(
@@ -79,6 +98,7 @@ def export_logs_excel(request):
             ('Blacklisted Hits', sum(1 for r in rows if r[7])),
         ],
         date_from=date_from, date_to=date_to,
+        chart_data=chart_data,
     )
 
 
@@ -89,6 +109,7 @@ def export_logs_pdf(request):
         return redirect('resident_dashboard')
     date_from, date_to, qs = _parse_range(request)
     logs = list(qs)
+    chart_data = _chart_data(logs)
     bl_map = get_active_blacklist_map([l.plate_number for l in logs])
     rows = _rows(logs, bl_map)
     return build_pdf_response(
@@ -100,4 +121,5 @@ def export_logs_pdf(request):
         highlight_fn=lambda r: bool(bl_map.get((r[0] or '').upper())),
         mono_col_idx=0,
         date_from=date_from, date_to=date_to,
+        chart_data=chart_data,
     )

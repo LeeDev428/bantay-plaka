@@ -13,20 +13,85 @@
 <!-- Category tabs -->
 <div class="page-card p-2 mb-4">
   <div class="flex flex-wrap gap-1">
+    <button type="button"
+      class="archive-tab-btn btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white"
+      data-tab-target="archive-tab-all"
+      onclick="switchArchiveTab('all')">
+      All
+      <span class="ml-1 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500 text-[10px] font-semibold px-1.5 py-0.5">{{ total_count }}</span>
+    </button>
     {% for section in sections %}
       <button type="button"
-        class="archive-tab-btn btn btn-sm {% if forloop.first %}bg-blue-600 hover:bg-blue-700 border-0 text-white{% else %}btn-ghost text-slate-500{% endif %}"
+        class="archive-tab-btn btn btn-sm btn-ghost text-slate-500"
         data-tab-target="archive-tab-{{ section.slug }}"
         onclick="switchArchiveTab('{{ section.slug }}')">
         {{ section.label }}
-        <span class="ml-1 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500 text-[10px] font-semibold px-1.5 py-0.5">{{ section.items|length }}</span>
+        <span class="ml-1 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500 text-[10px] font-semibold px-1.5 py-0.5">{{ section.count }}</span>
       </button>
     {% endfor %}
   </div>
 </div>
 
+<div id="archive-tab-all" class="archive-tab-panel">
+  {% for section in sections %}
+  <section class="page-card p-4 mb-4">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <h2 class="font-semibold text-slate-800">{{ section.label }}</h2>
+      <button type="button" class="btn btn-ghost btn-xs text-blue-600"
+              onclick="switchArchiveTab('{{ section.slug }}')">View all</button>
+    </div>
+    {% if section.recent_items %}
+    <div class="flex gap-3 overflow-x-auto pb-2">
+      {% for item in section.recent_items %}
+      <article class="page-card border border-slate-200 p-3 shrink-0 w-64">
+        <p class="font-semibold text-sm text-slate-800 truncate">
+          {% if section.slug == 'residents' or section.slug == 'visitors' %}
+            {{ item.full_name }}
+          {% elif section.slug == 'vehicles' or section.slug == 'snapshots' or section.slug == 'logs' or section.slug == 'blacklist' %}
+            {{ item.plate_number }}
+          {% elif section.slug == 'videos' %}
+            {{ item.source_filename }}
+          {% elif section.slug == 'alerts' %}
+            {{ item.get_camera_role_display }}
+          {% endif %}
+        </p>
+        <p class="text-xs text-slate-500 truncate mt-1">
+          {% if section.slug == 'residents' %}{{ item.address|default:'—' }}
+          {% elif section.slug == 'vehicles' %}{{ item.resident.full_name|default:'—' }} · {{ item.get_vehicle_type_display }}
+          {% elif section.slug == 'snapshots' or section.slug == 'logs' %}{{ item.get_camera_role_display }} · {{ item.get_status_display }}
+          {% elif section.slug == 'videos' %}{{ item.get_camera_role_display }}
+          {% elif section.slug == 'alerts' %}{{ item.reason }}
+          {% elif section.slug == 'blacklist' %}{{ item.get_tag_display }} · {{ item.reason }}
+          {% elif section.slug == 'visitors' %}{{ item.plate_number|default:'No plate' }} · Host: {{ item.host_name|default:'—' }}
+          {% endif %}
+        </p>
+        <p class="text-[11px] text-slate-400 mt-2">Archived {{ item.archived_at|date:"M d, Y h:i A" }}</p>
+        <div class="flex gap-2 mt-3">
+          <form method="post" action="{% url 'archive:restore' section.slug item.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-xs bg-emerald-100 hover:bg-emerald-200 border-0 text-emerald-700">
+              <i class="fa fa-rotate-left mr-1"></i> Restore
+            </button>
+          </form>
+          <form method="post" action="{% url 'archive:permanent_delete' section.slug item.pk %}" data-permanent-delete>
+            {% csrf_token %}
+            <button type="submit" class="btn btn-xs bg-red-100 hover:bg-red-200 border-0 text-red-700">
+              <i class="fa fa-trash mr-1"></i> Delete
+            </button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400">No archived {{ section.label|lower }}.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+
 {% for section in sections %}
-<div id="archive-tab-{{ section.slug }}" class="archive-tab-panel {% if not forloop.first %}hidden{% endif %}">
+<div id="archive-tab-{{ section.slug }}" class="archive-tab-panel hidden">
   <div class="page-card">
     <div class="overflow-x-auto">
       <table class="table table-sm">

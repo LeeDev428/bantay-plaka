@@ -114,14 +114,12 @@
               >
                 <i class="fa fa-pen text-xs"></i>
               </button>
-              <form method="post" action="{% url 'visitor_archive' visitor.pk %}"
-                    onsubmit="return confirm('Archive visitor {{ visitor.full_name|escapejs }}? The entry will remain available in Archive.');">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Archive">
-                  <i class="fa fa-box-archive text-xs"></i>
-                </button>
-              </form>
+              <button type="button" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600"
+                      title="Archive" data-archive-visitor
+                      data-archive-url="{% url 'visitor_archive' visitor.pk %}"
+                      data-visitor-name="{{ visitor.full_name|escapejs }}">
+                <i class="fa fa-box-archive text-xs"></i>
+              </button>
             </div>
           </td>
         </tr>
@@ -150,6 +148,31 @@
       </div>
     </div>
   {% endif %}
+</div>
+
+<!-- Archive confirmation modal -->
+<div id="visitor-archive-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeVisitorArchiveModal()"></div>
+  <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
+    <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+      <i class="fa fa-box-archive text-amber-700"></i>
+    </div>
+    <h3 class="text-lg font-bold text-slate-800 mb-1">Archive visitor?</h3>
+    <p class="text-sm text-slate-500 mb-6">
+      <span id="visitor-archive-name" class="font-semibold text-slate-700"></span>
+      will be moved to Archive and can be restored later.
+    </p>
+    <form id="visitor-archive-form" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeVisitorArchiveModal()">Cancel</button>
+        <button type="submit" class="btn bg-amber-100 hover:bg-amber-200 border-0 text-amber-800">
+          <i class="fa fa-box-archive mr-1"></i> Archive
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- Create Modal -->
@@ -262,6 +285,9 @@
   const openCreateBtn = document.getElementById('open-visitor-create-modal');
   const editModal = document.getElementById('visitor-edit-modal');
   const editForm  = document.getElementById('visitor-edit-form');
+  const archiveModal = document.getElementById('visitor-archive-modal');
+  const archiveForm = document.getElementById('visitor-archive-form');
+  const archiveName = document.getElementById('visitor-archive-name');
 
   const firstName            = document.getElementById('edit-first-name');
   const lastName             = document.getElementById('edit-last-name');
@@ -321,10 +347,25 @@
 
   if (vehicleType) vehicleType.addEventListener('change', syncVehicleTypeOther);
 
+  window.closeVisitorArchiveModal = function () {
+    archiveModal?.classList.add('hidden');
+    archiveModal?.classList.remove('flex');
+  };
+
+  document.querySelectorAll('[data-archive-visitor]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      archiveForm.action = btn.dataset.archiveUrl || '';
+      archiveName.textContent = btn.dataset.visitorName || 'This visitor';
+      archiveModal.classList.remove('hidden');
+      archiveModal.classList.add('flex');
+    });
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     window.closeVisitorCreateModal();
     window.closeVisitorEditModal();
+    window.closeVisitorArchiveModal();
     document.getElementById('visitors-export-modal')?.classList.add('hidden');
     document.getElementById('visitors-export-modal')?.classList.remove('flex');
   });

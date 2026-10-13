@@ -14,14 +14,26 @@ PLATE_UNIQUE_SLUGS = {"vehicles", "blacklist"}
 @admin_required
 def archive_list(request):
     sections = []
+    total_count = 0
     for slug, config in ARCHIVE_REGISTRY.items():
         qs = config["model"].archived_objects.order_by("-archived_at")
         if slug == "logs":
             qs = qs.filter(Q(snapshot__isnull=True) | Q(snapshot=""))
         elif slug == "snapshots":
             qs = qs.filter(snapshot__isnull=False).exclude(snapshot="")
-        sections.append({"slug": slug, "label": config["label"], "items": qs})
-    return render(request, "archive/archive_list.html", {"sections": sections})
+        count = qs.count()
+        total_count += count
+        sections.append({
+            "slug": slug,
+            "label": config["label"],
+            "items": qs,
+            "recent_items": qs[:5],
+            "count": count,
+        })
+    return render(request, "archive/archive_list.html", {
+        "sections": sections,
+        "total_count": total_count,
+    })
 
 
 @admin_required

@@ -1,3 +1,4 @@
+import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -20,6 +21,9 @@ class ArchiveListTests(SimpleTestCase):
 
             def exclude(self, **_kwargs):
                 return self
+
+            def none(self):
+                return ArchivedQuerySet(0)
 
             def count(self):
                 return self.item_count
@@ -57,3 +61,64 @@ class ArchiveListTests(SimpleTestCase):
             [section['recent_items'] for section in context['sections']],
             [('recent-items', slice(None, 5, None))] * 2,
         )
+
+    def test_search_category_and_archived_date_filters_apply_to_sections(self):
+        class ArchivedQuerySet:
+            def __init__(self, count):
+                self.item_count = count
+                self.filters = []
+
+            def order_by(self, *_args):
+                return self
+
+            def filter(self, *args, **kwargs):
+                self.filters.append((args, kwargs))
+                return self
+
+            def exclude(self, **_kwargs):
+                return self
+
+            def none(self):
+                return ArchivedQuerySet(0)
+
+            def count(self):
+                return self.item_count
+
+            def __getitem__(self, key):
+                return ('recent-items', key)
+
+        visitors = ArchivedQuerySet(4)
+        videos = ArchivedQuerySet(3)
+        registry = {
+            'visitors': {
+                'model': SimpleNamespace(archived_objects=visitors),
+                'label': 'Visitors',
+            },
+            'videos': {
+                'model': SimpleNamespace(archived_objects=videos),
+                'label': 'Recorded Videos',
+            },
+        }
+        request = RequestFactory().get(
+            '/archive/?q=Smith&category=visitors&date_from=2026-10-01&date_to=2026-10-12'
+        )
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            is_admin=Mock(return_value=True),
+        )
+
+        with (
+            patch('apps.archive.views.ARCHIVE_REGISTRY', registry),
+            patch('apps.archive.views.render', return_value='rendered') as render,
+        ):
+            archive_list(request)
+
+        context = render.call_args.args[2]
+        self.assertEqual(context['query'], 'Smith')
+        self.assertEqual(context['category'], 'visitors')
+        self.assertEqual(context['date_from'], '2026-10-01')
+        self.assertEqual(context['date_to'], '2026-10-12')
+        self.assertEqual(context['total_count'], 4)
+        date_filters = [kwargs for _args, kwargs in visitors.filters if kwargs]
+        self.assertIn({'archived_at__date__gte': datetime.date(2026, 10, 1)}, date_filters)
+        self.assertIn({'archived_at__date__lte': datetime.date(2026, 10, 12)}, date_filters)

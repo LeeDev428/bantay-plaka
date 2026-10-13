@@ -139,33 +139,54 @@
             {% endif %}
           </td>
           <td>
-            {% for v in resident.vehicles.all %}
-              <div class="flex items-center gap-2 mb-1">
-                <span class="font-mono text-xs font-semibold px-2 py-0.5 bg-slate-100 rounded text-slate-700">{{ v.plate_number }}</span>
-                <span class="text-xs text-slate-400">{{ v.color }} {{ v.make }} {{ v.model }}</span>
-                {% if user.is_admin %}
-                <form method="post" action="{% url 'vehicle_delete' v.pk %}" class="inline" data-delete-vehicle data-plate="{{ v.plate_number }}">
-                  {% csrf_token %}
-                  <button type="submit" class="text-amber-500 hover:text-amber-700 transition-colors">
-                    <i class="fa fa-xmark text-xs"></i>
-                  </button>
-                </form>
-                {% endif %}
+            <div class="flex flex-col items-start gap-1">
+              <span class="text-xs text-slate-500">
+                {{ resident.vehicles.all|length }} vehicle{% if resident.vehicles.all|length != 1 %}s{% endif %}
+              </span>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                data-open-resident-vehicles
+                data-resident-id="{{ resident.pk }}"
+                data-resident-name="{{ resident.full_name }}"
+              >
+                <i class="fa fa-car-side text-[10px]"></i> See Vehicles
+              </button>
+            </div>
+            <template id="resident-vehicles-{{ resident.pk }}">
+              <div class="space-y-3">
+                {% for v in resident.vehicles.all %}
+                <article class="rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="font-mono font-semibold text-slate-800">{{ v.plate_number }}</p>
+                    <p class="text-sm text-slate-600">{{ v.get_vehicle_type_display }}</p>
+                    <p class="text-xs text-slate-500 mt-1">
+                      Brand / Model: {{ v.make|default:'—' }}{% if v.model %} {{ v.model }}{% endif %}
+                      <span class="mx-1">·</span>
+                      Color: {{ v.color|default:'—' }}
+                    </p>
+                    {% if v.is_approved %}
+                      <span class="inline-flex mt-2 items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Approved</span>
+                    {% elif v.approval_notes %}
+                      <span class="inline-flex mt-2 items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Not Approved</span>
+                    {% else %}
+                      <span class="inline-flex mt-2 items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pending Approval</span>
+                    {% endif %}
+                  </div>
+                  {% if user.is_admin %}
+                  <form method="post" action="{% url 'vehicle_delete' v.pk %}" data-delete-vehicle data-plate="{{ v.plate_number }}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-700" title="Archive vehicle">
+                      <i class="fa fa-box-archive mr-1"></i> Archive
+                    </button>
+                  </form>
+                  {% endif %}
+                </article>
+                {% empty %}
+                <p class="text-sm text-slate-400 italic">No vehicles registered for this resident.</p>
+                {% endfor %}
               </div>
-            {% empty %}
-              <span class="text-xs text-slate-400 italic">No vehicles</span>
-            {% endfor %}
-            {% if user.is_admin %}
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1"
-              data-open-vehicle-modal
-              data-resident-id="{{ resident.pk }}"
-              data-resident-name="{{ resident.full_name }}"
-            >
-              <i class="fa fa-plus text-[10px]"></i> Add
-            </button>
-            {% endif %}
+            </template>
           </td>
           {% if user.is_admin %}
           <td>
@@ -304,6 +325,30 @@
   </div>
 </div>
 {% endif %}
+
+<div id="resident-vehicles-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeResidentVehiclesModal()"></div>
+  <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-slate-800">Resident Vehicles</h3>
+        <p id="resident-vehicles-name" class="text-xs text-slate-500"></p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeResidentVehiclesModal()" aria-label="Close">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+    <div id="resident-vehicles-content" class="px-6 py-5 overflow-y-auto"></div>
+    {% if user.is_admin %}
+    <div class="px-6 py-4 border-t border-slate-100 flex justify-between gap-2 shrink-0">
+      <button type="button" id="add-vehicle-from-list" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+        <i class="fa fa-plus mr-1"></i> Add Vehicle
+      </button>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="closeResidentVehiclesModal()">Close</button>
+    </div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -361,8 +406,11 @@
 (function () {
   const residentModal = document.getElementById('resident-modal');
   const vehicleModal  = document.getElementById('vehicle-modal');
+  const residentVehiclesModal = document.getElementById('resident-vehicles-modal');
+  const residentVehiclesContent = document.getElementById('resident-vehicles-content');
   const delModal      = document.getElementById('delete-resident-modal');
   const rejectModal   = document.getElementById('reject-resident-modal');
+  let activeVehiclesResident = null;
 
   window.closeResidentModal = () => residentModal?.classList.add('hidden') || residentModal?.classList.remove('flex');
   window.closeVehicleModal  = () => vehicleModal?.classList.add('hidden')  || vehicleModal?.classList.remove('flex');
@@ -375,14 +423,37 @@
     });
   }
 
-  document.querySelectorAll('[data-open-vehicle-modal]').forEach((btn) => {
+  window.closeResidentVehiclesModal = function () {
+    residentVehiclesModal?.classList.add('hidden');
+    residentVehiclesModal?.classList.remove('flex');
+  };
+
+  document.querySelectorAll('[data-open-resident-vehicles]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      document.getElementById('vehicle-resident-pk').value = btn.dataset.residentId || '';
-      document.getElementById('vehicle-modal-resident').textContent = 'Resident: ' + (btn.dataset.residentName || '');
+      activeVehiclesResident = {
+        id: btn.dataset.residentId || '',
+        name: btn.dataset.residentName || '',
+      };
+      const vehicleTemplate = document.getElementById('resident-vehicles-' + activeVehiclesResident.id);
+      if (!vehicleTemplate || !residentVehiclesContent || !residentVehiclesModal) return;
+      document.getElementById('resident-vehicles-name').textContent = activeVehiclesResident.name;
+      residentVehiclesContent.innerHTML = vehicleTemplate.innerHTML;
+      residentVehiclesModal.classList.remove('hidden');
+      residentVehiclesModal.classList.add('flex');
+    });
+  });
+
+  const addVehicleFromList = document.getElementById('add-vehicle-from-list');
+  if (addVehicleFromList) {
+    addVehicleFromList.addEventListener('click', () => {
+      if (!activeVehiclesResident || !vehicleModal) return;
+      document.getElementById('vehicle-resident-pk').value = activeVehiclesResident.id;
+      document.getElementById('vehicle-modal-resident').textContent = 'Resident: ' + activeVehiclesResident.name;
+      window.closeResidentVehiclesModal();
       vehicleModal.classList.remove('hidden');
       vehicleModal.classList.add('flex');
     });
-  });
+  }
 
   let activeDelForm = null;
   document.querySelectorAll('[data-delete-resident]').forEach((form) => {
@@ -399,14 +470,16 @@
 
   const delVehicleModal = document.getElementById('delete-vehicle-modal');
   let activeDelVehicleForm = null;
-  document.querySelectorAll('[data-delete-vehicle]').forEach((form) => {
-    form.querySelector('button').addEventListener('click', (e) => {
+  if (residentVehiclesContent) {
+    residentVehiclesContent.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-delete-vehicle] button');
+      if (!button) return;
       e.preventDefault();
-      activeDelVehicleForm = form;
-      document.getElementById('del-vehicle-plate').textContent = form.dataset.plate || 'this vehicle';
+      activeDelVehicleForm = button.closest('form');
+      document.getElementById('del-vehicle-plate').textContent = activeDelVehicleForm.dataset.plate || 'this vehicle';
       delVehicleModal.classList.remove('hidden');
     });
-  });
+  }
   document.getElementById('del-vehicle-cancel').addEventListener('click', () => { delVehicleModal.classList.add('hidden'); activeDelVehicleForm = null; });
   document.getElementById('del-vehicle-confirm').addEventListener('click', () => { activeDelVehicleForm?.submit(); delVehicleModal.classList.add('hidden'); });
   delVehicleModal.addEventListener('click', (e) => { if (e.target === delVehicleModal) { delVehicleModal.classList.add('hidden'); activeDelVehicleForm = null; } });
@@ -434,6 +507,7 @@
     if (e.key !== 'Escape') return;
     window.closeResidentModal();
     window.closeVehicleModal();
+    window.closeResidentVehiclesModal();
     delModal.classList.add('hidden');
     delVehicleModal.classList.add('hidden');
     rejectModal.classList.add('hidden');

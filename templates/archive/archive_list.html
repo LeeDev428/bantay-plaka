@@ -10,11 +10,45 @@
   </div>
 </div>
 
+<div class="page-card p-4 mb-4">
+  <form id="archive-filter-form" method="get" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label for="archive-search" class="block text-xs font-medium text-slate-500 mb-1">Search archived records</label>
+      <input id="archive-search" type="search" name="q" value="{{ query }}"
+             placeholder="Name, plate, filename, or details"
+             class="input input-bordered input-sm w-56 bg-white">
+    </div>
+    <div>
+      <label for="archive-category" class="block text-xs font-medium text-slate-500 mb-1">Category</label>
+      <select id="archive-category" name="category" class="select select-bordered select-sm bg-white">
+        <option value="">All categories</option>
+        {% for section in sections %}
+        <option value="{{ section.slug }}" {% if category == section.slug %}selected{% endif %}>{{ section.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="archive-date-from" class="block text-xs font-medium text-slate-500 mb-1">Archived from</label>
+      <input id="archive-date-from" type="date" name="date_from" value="{{ date_from }}"
+             class="input input-bordered input-sm bg-white">
+    </div>
+    <div>
+      <label for="archive-date-to" class="block text-xs font-medium text-slate-500 mb-1">Archived to</label>
+      <input id="archive-date-to" type="date" name="date_to" value="{{ date_to }}"
+             class="input input-bordered input-sm bg-white">
+    </div>
+    <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
+      <i class="fa fa-magnifying-glass mr-1"></i> Search
+    </button>
+    <a href="{% url 'archive:list' %}" class="btn btn-ghost btn-sm text-slate-500 whitespace-nowrap">Clear Search Filter</a>
+  </form>
+</div>
+
 <!-- Category tabs -->
 <div class="page-card p-2 mb-4">
   <div class="flex flex-wrap gap-1">
     <button type="button"
-      class="archive-tab-btn btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white"
+      class="archive-tab-btn btn btn-sm {% if not category %}bg-blue-600 hover:bg-blue-700 border-0 text-white{% else %}btn-ghost text-slate-500{% endif %}"
       data-tab-target="archive-tab-all"
       onclick="switchArchiveTab('all')">
       All
@@ -22,7 +56,7 @@
     </button>
     {% for section in sections %}
       <button type="button"
-        class="archive-tab-btn btn btn-sm btn-ghost text-slate-500"
+        class="archive-tab-btn btn btn-sm {% if category == section.slug %}bg-blue-600 hover:bg-blue-700 border-0 text-white{% else %}btn-ghost text-slate-500{% endif %}"
         data-tab-target="archive-tab-{{ section.slug }}"
         onclick="switchArchiveTab('{{ section.slug }}')">
         {{ section.label }}
@@ -32,7 +66,7 @@
   </div>
 </div>
 
-<div id="archive-tab-all" class="archive-tab-panel">
+<div id="archive-tab-all" class="archive-tab-panel {% if category %}hidden{% endif %}">
   {% for section in sections %}
   <section class="page-card p-4 mb-4">
     <div class="flex items-center justify-between gap-3 mb-3">
@@ -227,6 +261,14 @@
 {% block extra_scripts %}
 <script>
 function switchArchiveTab(activeSlug) {
+  const categoryFilter = document.getElementById('archive-category');
+  const filterForm = document.getElementById('archive-filter-form');
+  const selectedCategory = activeSlug === 'all' ? '' : activeSlug;
+  if (categoryFilter && categoryFilter.value !== selectedCategory) {
+    categoryFilter.value = selectedCategory;
+    filterForm?.requestSubmit();
+    return;
+  }
   document.querySelectorAll('.archive-tab-panel').forEach((panel) => {
     panel.classList.toggle('hidden', panel.id !== 'archive-tab-' + activeSlug);
   });

@@ -19,9 +19,9 @@
       </select>
     </div>
     <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
-      <i class="fa fa-filter mr-1"></i> Filter
+      <i class="fa fa-magnifying-glass mr-1"></i> Search
     </button>
-    <a href="{% url 'alert_gallery' %}" class="btn btn-ghost btn-sm text-slate-500">Clear</a>
+    <a href="{% url 'alert_gallery' %}" class="btn btn-ghost btn-sm text-slate-500 whitespace-nowrap">Clear Search Filter</a>
   </form>
 </div>
 
@@ -52,6 +52,14 @@
               class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
         <i class="fa fa-video"></i> Review recorded video
       </button>
+      <form method="post" action="{% url 'alert_archive' alert.pk %}"
+            onsubmit="return confirm('Archive this alert?');">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button type="submit" class="btn btn-xs bg-amber-100 hover:bg-amber-200 border-0 text-amber-800">
+          <i class="fa fa-box-archive mr-1"></i> Archive
+        </button>
+      </form>
     </div>
   </article>
   {% endfor %}

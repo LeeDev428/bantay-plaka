@@ -229,6 +229,41 @@ def snapshot_gallery(request):
     })
 
 
+def _archive_media_record(request, model, pk, label, redirect_name, **filters):
+    if request.user.is_resident():
+        messages.error(request, 'Access denied.')
+        return redirect('resident_dashboard')
+
+    if request.method == 'POST':
+        item = get_object_or_404(model, pk=pk, **filters)
+        item.archive(user=request.user)
+        messages.success(request, f'{label} archived.')
+    return redirect(request.POST.get('next') or redirect_name)
+
+
+@login_required
+def snapshot_archive(request, pk):
+    return _archive_media_record(
+        request, VehicleLog, pk, 'Snapshot', 'snapshot_gallery',
+        snapshot__isnull=False,
+        snapshot__gt='',
+    )
+
+
+@login_required
+def video_archive(request, pk):
+    return _archive_media_record(
+        request, VideoRecording, pk, 'Recorded video', 'video_gallery',
+    )
+
+
+@login_required
+def alert_archive(request, pk):
+    return _archive_media_record(
+        request, UnrecognizedPlateAlert, pk, 'Alert', 'alert_gallery',
+    )
+
+
 @login_required
 def alert_gallery(request):
     if request.user.is_resident():
@@ -277,6 +312,7 @@ def video_gallery(request):
             if isinstance(event, dict) and event.get('plate')
         ]
         recordings.append({
+            'id': recording.pk,
             'name': recording.source_filename,
             'role': recording.camera_role,
             'role_label': recording.get_camera_role_display(),

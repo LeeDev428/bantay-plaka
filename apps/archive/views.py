@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.accounts.views import admin_required
@@ -15,6 +16,10 @@ def archive_list(request):
     sections = []
     for slug, config in ARCHIVE_REGISTRY.items():
         qs = config["model"].archived_objects.order_by("-archived_at")
+        if slug == "logs":
+            qs = qs.filter(Q(snapshot__isnull=True) | Q(snapshot=""))
+        elif slug == "snapshots":
+            qs = qs.filter(snapshot__isnull=False).exclude(snapshot="")
         sections.append({"slug": slug, "label": config["label"], "items": qs})
     return render(request, "archive/archive_list.html", {"sections": sections})
 

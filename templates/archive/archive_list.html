@@ -44,10 +44,26 @@
               <th class="font-semibold">Plate</th>
               <th class="font-semibold">Camera</th>
               <th class="font-semibold">Timestamp</th>
+            {% elif section.slug == 'snapshots' %}
+              <th class="font-semibold">Plate</th>
+              <th class="font-semibold">Camera</th>
+              <th class="font-semibold">Timestamp</th>
+            {% elif section.slug == 'videos' %}
+              <th class="font-semibold">Filename</th>
+              <th class="font-semibold">Camera</th>
+              <th class="font-semibold">Started At</th>
+            {% elif section.slug == 'alerts' %}
+              <th class="font-semibold">Camera</th>
+              <th class="font-semibold">Reason</th>
+              <th class="font-semibold">Created At</th>
             {% elif section.slug == 'blacklist' %}
               <th class="font-semibold">Plate</th>
               <th class="font-semibold">Tag</th>
               <th class="font-semibold">Reason</th>
+            {% elif section.slug == 'visitors' %}
+              <th class="font-semibold">Name</th>
+              <th class="font-semibold">Plate</th>
+              <th class="font-semibold">Host</th>
             {% endif %}
             <th class="font-semibold">Archived At</th>
             <th class="font-semibold">Archived By</th>
@@ -69,6 +85,18 @@
               <td class="font-mono font-semibold text-slate-800">{{ item.plate_number }}</td>
               <td class="text-sm text-slate-500">{{ item.get_camera_role_display }}</td>
               <td class="text-xs text-slate-400">{{ item.local_time|date:"M d, Y h:i:s A" }}</td>
+            {% elif section.slug == 'snapshots' %}
+              <td class="font-mono font-semibold text-slate-800">{{ item.plate_number }}</td>
+              <td class="text-sm text-slate-500">{{ item.get_camera_role_display }}</td>
+              <td class="text-xs text-slate-400">{{ item.local_time|date:"M d, Y h:i:s A" }}</td>
+            {% elif section.slug == 'videos' %}
+              <td class="font-mono text-sm text-slate-700 break-all">{{ item.source_filename }}</td>
+              <td class="text-sm text-slate-500">{{ item.get_camera_role_display }}</td>
+              <td class="text-xs text-slate-400">{{ item.started_at|default:item.uploaded_at|date:"M d, Y h:i A" }}</td>
+            {% elif section.slug == 'alerts' %}
+              <td class="text-sm text-slate-500">{{ item.get_camera_role_display }}</td>
+              <td class="text-sm text-slate-600">{{ item.reason }}</td>
+              <td class="text-xs text-slate-400">{{ item.created_at|date:"M d, Y h:i:s A" }}</td>
             {% elif section.slug == 'blacklist' %}
               <td class="font-mono font-semibold text-slate-800">{{ item.plate_number }}</td>
               <td>
@@ -79,6 +107,10 @@
                 {% endif %}
               </td>
               <td class="text-sm text-slate-600">{{ item.reason|default:'—' }}</td>
+            {% elif section.slug == 'visitors' %}
+              <td class="font-semibold text-slate-800">{{ item.full_name }}</td>
+              <td class="font-mono text-sm text-slate-600">{{ item.plate_number|default:'—' }}</td>
+              <td class="text-sm text-slate-600">{{ item.host_name|default:'—' }}</td>
             {% endif %}
             <td class="text-xs text-slate-400">{{ item.archived_at|date:"M d, Y h:i A" }}</td>
             <td class="text-xs text-slate-500">{{ item.archived_by.get_full_name|default:'—' }}</td>

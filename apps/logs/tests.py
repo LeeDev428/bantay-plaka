@@ -9,8 +9,18 @@ from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
 from unittest.mock import Mock, patch
 
-from apps.logs.views import alert_gallery, recording_download, recording_file, snapshot_gallery, video_gallery
-from apps.logs.models import VehicleLog, VideoRecording
+from apps.logs.views import (
+    alert_archive,
+    alert_gallery,
+    recording_download,
+    recording_file,
+    snapshot_archive,
+    snapshot_gallery,
+    video_archive,
+    video_gallery,
+)
+from apps.logs.models import UnrecognizedPlateAlert, VehicleLog, VideoRecording
+from apps.archive.registry import ARCHIVE_REGISTRY
 
 
 class VideoGalleryTests(SimpleTestCase):
@@ -66,9 +76,11 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertContains(response, 'data-media-preview')
         self.assertContains(response, 'media-preview-modal')
         self.assertContains(response, 'Play recording')
+        self.assertNotContains(response, reverse('video_archive', args=[1]))
 
     def test_video_gallery_renders_cloud_recordings(self):
         cloud_recording = SimpleNamespace(
+            pk=12,
             source_filename='hosted_entry.mp4',
             camera_role='ENTRY_CAM',
             get_camera_role_display=lambda: 'Entry Camera',
@@ -94,6 +106,7 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertContains(response, 'https://media.example/hosted_entry.mp4')
         self.assertContains(response, 'data-preview-type="video"')
         self.assertContains(response, 'media-preview-modal')
+        self.assertContains(response, reverse('video_archive', args=[12]))
 
     def test_recording_file_serves_only_mp4_in_recordings_directory(self):
         recording = self.recordings_dir / 'clip.mp4'
@@ -171,6 +184,7 @@ class VideoGalleryTests(SimpleTestCase):
 
     def test_alert_gallery_renders_snapshot_and_clip_links(self):
         alert = SimpleNamespace(
+            pk=14,
             snapshot=SimpleNamespace(url='https://media.example/alert.jpg'),
             recording=SimpleNamespace(video=SimpleNamespace(url='https://media.example/clip.mp4')),
             camera_role='ENTRY_CAM',
@@ -194,6 +208,7 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertContains(response, 'data-preview-type="image"')
         self.assertContains(response, 'data-preview-type="video"')
         self.assertContains(response, 'media-preview-modal')
+        self.assertContains(response, reverse('alert_archive', args=[14]))
         self.assertNotContains(response, 'target="_blank"')
 
     def test_snapshot_gallery_renders_uncropped_in_page_preview(self):
@@ -217,6 +232,7 @@ class VideoGalleryTests(SimpleTestCase):
                 return self.items[item]
 
         log = SimpleNamespace(
+            pk=13,
             snapshot=SimpleNamespace(url='https://media.example/plate.jpg'),
             plate_number='ABC1234',
             get_entry_type_display=lambda: 'Visitor',
@@ -235,6 +251,7 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertContains(response, 'data-media-preview')
         self.assertContains(response, 'object-contain')
         self.assertContains(response, 'media-preview-modal')
+        self.assertContains(response, reverse('snapshot_archive', args=[13]))
         self.assertNotContains(response, 'target="_blank"')
 
     @override_settings(
@@ -256,3 +273,80 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertEqual(build_url.call_args.kwargs['resource_type'], 'video')
         self.assertEqual(build_url.call_args.kwargs['format'], 'mp4')
         self.assertEqual(build_url.call_args.kwargs['video_codec'], 'h264')
+
+
+class MediaArchiveActionTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = SimpleNamespace(
+            is_authenticated=True,
+            is_resident=lambda: False,
+        )
+
+    def test_media_models_are_registered_in_archive_categories(self):
+        self.assertIs(ARCHIVE_REGISTRY['snapshots']['model'], VehicleLog)
+        self.assertIs(ARCHIVE_REGISTRY['videos']['model'], VideoRecording)
+        self.assertIs(ARCHIVE_REGISTRY['alerts']['model'], UnrecognizedPlateAlert)
+
+    def test_snapshot_archive_archives_associated_vehicle_log(self):
+        item = SimpleNamespace(archive=Mock())
+        request = self.factory.post(
+            '/logs/snapshots/13/archive/',
+            {'next': '/logs/snapshots/?camera=ENTRY_CAM'},
+        )
+        request.user = self.user
+
+        with (
+            patch('apps.logs.views.get_object_or_404', return_value=item) as get_item,
+            patch('apps.logs.views.messages.success'),
+        ):
+            response = snapshot_archive(request, 13)
+
+        get_item.assert_called_once_with(
+            VehicleLog, pk=13, snapshot__isnull=False, snapshot__gt='',
+        )
+        item.archive.assert_called_once_with(user=self.user)
+        self.assertEqual(response.url, '/logs/snapshots/?camera=ENTRY_CAM')
+
+    def test_video_archive_archives_database_recording(self):
+        item = SimpleNamespace(archive=Mock())
+        request = self.factory.post('/logs/videos/recordings/12/archive/')
+        request.user = self.user
+
+        with (
+            patch('apps.logs.views.get_object_or_404', return_value=item),
+            patch('apps.logs.views.messages.success'),
+        ):
+            response = video_archive(request, 12)
+
+        item.archive.assert_called_once_with(user=self.user)
+        self.assertEqual(response.url, '/logs/videos/')
+
+    def test_alert_archive_archives_alert_without_deleting_recording(self):
+        item = SimpleNamespace(archive=Mock())
+        request = self.factory.post('/logs/alerts/14/archive/')
+        request.user = self.user
+
+        with (
+            patch('apps.logs.views.get_object_or_404', return_value=item),
+            patch('apps.logs.views.messages.success'),
+        ):
+            response = alert_archive(request, 14)
+
+        item.archive.assert_called_once_with(user=self.user)
+        self.assertEqual(response.url, '/logs/alerts/')
+
+    def test_resident_cannot_archive_media(self):
+        self.user.is_resident = lambda: True
+        request = self.factory.post('/logs/alerts/14/archive/')
+        request.user = self.user
+
+        with (
+            patch('apps.logs.views.get_object_or_404') as get_item,
+            patch('apps.logs.views.messages.error') as error_message,
+        ):
+            response = alert_archive(request, 14)
+
+        get_item.assert_not_called()
+        error_message.assert_called_once_with(request, 'Access denied.')
+        self.assertEqual(response.url, '/dashboard/resident/')

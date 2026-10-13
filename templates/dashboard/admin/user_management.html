@@ -68,10 +68,10 @@
         </select>
       </div>
       <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
-        <i class="fa fa-filter mr-1"></i> Filter
+        <i class="fa fa-magnifying-glass mr-1"></i> Search
       </button>
       {% if q or role or status %}
-        <a href="{% url 'user_management' %}" class="btn btn-ghost btn-sm text-slate-500">Clear</a>
+        <a href="{% url 'user_management' %}" class="btn btn-ghost btn-sm text-slate-500 whitespace-nowrap">Clear Search Filter</a>
       {% endif %}
     </form>
   </div>

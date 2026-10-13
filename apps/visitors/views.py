@@ -147,14 +147,15 @@ def visitor_edit(request, pk):
 
 
 @login_required
-def visitor_delete(request, pk):
+def visitor_archive(request, pk):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    _ = get_object_or_404(Visitor, pk=pk)
     if request.method == 'POST':
-        messages.warning(request, 'Delete is disabled. Visitor entry was retained.')
+        visitor = get_object_or_404(Visitor, pk=pk)
+        visitor.archive(user=request.user)
+        messages.success(request, f'Visitor {visitor.full_name} archived.')
     return redirect(request.POST.get('next', 'visitor_list'))
 
 
@@ -507,7 +508,7 @@ def blacklist_cancel(request, pk):
 
 
 @login_required
-def blacklist_delete(request, pk):
+def blacklist_archive(request, pk):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')

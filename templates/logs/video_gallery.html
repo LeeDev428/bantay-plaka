@@ -25,9 +25,9 @@
       </select>
     </div>
     <button type="submit" class="btn btn-sm bg-blue-600 hover:bg-blue-700 border-0 text-white">
-      <i class="fa fa-filter mr-1"></i> Filter
+      <i class="fa fa-magnifying-glass mr-1"></i> Search
     </button>
-    <a href="{% url 'video_gallery' %}" class="btn btn-ghost btn-sm text-slate-500">Clear</a>
+    <a href="{% url 'video_gallery' %}" class="btn btn-ghost btn-sm text-slate-500 whitespace-nowrap">Clear Search Filter</a>
   </form>
 </div>
 
@@ -62,6 +62,16 @@
         <a href="{% url 'recording_download' recording.name %}" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700">
           <i class="fa fa-download"></i> Download video
         </a>
+        {% if recording.is_cloud %}
+        <form method="post" action="{% url 'video_archive' recording.id %}" class="mt-2"
+              onsubmit="return confirm('Archive this recorded video?');">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="btn btn-xs bg-amber-100 hover:bg-amber-200 border-0 text-amber-800">
+            <i class="fa fa-box-archive mr-1"></i> Archive
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
   {% endfor %}

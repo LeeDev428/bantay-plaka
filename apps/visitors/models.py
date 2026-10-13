@@ -3,7 +3,7 @@ from apps.accounts.models import User
 from apps.core.models import Archivable
 
 
-class Visitor(models.Model):
+class Visitor(Archivable, models.Model):
     TYPE_VISITOR = 'VISITOR'
     TYPE_VERIFIED = 'VERIFIED_VISITOR'
     VISITOR_TYPE_CHOICES = [

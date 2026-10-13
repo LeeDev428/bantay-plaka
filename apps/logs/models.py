@@ -104,7 +104,7 @@ class CameraFeedSnapshot(models.Model):
         return f'{self.camera_role} @ {self.updated_at:%Y-%m-%d %H:%M:%S}'
 
 
-class VideoRecording(models.Model):
+class VideoRecording(Archivable, models.Model):
     CAMERA_ROLE_CHOICES = [
         (VehicleLog.CAMERA_ROLE_ENTRY, 'Entry Camera'),
         (VehicleLog.CAMERA_ROLE_EXIT, 'Exit Camera'),
@@ -129,7 +129,7 @@ class VideoRecording(models.Model):
         return f'{self.source_filename} ({self.camera_role})'
 
 
-class UnrecognizedPlateAlert(models.Model):
+class UnrecognizedPlateAlert(Archivable, models.Model):
     recording = models.OneToOneField(
         VideoRecording,
         on_delete=models.CASCADE,

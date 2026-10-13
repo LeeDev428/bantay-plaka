@@ -11,6 +11,7 @@ from django.shortcuts import redirect
 from django.shortcuts import render
 from django.utils import timezone
 
+from apps.export_helpers import build_export_chart_data
 from apps.logs.models import VehicleLog
 from apps.logs.services import get_active_blacklist_map
 
@@ -237,6 +238,7 @@ def export_pdf(request):
         highlight_fn=lambda r: bool(bl_map.get((r[0] or '').upper())),
         mono_col_idx=0,
         date_from=date_from, date_to=date_to,
+        chart_data=build_export_chart_data(rows, 2, 6, 'Vehicle Logs by Status'),
     )
 
 
@@ -298,6 +300,7 @@ def export_excel(request):
             ('Blacklisted Hits', sum(1 for r in rows if r[7])),
         ],
         date_from=date_from, date_to=date_to,
+        chart_data=build_export_chart_data(rows, 2, 10, 'Vehicle Logs by Status'),
     )
 
 

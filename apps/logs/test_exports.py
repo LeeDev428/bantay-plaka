@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.test import RequestFactory, SimpleTestCase
 from openpyxl import load_workbook
 
+from apps.export_helpers import build_export_chart_data
 from apps.logs.export_views import export_logs_excel, export_logs_pdf
 
 
@@ -77,6 +78,23 @@ class VehicleLogExportChartTests(SimpleTestCase):
         request = self.factory.get(path)
         request.user = self.user
         return request
+
+    def test_shared_chart_data_counts_categories_and_days(self):
+        chart_data = build_export_chart_data(
+            [
+                ['Admin', '2026-10-10'],
+                ['Guard', '2026-10-10'],
+                ['Guard', '2026-10-11'],
+                ['—', '—'],
+            ],
+            0,
+            1,
+            'Users by Role',
+        )
+
+        self.assertEqual(chart_data['category'], [('Admin', 1), ('Guard', 2)])
+        self.assertEqual(chart_data['category_title'], 'Users by Role')
+        self.assertEqual(chart_data['daily'], [('2026-10-10', 2), ('2026-10-11', 1)])
 
     def test_excel_export_includes_both_charts(self):
         response = export_logs_excel(self._request('/logs/export/excel/'))

@@ -10,7 +10,7 @@ from apps.visitors.models import Visitor, BlacklistEntry
 from apps.visitors.forms import VisitorForm, BlacklistEntryForm, VisitorEditForm
 from apps.logs.models import VehicleLog
 from apps.logs.services import broadcast_log
-from apps.export_helpers import build_excel_response, build_pdf_response
+from apps.export_helpers import build_excel_response, build_export_chart_data, build_pdf_response
 
 
 def _is_blacklisted(plate_number: str) -> bool:
@@ -214,6 +214,7 @@ def visitor_export_excel(request):
             ('Verified Visitor', sum(1 for r in rows if r[2] == 'Verified Visitor')),
         ],
         date_from=date_q,
+        chart_data=build_export_chart_data(rows, 2, 7, 'Visitors by Type'),
     )
 
 
@@ -259,6 +260,7 @@ def visitor_export_pdf(request):
             timezone.localtime(visitor.created_at).strftime('%Y-%m-%d %H:%M:%S') if visitor.created_at else '—',
         ])
 
+    chart_data = build_export_chart_data(rows, 1, 5, 'Visitors by Type')
     return build_pdf_response(
         'bantayplaka_visitors', 'Bantay Plaka — Visitors Report',
         headers=['Name', 'Type', 'Plate', 'Purpose', 'Host', 'Timestamp'],
@@ -266,6 +268,7 @@ def visitor_export_pdf(request):
         rows=rows,
         mono_col_idx=2,
         date_from=date_q,
+        chart_data=chart_data,
     )
 
 
@@ -324,6 +327,7 @@ def blacklist_export_excel(request):
             ('High Risk', sum(1 for r in rows if r[2] == 'High Risk')),
             ('Watchlist', sum(1 for r in rows if r[2] == 'Watchlist')),
         ],
+        chart_data=build_export_chart_data(rows, 2, 7, 'Blacklist by Risk Tag'),
     )
 
 
@@ -367,6 +371,7 @@ def blacklist_export_pdf(request):
             timezone.localtime(entry.created_at).strftime('%Y-%m-%d %H:%M:%S') if entry.created_at else '—',
         ])
 
+    chart_data = build_export_chart_data(rows, 1, 6, 'Blacklist by Risk Tag')
     return build_pdf_response(
         'bantayplaka_blacklist', 'Bantay Plaka — Blacklist Report',
         headers=['Plate', 'Tag', 'Reason', 'Remarks', 'Status', 'Created By', 'Created At'],
@@ -374,6 +379,7 @@ def blacklist_export_pdf(request):
         rows=rows,
         mono_col_idx=0,
         highlight_fn=lambda r: r[1] == 'High Risk' and r[4] == 'Active',
+        chart_data=chart_data,
     )
 
 

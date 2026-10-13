@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from apps.accounts.views import admin_required
 from apps.residents.models import Resident, Vehicle
-from apps.export_helpers import build_excel_response, build_pdf_response
+from apps.export_helpers import build_excel_response, build_export_chart_data, build_pdf_response
 
 
 def _resident_rows(qs):
@@ -42,6 +42,7 @@ def export_residents_excel(request):
             ('Not Approved', sum(1 for r in rows if r[9] == 'Not Approved')),
             ('With Vehicles', sum(1 for r in rows if r[10] != '—')),
         ],
+        chart_data=build_export_chart_data(rows, 9, 11, 'Residents by Approval Status'),
     )
 
 
@@ -49,11 +50,13 @@ def export_residents_excel(request):
 def export_residents_pdf(request):
     qs = Resident.objects.prefetch_related('vehicles').order_by('last_name', 'first_name')
     rows = _resident_rows(qs)
+    pdf_rows = [[r[1], r[2], r[3], r[6], r[7], r[8], r[9], r[10], r[11]] for r in rows]
     return build_pdf_response(
         'bantayplaka_residents', 'Bantay Plaka — Residents Directory',
-        headers=['Full Name', 'Sex', 'Birth Date', 'Address', 'Contact', 'Valid ID', 'Status', 'Vehicles'],
-        col_widths_mm=[46, 14, 20, 46, 26, 28, 18, 32],
-        rows=[[r[1], r[2], r[3], r[6], r[7], r[8], r[9], r[10]] for r in rows],
+        headers=['Full Name', 'Sex', 'Birth Date', 'Address', 'Contact', 'Valid ID', 'Status', 'Vehicles', 'Registered'],
+        col_widths_mm=[42, 12, 18, 42, 24, 25, 17, 29, 20],
+        rows=pdf_rows,
+        chart_data=build_export_chart_data(pdf_rows, 6, 8, 'Residents by Approval Status'),
     )
 
 
@@ -85,6 +88,7 @@ def export_vehicles_excel(request):
             ('Approved', sum(1 for r in rows if r[7] == 'Approved')),
             ('Pending',  sum(1 for r in rows if r[7] == 'Pending')),
         ],
+        chart_data=build_export_chart_data(rows, 3, 9, 'Vehicles by Type'),
     )
 
 
@@ -92,12 +96,14 @@ def export_vehicles_excel(request):
 def export_vehicles_pdf(request):
     qs = Vehicle.objects.select_related('resident', 'approved_by').order_by('plate_number')
     rows = _vehicle_rows(qs)
+    pdf_rows = [[r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[9]] for r in rows]
     return build_pdf_response(
         'bantayplaka_vehicles', 'Bantay Plaka — Registered Vehicles',
         headers=['Plate', 'Resident', 'Type', 'Make', 'Model', 'Color', 'Status', 'Date'],
         col_widths_mm=[28, 46, 20, 22, 22, 18, 18, 22],
-        rows=[[r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[9]] for r in rows],
+        rows=pdf_rows,
         mono_col_idx=0,
+        chart_data=build_export_chart_data(pdf_rows, 2, 7, 'Vehicles by Type'),
     )
 
 
@@ -120,6 +126,7 @@ def export_approvals_excel(request):
         headers=['#', 'Plate', 'Resident', 'Type', 'Make', 'Model', 'Color', 'Submitted'],
         col_widths=[5, 14, 28, 13, 16, 16, 14, 18],
         rows=rows, mono_cols={2}, center_cols={1, 4, 7, 8},
+        chart_data=build_export_chart_data(rows, 3, 7, 'Pending Vehicles by Type'),
     )
 
 
@@ -133,4 +140,10 @@ def export_approvals_pdf(request):
         col_widths_mm=[28, 52, 22, 24, 24, 20, 30],
         rows=[[r[1], r[2], r[3], r[4], r[5], r[6], r[7]] for r in rows],
         mono_col_idx=0,
+        chart_data=build_export_chart_data(
+            [[r[1], r[2], r[3], r[4], r[5], r[6], r[7]] for r in rows],
+            2,
+            6,
+            'Pending Vehicles by Type',
+        ),
     )

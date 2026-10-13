@@ -163,7 +163,7 @@
       </div>
       <div class="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-500 flex gap-2">
         <i class="fa fa-circle-info mt-0.5 shrink-0 text-slate-400"></i>
-        <span>Leave dates blank to export all records. Excel includes a Summary sheet.</span>
+        <span>Leave dates blank to export all records. Excel and PDF include visual charts.</span>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex flex-col items-center gap-2 text-center">
@@ -172,7 +172,7 @@
           </div>
           <div>
             <p class="text-sm font-semibold text-slate-700">Excel</p>
-            <p class="text-[11px] text-slate-400">.xlsx with summary sheet</p>
+            <p class="text-[11px] text-slate-400">.xlsx with summary and charts</p>
           </div>
           <a id="rep-excel-btn" href="{% url 'report_export_excel' %}"
             class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white w-full mt-1">
@@ -185,7 +185,7 @@
           </div>
           <div>
             <p class="text-sm font-semibold text-slate-700">PDF</p>
-            <p class="text-[11px] text-slate-400">Landscape A4 report</p>
+            <p class="text-[11px] text-slate-400">Landscape A4 report with charts</p>
           </div>
           <a id="rep-pdf-btn" href="{% url 'report_export_pdf' %}"
             class="btn btn-sm bg-red-600 hover:bg-red-700 border-0 text-white w-full mt-1">

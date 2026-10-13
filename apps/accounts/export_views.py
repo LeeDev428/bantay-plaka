@@ -1,7 +1,7 @@
 """apps/accounts/export_views.py"""
 from apps.accounts.models import User
 from apps.accounts.views import admin_required
-from apps.export_helpers import build_excel_response, build_pdf_response
+from apps.export_helpers import build_excel_response, build_export_chart_data, build_pdf_response
 
 
 def _user_rows(qs):
@@ -33,6 +33,7 @@ def export_users_excel(request):
             ('Active',  sum(1 for r in rows if r[6] == 'Active')),
             ('Inactive',sum(1 for r in rows if r[6] == 'Inactive')),
         ],
+        chart_data=build_export_chart_data(rows, 4, 7, 'Users by Role'),
     )
 
 
@@ -40,9 +41,11 @@ def export_users_excel(request):
 def export_users_pdf(request):
     qs = User.objects.exclude(role=User.ROLE_RESIDENT).order_by('role', 'last_name')
     rows = _user_rows(qs)
+    pdf_rows = [[r[1], r[2], r[3], r[4], r[5], r[6], r[7]] for r in rows]
     return build_pdf_response(
         'bantayplaka_users', 'Bantay Plaka — User Management',
         headers=['Full Name', 'Username', 'Email', 'Role', 'Contact', 'Status', 'Date Joined'],
         col_widths_mm=[46, 26, 48, 18, 26, 16, 20],
-        rows=[[r[1], r[2], r[3], r[4], r[5], r[6], r[7]] for r in rows],
+        rows=pdf_rows,
+        chart_data=build_export_chart_data(pdf_rows, 3, 6, 'Users by Role'),
     )

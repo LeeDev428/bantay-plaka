@@ -7,6 +7,8 @@ Drop this file anywhere and import directly — no Django app dependency.
 from django.http import HttpResponse
 from django.utils import timezone
 import math
+from collections import Counter
+from datetime import date
 
 NAVY  = '1E3A5F'
 BLUE  = '2563EB'
@@ -15,6 +17,31 @@ WHITE = 'FFFFFF'
 REDBG = 'FEE2E2'
 SLATE = '334155'
 LIGHT = 'BFDBFE'
+
+
+def build_export_chart_data(rows, category_index, date_index, category_title):
+    category_counts = Counter()
+    daily_counts = Counter()
+
+    for row in rows:
+        if category_index < len(row):
+            category = str(row[category_index]).strip()
+            if category and category not in {'—', '-', 'N/A'}:
+                category_counts[category] += 1
+
+        if date_index is not None and date_index < len(row):
+            date_value = str(row[date_index]).strip()[:10]
+            try:
+                day = date.fromisoformat(date_value).isoformat()
+            except ValueError:
+                continue
+            daily_counts[day] += 1
+
+    return {
+        'category': sorted(category_counts.items()),
+        'category_title': category_title,
+        'daily': sorted(daily_counts.items()),
+    }
 
 
 def build_excel_response(filename_base, sheet_title, headers, col_widths,
@@ -27,6 +54,7 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
     highlight_fn(row) -> bool  — red background when True
     mono_cols / center_cols: 1-based sets of column indices
     summary_rows: list of (label, value) for a second Summary sheet
+    chart_data: optional category and per-day counts for the Summary sheet charts
     """
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -119,7 +147,7 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
         ws.auto_filter.ref = f'A4:{last}{4 + len(rows)}'
 
     # ── Summary sheet ──
-    if summary_rows:
+    if summary_rows or chart_data is not None:
         ws2 = wb.create_sheet('Summary')
         ws2.column_dimensions['A'].width = 28
         ws2.column_dimensions['B'].width = 16
@@ -129,7 +157,7 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
         c.font = Font(name='Calibri', bold=True, size=12, color=WHITE)
         c.fill = fill(NAVY); c.alignment = center
         ws2.row_dimensions[1].height = 22
-        for i, (label, value) in enumerate(summary_rows, 2):
+        for i, (label, value) in enumerate(summary_rows or [], 2):
             bg = fill(ALT) if i % 2 == 0 else fill(WHITE)
             lc = ws2.cell(row=i, column=1, value=label)
             vc = ws2.cell(row=i, column=2, value=value)
@@ -145,7 +173,7 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
 
             def add_chart_or_na(title, values, anchor, chart_type):
                 if values:
-                    start_row = max(25, len(summary_rows) + 3)
+                    start_row = max(25, len(summary_rows or []) + 3)
                     data_col = 1 if chart_type == 'pie' else 4
                     label_col = data_col + 1
                     ws2.cell(row=start_row, column=data_col, value=title)
@@ -196,8 +224,8 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
                     cell.alignment = center
 
             add_chart_or_na(
-                'Time In vs. Time Out',
-                chart_data.get('status', []),
+                chart_data.get('category_title', 'Category Breakdown'),
+                chart_data.get('category', []),
                 'D2',
                 'pie',
             )
@@ -222,6 +250,7 @@ def build_pdf_response(filename_base, report_title, headers, col_widths_mm,
     """
     Returns an HttpResponse with a landscape A4 PDF attachment.
     col_widths_mm: list of mm values matching headers length.
+    chart_data: optional category and per-day counts rendered before the report table.
     """
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib import colors
@@ -330,7 +359,11 @@ def build_pdf_response(filename_base, report_title, headers, col_widths_mm,
 
         charts_table = Table(
             [[
-                make_chart('Time In vs. Time Out', chart_data.get('status', []), is_pie=True),
+                make_chart(
+                    chart_data.get('category_title', 'Category Breakdown'),
+                    chart_data.get('category', []),
+                    is_pie=True,
+                ),
                 make_chart('Records per Day', chart_data.get('daily', [])),
             ]],
             colWidths=[chart_width, chart_width],

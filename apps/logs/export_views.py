@@ -66,7 +66,8 @@ def _chart_data(logs):
         ('Time Out', status_counts.get(VehicleLog.STATUS_OUT, 0)),
     ]
     return {
-        'status': [(label, count) for label, count in status_values if count] if logs else [],
+        'category': [(label, count) for label, count in status_values if count] if logs else [],
+        'category_title': 'Time In vs. Time Out',
         'daily': sorted(daily_counts.items()),
     }
 

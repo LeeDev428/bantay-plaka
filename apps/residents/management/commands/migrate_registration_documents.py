@@ -79,7 +79,7 @@ class Command(BaseCommand):
             import cloudinary.api
             from cloudinary.utils import cloudinary_url
 
-            public_id = str(PurePosixPath(name).with_suffix())
+            public_id = str(PurePosixPath(name).with_suffix(''))
             resource = cloudinary.api.resource(
                 public_id,
                 resource_type='image',
@@ -121,7 +121,7 @@ class Command(BaseCommand):
             import cloudinary.exceptions
             import cloudinary.uploader
 
-            public_id = str(PurePosixPath(name).with_suffix())
+            public_id = str(PurePosixPath(name).with_suffix(''))
             try:
                 cloudinary.api.resource(
                     public_id,

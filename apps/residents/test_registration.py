@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from apps.accounts.forms import ResidentSignupForm
 from apps.residents.forms import ResidentForm, VehicleForm, VehicleRegistrationFormSetFactory
+from apps.residents.management.commands.migrate_registration_documents import Command
 from apps.residents.storage import PrivateRegistrationDocumentStorage
 from apps.residents.validators import MAX_DOCUMENT_SIZE, validate_uploaded_document
 from apps.residents.views import resident_id_document
@@ -184,3 +185,59 @@ class RegistrationDocumentAccessTests(SimpleTestCase):
         response = resident_id_document(request, 7)
 
         self.assertEqual(response.status_code, 403)
+
+
+class RegistrationDocumentMigrationCommandTests(SimpleTestCase):
+    @override_settings(
+        USE_CLOUDINARY=True,
+        CLOUDINARY_CLOUD_NAME='test-cloud',
+        CLOUDINARY_API_KEY='test-key',
+        CLOUDINARY_API_SECRET='test-secret',
+    )
+    @patch('apps.residents.management.commands.migrate_registration_documents.requests.get')
+    @patch('cloudinary.utils.cloudinary_url')
+    @patch('cloudinary.api.resource')
+    def test_cloudinary_legacy_public_id_removes_file_extension(
+        self,
+        resource,
+        cloudinary_url,
+        request_get,
+    ):
+        resource.return_value = {'format': 'pdf'}
+        cloudinary_url.return_value = ('https://cloudinary.test/legacy.pdf', {})
+        request_get.return_value.content = b'%PDF-1.7'
+        request_get.return_value.raise_for_status.return_value = None
+
+        content, file_format = Command()._read_legacy_document('resident_ids/legacy-id.pdf')
+
+        self.assertEqual((content, file_format), (b'%PDF-1.7', 'pdf'))
+        resource.assert_called_once_with(
+            'resident_ids/legacy-id',
+            resource_type='image',
+            type='upload',
+        )
+
+    @override_settings(
+        USE_CLOUDINARY=True,
+        CLOUDINARY_CLOUD_NAME='test-cloud',
+        CLOUDINARY_API_KEY='test-key',
+        CLOUDINARY_API_SECRET='test-secret',
+    )
+    @patch('cloudinary.uploader.destroy')
+    @patch('cloudinary.api.resource')
+    def test_cloudinary_legacy_cleanup_removes_file_extension(self, resource, destroy):
+        destroy.return_value = {'result': 'ok'}
+
+        Command()._delete_legacy_document('resident_ids/legacy-id.pdf')
+
+        resource.assert_called_once_with(
+            'resident_ids/legacy-id',
+            resource_type='image',
+            type='upload',
+        )
+        destroy.assert_called_once_with(
+            'resident_ids/legacy-id',
+            resource_type='image',
+            type='upload',
+            invalidate=True,
+        )

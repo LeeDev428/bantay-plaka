@@ -125,7 +125,7 @@
 </div>
 
 {% for section in sections %}
-<div id="archive-tab-{{ section.slug }}" class="archive-tab-panel hidden">
+<div id="archive-tab-{{ section.slug }}" class="archive-tab-panel {% if category != section.slug %}hidden{% endif %}">
   <div class="page-card">
     <div class="overflow-x-auto">
       <table class="table table-sm">

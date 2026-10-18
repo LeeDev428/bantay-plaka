@@ -17,7 +17,7 @@ def _resident_rows(qs):
                      str(r.birth_date) if r.birth_date else '—',
                      str(r.age) if r.age else '—',
                      f'{r.street_number} {r.street_name}'.strip() or '—',
-                     r.address or '—', r.contact_number or '—',
+                     r.address or '—', r.contact_number or '—', r.telephone_number or '—',
                      r.get_valid_id_type_display() if r.valid_id_type else '—',
                      status, plates,
                      str(r.created_at.date()) if r.created_at else '—'])
@@ -30,19 +30,19 @@ def export_residents_excel(request):
     rows = _resident_rows(qs)
     return build_excel_response(
         'bantayplaka_residents', 'Residents',
-        headers=['#', 'Full Name', 'Sex', 'Birth Date', 'Age', 'Street', 'Address', 'Contact', 'Valid ID', 'Status', 'Vehicles', 'Registered'],
-        col_widths=[5, 28, 10, 13, 7, 22, 28, 16, 22, 12, 24, 13],
+        headers=['#', 'Full Name', 'Sex', 'Birth Date', 'Age', 'Street', 'Address', 'Mobile Contact', 'Telephone', 'Valid ID', 'Status', 'Vehicles', 'Registered'],
+        col_widths=[5, 28, 10, 13, 7, 22, 28, 16, 16, 22, 12, 24, 13],
         rows=rows,
-        highlight_fn=lambda r: r[9] == 'Not Approved',
-        center_cols={1, 3, 4, 5, 9, 10, 12},
+        highlight_fn=lambda r: r[10] == 'Not Approved',
+        center_cols={1, 3, 4, 5, 10, 11, 13},
         summary_rows=[
             ('Total Residents', len(rows)),
-            ('Approved',  sum(1 for r in rows if r[9] == 'Approved')),
-            ('Pending',   sum(1 for r in rows if r[9] == 'Pending')),
-            ('Not Approved', sum(1 for r in rows if r[9] == 'Not Approved')),
-            ('With Vehicles', sum(1 for r in rows if r[10] != '—')),
+            ('Approved',  sum(1 for r in rows if r[10] == 'Approved')),
+            ('Pending',   sum(1 for r in rows if r[10] == 'Pending')),
+            ('Not Approved', sum(1 for r in rows if r[10] == 'Not Approved')),
+            ('With Vehicles', sum(1 for r in rows if r[11] != '—')),
         ],
-        chart_data=build_export_chart_data(rows, 9, 11, 'Residents by Approval Status'),
+        chart_data=build_export_chart_data(rows, 10, 12, 'Residents by Approval Status'),
     )
 
 
@@ -50,13 +50,13 @@ def export_residents_excel(request):
 def export_residents_pdf(request):
     qs = Resident.objects.prefetch_related('vehicles').order_by('last_name', 'first_name')
     rows = _resident_rows(qs)
-    pdf_rows = [[r[1], r[2], r[3], r[6], r[7], r[8], r[9], r[10], r[11]] for r in rows]
+    pdf_rows = [[r[1], r[2], r[3], r[6], r[7], r[8], r[9], r[10], r[11], r[12]] for r in rows]
     return build_pdf_response(
         'bantayplaka_residents', 'Bantay Plaka — Residents Directory',
-        headers=['Full Name', 'Sex', 'Birth Date', 'Address', 'Contact', 'Valid ID', 'Status', 'Vehicles', 'Registered'],
-        col_widths_mm=[42, 12, 18, 42, 24, 25, 17, 29, 20],
+        headers=['Full Name', 'Sex', 'Birth Date', 'Address', 'Mobile', 'Telephone', 'Valid ID', 'Status', 'Vehicles', 'Registered'],
+        col_widths_mm=[42, 12, 18, 42, 22, 20, 25, 17, 29, 20],
         rows=pdf_rows,
-        chart_data=build_export_chart_data(pdf_rows, 6, 8, 'Residents by Approval Status'),
+        chart_data=build_export_chart_data(pdf_rows, 7, 9, 'Residents by Approval Status'),
     )
 
 

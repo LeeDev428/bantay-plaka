@@ -12,7 +12,7 @@
   <h2 class="font-semibold text-slate-800">Register New Vehicle</h2>
   <p class="text-sm text-slate-500 mt-1">Add your own vehicle plate for resident access records.</p>
 
-  <form method="post" action="{% url 'resident_vehicle_create_self' %}" class="mt-4" novalidate>
+  <form method="post" action="{% url 'resident_vehicle_create_self' %}" enctype="multipart/form-data" class="mt-4" novalidate>
     {% csrf_token %}
     <div class="grid md:grid-cols-2 gap-3">
       <div>
@@ -60,6 +60,16 @@
         <input type="text" name="color" class="input input-bordered w-full" placeholder="e.g. White" required>
       </div>
       <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Official Receipt (OR) <span class="text-red-400">*</span></label>
+        <input type="file" name="or_document" class="file-input file-input-bordered w-full" accept=".jpg,.jpeg,.png,.pdf" required>
+        <p class="text-xs text-slate-400 mt-1">JPG, PNG, or PDF; max 5 MB.</p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Certificate of Registration (CR) <span class="text-red-400">*</span></label>
+        <input type="file" name="cr_document" class="file-input file-input-bordered w-full" accept=".jpg,.jpeg,.png,.pdf" required>
+        <p class="text-xs text-slate-400 mt-1">JPG, PNG, or PDF; max 5 MB.</p>
+      </div>
+      <div>
         <label class="block text-sm font-medium text-slate-700 mb-1">Year</label>
         <input type="number" name="year" class="input input-bordered w-full" min="1900" max="2099" placeholder="e.g. 2024">
       </div>
@@ -93,6 +103,11 @@
         <p><span class="text-slate-500">Brand:</span> {{ vehicle.make|default:'-' }}</p>
         <p><span class="text-slate-500">Model:</span> {{ vehicle.model|default:'-' }}</p>
         <p><span class="text-slate-500">Color:</span> {{ vehicle.color|default:'-' }}</p>
+      </div>
+
+      <div class="flex gap-3 mt-3 text-sm">
+        {% if vehicle.or_document %}<a href="{% url 'vehicle_registration_document' vehicle.pk 'or' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">View OR</a>{% endif %}
+        {% if vehicle.cr_document %}<a href="{% url 'vehicle_registration_document' vehicle.pk 'cr' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">View CR</a>{% endif %}
       </div>
 
       {% if vehicle.blacklist_entry %}

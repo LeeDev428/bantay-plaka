@@ -1,1 +1,1 @@
-web: python manage.py migrate --noinput && daphne -b 0.0.0.0 -p $PORT config.asgi:application
+web: python manage.py migrate --noinput && python manage.py migrate_registration_documents && daphne -b 0.0.0.0 -p $PORT config.asgi:application

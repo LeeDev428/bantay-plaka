@@ -86,14 +86,16 @@
       <p><span class="text-slate-500">Age:</span> <span class="font-medium text-slate-800">{{ resident.age|default:'Not set' }}</span></p>
       <p><span class="text-slate-500">Address:</span> <span class="font-medium text-slate-800">{{ resident.street_number }} {{ resident.street_name }} {{ resident.address }}</span></p>
       <p><span class="text-slate-500">Valid ID:</span> <span class="font-medium text-slate-800">{{ resident.get_valid_id_type_display|default:'Not set' }}</span></p>
-      {% if resident.has_valid_id_image %}
+      {% if resident.has_valid_id_document %}
         <div class="mt-3">
-          <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-2 text-blue-700 font-semibold text-sm">
-            <i class="fa fa-image"></i> View Uploaded ID
+          <a href="{% url 'resident_id_document' resident.pk %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 text-blue-700 font-semibold text-sm">
+            <i class="fa {% if resident.valid_id_is_image %}fa-image{% else %}fa-file-pdf{% endif %}"></i> View Uploaded ID
           </a>
-          <a href="{{ resident.valid_id_image.url }}" target="_blank" class="block mt-2 w-fit">
-            <img src="{{ resident.valid_id_image.url }}" alt="Resident valid ID" class="max-h-48 rounded border border-slate-200 object-contain" />
-          </a>
+          {% if resident.valid_id_is_image %}
+            <a href="{% url 'resident_id_document' resident.pk %}" target="_blank" rel="noopener noreferrer" class="block mt-2 w-fit">
+              <img src="{% url 'resident_id_document' resident.pk %}" alt="Resident valid ID" class="max-h-48 rounded border border-slate-200 object-contain" />
+            </a>
+          {% endif %}
         </div>
       {% elif resident.valid_id_image %}
         <p class="text-xs text-amber-600 mt-2">Uploaded ID file is currently unavailable. Please re-upload via admin.</p>
@@ -108,6 +110,10 @@
         <div class="border border-slate-100 rounded-lg p-3">
           <p class="font-mono font-semibold text-slate-800">{{ vehicle.plate_number }}</p>
           <p class="text-xs text-slate-500 mt-1">{{ vehicle.vehicle_type }}{% if vehicle.color %} - {{ vehicle.color }}{% endif %}{% if vehicle.make or vehicle.model %} - {{ vehicle.make }} {{ vehicle.model }}{% endif %}</p>
+          <div class="flex gap-3 mt-2 text-xs">
+            {% if vehicle.or_document %}<a href="{% url 'vehicle_registration_document' vehicle.pk 'or' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">View OR</a>{% endif %}
+            {% if vehicle.cr_document %}<a href="{% url 'vehicle_registration_document' vehicle.pk 'cr' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">View CR</a>{% endif %}
+          </div>
           {% if vehicle.blacklist_entry %}
             <div class="mt-2 inline-flex items-center px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-semibold">Blacklisted: {{ vehicle.blacklist_entry.get_tag_display }}</div>
             {% if vehicle.blacklist_entry.remarks %}<p class="text-xs text-red-600 mt-1">{{ vehicle.blacklist_entry.remarks }}</p>{% endif %}

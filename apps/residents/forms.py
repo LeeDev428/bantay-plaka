@@ -1,4 +1,6 @@
 from django import forms
+from django.core.exceptions import ValidationError
+from django.forms import BaseFormSet, formset_factory
 from django.utils import timezone
 import re
 
@@ -25,6 +27,7 @@ class ResidentForm(forms.ModelForm):
             'birth_date',
             'age',
             'contact_number',
+            'telephone_number',
             'street_number',
             'street_name',
             'address',
@@ -48,10 +51,18 @@ class ResidentForm(forms.ModelForm):
                 'maxlength': 11,
                 'inputmode': 'numeric',
             }),
-            'valid_id_image': forms.ClearableFileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
+            'telephone_number': forms.TextInput(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': 'Optional landline number',
+                'inputmode': 'tel',
+            }),
+            'valid_id_image': forms.FileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
         }
         labels = {
-            'valid_id_image': 'OR/CR (Official Receipt / Certificate of Registration)',
+            'valid_id_image': 'Government-issued ID document',
             'make': 'Brand',
         }
 
@@ -75,7 +86,10 @@ class ResidentForm(forms.ModelForm):
 class VehicleForm(forms.ModelForm):
     class Meta:
         model = Vehicle
-        fields = ['plate_number', 'vehicle_type', 'make', 'model', 'color']
+        fields = [
+            'plate_number', 'vehicle_type', 'make', 'model', 'color',
+            'or_document', 'cr_document',
+        ]
         widgets = {
             'plate_number': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full uppercase',
@@ -85,16 +99,31 @@ class VehicleForm(forms.ModelForm):
             'make': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. Toyota'}),
             'model': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. Vios'}),
             'color': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g. White'}),
+            'or_document': forms.ClearableFileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
+            'cr_document': forms.ClearableFileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
         }
 
         labels = {
             'make': 'Brand',
+            'or_document': 'Official Receipt (OR)',
+            'cr_document': 'Certificate of Registration (CR)',
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.reused_from_archive = False
-        for field_name in ['plate_number', 'vehicle_type', 'make', 'model', 'color']:
+        self.fields['or_document'].help_text = 'JPG, PNG, or PDF. Maximum 5 MB.'
+        self.fields['cr_document'].help_text = 'JPG, PNG, or PDF. Maximum 5 MB.'
+        for field_name in [
+            'plate_number', 'vehicle_type', 'make', 'model', 'color',
+            'or_document', 'cr_document',
+        ]:
             self.fields[field_name].required = True
 
     def clean_plate_number(self):
@@ -113,3 +142,29 @@ class VehicleForm(forms.ModelForm):
         self.reused_from_archive = archived_qs.exists()
 
         return plate
+
+
+class VehicleRegistrationFormSet(BaseFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+
+        plates = []
+        for form in self.forms:
+            if self.can_delete and self._should_delete_form(form):
+                continue
+            plate = form.cleaned_data.get('plate_number')
+            if plate:
+                plates.append(plate)
+
+        if len(plates) != len(set(plates)):
+            raise ValidationError('Each vehicle in this registration must have a different plate number.')
+
+
+VehicleRegistrationFormSetFactory = formset_factory(
+    VehicleForm,
+    formset=VehicleRegistrationFormSet,
+    extra=0,
+    can_delete=True,
+)

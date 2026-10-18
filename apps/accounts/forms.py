@@ -6,13 +6,17 @@ from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.utils.text import slugify
 import re
 
 from apps.accounts.models import User
 from apps.residents.models import Resident
+from apps.residents.forms import VehicleRegistrationFormSetFactory
+from apps.residents.validators import validate_uploaded_document
 
 
 CONTACT_NUMBER_REGEX = re.compile(r'^09\d{9}$')
+PRIVACY_NOTICE_VERSION = '2026-10-v1'
 
 
 def _normalize_contact_number(raw_value: str) -> str:
@@ -101,10 +105,6 @@ class LoginForm(AuthenticationForm):
 
 
 class ResidentSignupForm(forms.Form):
-    username = forms.CharField(
-        max_length=150,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Username'}),
-    )
     email = forms.EmailField(
         widget=forms.EmailInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Email address'}),
     )
@@ -152,6 +152,15 @@ class ResidentSignupForm(forms.Form):
             'inputmode': 'numeric',
         }),
     )
+    telephone_number = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'input input-bordered w-full',
+            'placeholder': 'Optional landline number',
+            'inputmode': 'tel',
+        }),
+    )
     blk_number = forms.CharField(
         max_length=30,
         required=False,
@@ -183,17 +192,21 @@ class ResidentSignupForm(forms.Form):
         choices=Resident.VALID_ID_TYPE_CHOICES,
         widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
     )
-    valid_id_image = forms.ImageField(
+    valid_id_image = forms.FileField(
         required=True,
-        label='OR/CR (Official Receipt / Certificate of Registration)',
-        widget=forms.ClearableFileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
+        label='Government-issued ID document',
+        widget=forms.FileInput(attrs={
+            'class': 'file-input file-input-bordered w-full',
+            'accept': '.jpg,.jpeg,.png,.pdf',
+        }),
+        validators=[validate_uploaded_document],
+        help_text='JPG, PNG, or PDF. Maximum 5 MB.',
     )
-
-    def clean_username(self):
-        username = self.cleaned_data['username'].strip()
-        if User.objects.filter(username__iexact=username).exists():
-            raise forms.ValidationError('Username is already taken.')
-        return username
+    privacy_consent = forms.BooleanField(
+        required=True,
+        error_messages={'required': 'Please agree to the privacy and project-use notice before submitting.'},
+        widget=forms.CheckboxInput(attrs={'class': 'checkbox checkbox-primary'}),
+    )
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
@@ -203,6 +216,13 @@ class ResidentSignupForm(forms.Form):
 
     def clean_contact_number(self):
         return _normalize_contact_number(self.cleaned_data.get('contact_number'))
+
+    def clean_telephone_number(self):
+        return (self.cleaned_data.get('telephone_number') or '').strip()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['birth_date'].widget.attrs['max'] = timezone.localdate().isoformat()
 
     def clean(self):
         cleaned = super().clean()
@@ -228,7 +248,7 @@ class ResidentSignupForm(forms.Form):
         return cleaned
 
     @transaction.atomic
-    def save(self):
+    def save(self, vehicle_formset):
         blk = (self.cleaned_data.get('blk_number') or '').strip()
         lot = (self.cleaned_data.get('lot_number') or '').strip()
         house = (self.cleaned_data.get('house_number') or '').strip()
@@ -241,8 +261,17 @@ class ResidentSignupForm(forms.Form):
             street_number_parts.append(f'House {house}')
         street_number = ' '.join(street_number_parts)
 
+        username_base = slugify(
+            f"{self.cleaned_data['first_name']} {self.cleaned_data['last_name']}"
+        ).replace('-', '_')[:140] or 'resident'
+        username = username_base
+        suffix = 1
+        while User.objects.filter(username__iexact=username).exists():
+            username = f'{username_base[:140 - len(str(suffix))]}{suffix}'
+            suffix += 1
+
         user = User(
-            username=self.cleaned_data['username'],
+            username=username,
             email=self.cleaned_data['email'],
             first_name=self.cleaned_data['first_name'],
             last_name=self.cleaned_data['last_name'],
@@ -263,14 +292,28 @@ class ResidentSignupForm(forms.Form):
             birth_date=self.cleaned_data.get('birth_date'),
             age=self.cleaned_data.get('computed_age'),
             contact_number=self.cleaned_data['contact_number'],
+            telephone_number=self.cleaned_data.get('telephone_number', ''),
             address=self.cleaned_data['address'],
             street_number=street_number,
             street_name=self.cleaned_data.get('street_name', ''),
             valid_id_type=self.cleaned_data.get('valid_id_type', ''),
             valid_id_image=self.cleaned_data.get('valid_id_image'),
+            privacy_consent_at=timezone.now(),
+            privacy_notice_version=PRIVACY_NOTICE_VERSION,
             is_approved=False,
             registered_by=None,
         )
+        deleted_vehicle_forms = vehicle_formset.deleted_forms
+        for vehicle_form in vehicle_formset.forms:
+            if vehicle_form in deleted_vehicle_forms:
+                continue
+            vehicle = vehicle_form.save(commit=False)
+            vehicle.resident = resident
+            vehicle.is_approved = False
+            vehicle.approved_by = None
+            vehicle.approved_at = None
+            vehicle.approval_notes = ''
+            vehicle.save()
         return user, resident
 
 

@@ -4,61 +4,229 @@
 
 {% block auth_content %}
 <div class="min-h-screen bg-gradient-to-br from-slate-900 via-[#16263d] to-slate-900 py-8 px-4">
-  <div class="max-w-4xl mx-auto">
+  <div class="max-w-5xl mx-auto">
+    <noscript>
+      <p class="mb-4 rounded-lg bg-amber-100 px-4 py-3 text-sm text-amber-900">
+        Please enable JavaScript to move between registration steps.
+      </p>
+    </noscript>
     <div class="text-center mb-6">
       <img src="{% static 'img/bantayplaka_register.png' %}" alt="BantayPlaka" class="h-20 w-auto object-contain mx-auto" />
       <h1 class="text-2xl md:text-3xl font-black text-white mt-3">Resident Account Registration</h1>
-      <p class="text-slate-300 text-sm mt-1">Complete your details for admin approval.</p>
+      <p class="text-slate-300 text-sm mt-1">Complete the three steps to submit your account for approval.</p>
     </div>
 
-    <div class="page-card p-6 md:p-8 rounded-2xl shadow-2xl">
-      <form method="post" enctype="multipart/form-data" novalidate>
+    <div class="page-card p-5 md:p-8 rounded-2xl shadow-2xl">
+      <ol id="registration-progress" class="grid grid-cols-3 gap-2 mb-7" aria-label="Registration progress">
+        <li data-progress-step="1" class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-center">
+          <span class="block text-xs font-semibold uppercase tracking-wide text-blue-700">Step 1</span>
+          <span class="text-sm font-semibold text-slate-800">Account &amp; Personal</span>
+        </li>
+        <li data-progress-step="2" class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+          <span class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Step 2</span>
+          <span class="text-sm font-semibold text-slate-500">Contact &amp; Address</span>
+        </li>
+        <li data-progress-step="3" class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+          <span class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Step 3</span>
+          <span class="text-sm font-semibold text-slate-500">Vehicles &amp; Consent</span>
+        </li>
+      </ol>
+
+      <form id="resident-registration-form" method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
+        {{ vehicle_formset.management_form }}
 
-        <div class="grid md:grid-cols-2 gap-4">
-          {% for field in form %}
-            <div class="{% if field.name == 'address' or field.name == 'valid_id_image' or field.name == 'valid_id_type' %}md:col-span-2{% endif %}">
-              <label class="block text-sm font-medium text-slate-700 mb-1.5">
-                {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
-              </label>
-              {% if field.name == 'password1' or field.name == 'password2' %}
-                <div class="relative">
-                  {{ field }}
-                  <button
-                    type="button"
-                    class="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600"
-                    data-password-toggle
-                    data-target="{{ field.id_for_label }}"
-                    aria-label="Toggle password visibility"
-                  >
-                    <i class="fa fa-eye"></i>
-                  </button>
+        <section class="registration-step {% if wizard_step != 1 %}hidden{% endif %}" data-step="1" aria-labelledby="step-one-title">
+          <div class="mb-5">
+            <h2 id="step-one-title" tabindex="-1" class="text-lg font-bold text-slate-800">Account &amp; personal information</h2>
+            <p class="text-sm text-slate-500">Your username will be generated from your name after submission.</p>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-4">
+            {% for field in form %}
+              {% if field.name == 'email' or field.name == 'password1' or field.name == 'password2' or field.name == 'first_name' or field.name == 'middle_name' or field.name == 'last_name' or field.name == 'suffix' or field.name == 'sex' or field.name == 'birth_date' %}
+                <div>
+                  <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1.5">
+                    {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+                  </label>
+                  {% if field.name == 'password1' or field.name == 'password2' %}
+                    <div class="relative">
+                      {{ field }}
+                      <button type="button" class="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600"
+                              data-password-toggle data-target="{{ field.id_for_label }}" aria-label="Toggle password visibility">
+                        <i class="fa fa-eye"></i>
+                      </button>
+                    </div>
+                  {% else %}
+                    {{ field }}
+                  {% endif %}
+                  {% if field.name == 'birth_date' %}
+                    <p class="text-xs text-slate-500 mt-1">Age: <output id="resident-age">—</output></p>
+                  {% endif %}
+                  {% if field.help_text %}<p class="text-xs text-slate-400 mt-1">{{ field.help_text }}</p>{% endif %}
+                  {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
                 </div>
-                {% if field.name == 'password1' %}
-                  {% comment %}Must be strong: minimum 8 characters with uppercase, lowercase, number, and special character.{% endcomment %}
-                {% endif %}
-              {% elif field.name == 'valid_id_image' %}
-                {{ field }}
-                <div id="valid-id-preview-wrapper" class="mt-3 hidden">
-                  <p class="text-xs font-medium text-slate-500 mb-1">Image Preview</p>
-                  <img id="valid-id-preview" src="#" alt="Valid ID preview" class="max-h-48 rounded-lg border border-slate-200 object-contain bg-slate-50 p-1" />
-                </div>
-              {% else %}
-                {{ field }}
               {% endif %}
-              {% if field.help_text %}<p class="text-xs text-slate-400 mt-1">{{ field.help_text }}</p>{% endif %}
-              {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
-            </div>
-          {% endfor %}
-        </div>
+            {% endfor %}
+          </div>
+        </section>
 
-        <div class="flex flex-col sm:flex-row gap-2 mt-6 pt-5 border-t border-slate-100">
-          <button type="submit" class="btn bg-blue-700 hover:bg-blue-800 border-0 text-white sm:flex-1">
-            <i class="fa fa-paper-plane mr-1"></i> Submit Registration
+        <section class="registration-step {% if wizard_step != 2 %}hidden{% endif %}" data-step="2" aria-labelledby="step-two-title">
+          <div class="mb-5">
+            <h2 id="step-two-title" tabindex="-1" class="text-lg font-bold text-slate-800">Contact &amp; address</h2>
+            <p class="text-sm text-slate-500">Provide a contact number and your Paragon Village address.</p>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-4">
+            {% for field in form %}
+              {% if field.name == 'contact_number' or field.name == 'telephone_number' or field.name == 'blk_number' or field.name == 'lot_number' or field.name == 'house_number' or field.name == 'street_name' or field.name == 'address' or field.name == 'valid_id_type' or field.name == 'valid_id_image' %}
+                <div class="{% if field.name == 'address' or field.name == 'valid_id_type' or field.name == 'valid_id_image' %}sm:col-span-2{% endif %}">
+                  <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1.5">
+                    {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+                  </label>
+                  {{ field }}
+                  {% if field.name == 'valid_id_image' %}
+                    <p class="text-xs text-slate-500 mt-1">Upload a clear image or PDF of one government-issued ID. JPG, PNG, or PDF; max 5 MB.</p>
+                    <p id="resident-id-file-name" class="text-xs text-blue-700 mt-1" aria-live="polite"></p>
+                    <div id="resident-id-preview" class="hidden mt-3">
+                      <img id="resident-id-image-preview" alt="Selected ID preview" class="hidden max-h-48 rounded-lg border border-slate-200 object-contain bg-slate-50 p-1" />
+                      <a id="resident-id-pdf-preview" class="hidden text-sm text-blue-700 underline" target="_blank" rel="noopener noreferrer">Preview selected PDF</a>
+                    </div>
+                  {% elif field.help_text %}
+                    <p class="text-xs text-slate-400 mt-1">{{ field.help_text }}</p>
+                  {% endif %}
+                  {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="registration-step {% if wizard_step != 3 %}hidden{% endif %}" data-step="3" aria-labelledby="step-three-title">
+          <div class="mb-5">
+            <h2 id="step-three-title" tabindex="-1" class="text-lg font-bold text-slate-800">Vehicles &amp; privacy consent</h2>
+            <p class="text-sm text-slate-500">Adding vehicles is optional. Each vehicle you add needs its own OR and CR document.</p>
+          </div>
+
+          <div id="vehicle-card-list" class="space-y-4">
+            {% for vehicle_form in vehicle_formset.forms %}
+              <fieldset class="rounded-xl border border-slate-200 p-4" data-vehicle-card>
+                <legend class="px-2 text-sm font-semibold text-slate-700">Vehicle {{ forloop.counter }}</legend>
+                {% if vehicle_form.non_field_errors %}<div class="text-sm text-red-600 mb-3">{{ vehicle_form.non_field_errors }}</div>{% endif %}
+                {{ vehicle_form.DELETE.as_hidden }}
+                <div class="grid sm:grid-cols-2 gap-3">
+                  {% for field in vehicle_form %}
+                    {% if field.name != 'DELETE' %}
+                      <div class="{% if field.name == 'or_document' or field.name == 'cr_document' %}sm:col-span-2{% endif %}">
+                        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1.5">
+                          {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.name == 'or_document' or field.name == 'cr_document' %}
+                          <p class="text-xs text-slate-400 mt-1">JPG, PNG, or PDF; max 5 MB.</p>
+                        {% endif %}
+                        {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+                <button type="button" class="btn btn-ghost btn-xs text-red-600 mt-3" data-remove-vehicle>
+                  <i class="fa fa-trash mr-1"></i> Remove vehicle
+                </button>
+              </fieldset>
+            {% endfor %}
+          </div>
+
+          {% if vehicle_formset.non_form_errors %}
+            <p class="text-red-500 text-sm mt-2">{{ vehicle_formset.non_form_errors.0 }}</p>
+          {% endif %}
+          <button type="button" id="add-vehicle-card" class="btn btn-outline btn-sm border-blue-200 text-blue-700 mt-4">
+            <i class="fa fa-plus mr-1"></i> Add another vehicle
           </button>
-          <a href="{% url 'login' %}" class="btn btn-ghost sm:flex-1">Back to Login</a>
+          <template id="vehicle-form-template">
+            {% with vehicle_form=vehicle_formset.empty_form %}
+              <fieldset class="rounded-xl border border-slate-200 p-4" data-vehicle-card>
+                <legend class="px-2 text-sm font-semibold text-slate-700">Vehicle</legend>
+                {{ vehicle_form.DELETE.as_hidden }}
+                <div class="grid sm:grid-cols-2 gap-3">
+                  {% for field in vehicle_form %}
+                    {% if field.name != 'DELETE' %}
+                      <div class="{% if field.name == 'or_document' or field.name == 'cr_document' %}sm:col-span-2{% endif %}">
+                        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1.5">
+                          {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.name == 'or_document' or field.name == 'cr_document' %}
+                          <p class="text-xs text-slate-400 mt-1">JPG, PNG, or PDF; max 5 MB.</p>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+                <button type="button" class="btn btn-ghost btn-xs text-red-600 mt-3" data-remove-vehicle>
+                  <i class="fa fa-trash mr-1"></i> Remove vehicle
+                </button>
+              </fieldset>
+            {% endwith %}
+          </template>
+
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 mt-6">
+            <div class="flex items-start gap-3">
+              {{ form.privacy_consent }}
+              <label for="{{ form.privacy_consent.id_for_label }}" class="text-sm text-slate-700">
+                I agree to share the information and documents I provide with the BantayPlaka project team for project purposes.
+                <span class="text-red-500">*</span>
+              </label>
+            </div>
+            {% if form.privacy_consent.errors %}<p class="text-red-500 text-xs mt-2">{{ form.privacy_consent.errors.0 }}</p>{% endif %}
+            <button type="button" id="open-privacy-notice" class="text-sm text-blue-700 underline mt-3">
+              Read the Data Privacy Act information
+            </button>
+            <p class="text-xs text-slate-400 mt-1">Notice version {{ privacy_notice_version }}.</p>
+          </div>
+        </section>
+
+        <div class="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 mt-7 pt-5 border-t border-slate-100">
+          <a href="{% url 'login' %}" class="btn btn-ghost">Back to Login</a>
+          <div class="flex justify-end gap-2">
+            <button type="button" id="registration-prev" class="btn btn-ghost hidden">Back</button>
+            <button type="button" id="registration-next" class="btn bg-blue-700 hover:bg-blue-800 border-0 text-white">
+              Continue <i class="fa fa-arrow-right ml-1"></i>
+            </button>
+            <button type="submit" id="registration-submit" class="btn bg-blue-700 hover:bg-blue-800 border-0 text-white hidden">
+              <i class="fa fa-paper-plane mr-1"></i> Submit Registration
+            </button>
+          </div>
         </div>
       </form>
+    </div>
+    <p class="text-center text-xs text-slate-400 mt-4">Your account and vehicle submissions remain pending until reviewed by an administrator.</p>
+  </div>
+</div>
+
+<div id="privacy-notice-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="privacy-notice-title">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+      <div>
+        <h2 id="privacy-notice-title" class="font-bold text-slate-800">Data Privacy Act of 2012</h2>
+        <p class="text-xs text-slate-500">Official National Privacy Commission information</p>
+      </div>
+      <button type="button" id="close-privacy-notice" class="btn btn-ghost btn-sm" aria-label="Close privacy notice">
+        <i class="fa fa-xmark"></i>
+      </button>
+    </div>
+    <iframe
+      data-src="https://privacy.gov.ph/data-privacy-act/"
+      title="Data Privacy Act information from the National Privacy Commission"
+      class="w-full flex-1 min-h-[55vh]"
+      loading="lazy"
+      referrerpolicy="no-referrer"
+    ></iframe>
+    <div class="px-5 py-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <a href="https://privacy.gov.ph/data-privacy-act/" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-700 underline">
+        Open the official page in a new tab
+      </a>
+      <button type="button" id="privacy-notice-done" class="btn btn-sm bg-blue-700 hover:bg-blue-800 border-0 text-white">Done</button>
     </div>
   </div>
 </div>
@@ -67,58 +235,168 @@
 {% block extra_scripts %}
 <script>
 (function () {
-  const contactInput = document.getElementById('id_contact_number');
-  if (contactInput) {
-    contactInput.addEventListener('input', () => {
-      contactInput.value = contactInput.value.replace(/\D/g, '').slice(0, 11);
+  const form = document.getElementById('resident-registration-form');
+  const steps = Array.from(document.querySelectorAll('.registration-step'));
+  const progressItems = Array.from(document.querySelectorAll('[data-progress-step]'));
+  const previousButton = document.getElementById('registration-prev');
+  const nextButton = document.getElementById('registration-next');
+  const submitButton = document.getElementById('registration-submit');
+  const vehicleList = document.getElementById('vehicle-card-list');
+  const totalForms = document.getElementById('id_vehicles-TOTAL_FORMS');
+  const vehicleTemplate = document.getElementById('vehicle-form-template');
+  const privacyModal = document.getElementById('privacy-notice-modal');
+  let activeStep = {{ wizard_step|default:1 }};
+
+  function setStep(step) {
+    activeStep = step;
+    steps.forEach((panel) => panel.classList.toggle('hidden', Number(panel.dataset.step) !== step));
+    progressItems.forEach((item) => {
+      const current = Number(item.dataset.progressStep) === step;
+      item.classList.toggle('border-blue-200', current);
+      item.classList.toggle('bg-blue-50', current);
+      item.classList.toggle('border-slate-200', !current);
+      item.classList.toggle('bg-slate-50', !current);
+      item.querySelector('span:first-child').classList.toggle('text-blue-700', current);
+      item.querySelector('span:first-child').classList.toggle('text-slate-400', !current);
+      item.querySelector('span:last-child').classList.toggle('text-slate-800', current);
+      item.querySelector('span:last-child').classList.toggle('text-slate-500', !current);
+      if (current) item.setAttribute('aria-current', 'step');
+      else item.removeAttribute('aria-current');
     });
+    previousButton.classList.toggle('hidden', step === 1);
+    nextButton.classList.toggle('hidden', step === 3);
+    submitButton.classList.toggle('hidden', step !== 3);
+    document.getElementById(`step-${step}-title`).focus({ preventScroll: true });
+    window.scrollTo({ top: form.getBoundingClientRect().top + window.scrollY - 24, behavior: 'smooth' });
   }
 
-  const toggles = document.querySelectorAll('[data-password-toggle]');
-  toggles.forEach((toggle) => {
-    const targetId = toggle.dataset.target;
-    const input = document.getElementById(targetId);
+  function validateStep(step) {
+    const panel = steps.find((item) => Number(item.dataset.step) === step);
+    const invalid = Array.from(panel.querySelectorAll('input, select, textarea'))
+      .find((field) => !field.disabled && !field.checkValidity());
+    if (!invalid) return true;
+    invalid.reportValidity();
+    invalid.focus();
+    return false;
+  }
+
+  nextButton.addEventListener('click', () => {
+    if (validateStep(activeStep)) setStep(activeStep + 1);
+  });
+  previousButton.addEventListener('click', () => setStep(activeStep - 1));
+  form.addEventListener('submit', (event) => {
+    for (let step = 1; step <= 3; step += 1) {
+      if (!validateStep(step)) {
+        event.preventDefault();
+        setStep(step);
+        return;
+      }
+    }
+  });
+
+  document.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
+    const input = document.getElementById(toggle.dataset.target);
     const icon = toggle.querySelector('i');
     if (!input) return;
-
     input.classList.add('pr-10');
     toggle.addEventListener('click', () => {
       const showing = input.type === 'text';
       input.type = showing ? 'password' : 'text';
-      if (icon) {
-        icon.classList.toggle('fa-eye', showing);
-        icon.classList.toggle('fa-eye-slash', !showing);
-      }
+      icon?.classList.toggle('fa-eye', showing);
+      icon?.classList.toggle('fa-eye-slash', !showing);
     });
   });
 
-  const validIdInput = document.getElementById('id_valid_id_image');
-  const previewWrapper = document.getElementById('valid-id-preview-wrapper');
-  const previewImage = document.getElementById('valid-id-preview');
+  function updateAge() {
+    const birthDate = document.getElementById('id_birth_date');
+    const output = document.getElementById('resident-age');
+    if (!birthDate || !output || !birthDate.value) {
+      if (output) output.textContent = '—';
+      return;
+    }
+    const [year, month, day] = birthDate.value.split('-').map(Number);
+    const [todayYear, todayMonth, todayDay] = '{{ local_date|date:"Y-m-d" }}'.split('-').map(Number);
+    let age = todayYear - year;
+    if (todayMonth < month || (todayMonth === month && todayDay < day)) age -= 1;
+    output.textContent = age >= 0 ? String(age) : '—';
+  }
+  document.getElementById('id_birth_date')?.addEventListener('change', updateAge);
+  updateAge();
 
-  if (validIdInput && previewWrapper && previewImage) {
-    validIdInput.addEventListener('change', () => {
-      const file = validIdInput.files && validIdInput.files[0];
-      if (!file) {
-        previewImage.src = '#';
-        previewWrapper.classList.add('hidden');
-        return;
+  function prepareVehicleCard(card, index) {
+    const legend = card.querySelector('legend');
+    if (legend) legend.textContent = `Vehicle ${index + 1}`;
+    card.querySelector('[data-remove-vehicle]')?.addEventListener('click', () => {
+      const deleteInput = card.querySelector('input[name$="-DELETE"]');
+      if (deleteInput) {
+        deleteInput.value = 'on';
+        card.querySelectorAll('input, select, textarea').forEach((field) => {
+          if (field !== deleteInput) field.disabled = true;
+        });
       }
-
-      if (!file.type.startsWith('image/')) {
-        previewImage.src = '#';
-        previewWrapper.classList.add('hidden');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        previewImage.src = event.target && event.target.result ? event.target.result : '#';
-        previewWrapper.classList.remove('hidden');
-      };
-      reader.readAsDataURL(file);
+      card.classList.add('hidden');
     });
   }
+
+  Array.from(vehicleList.querySelectorAll('[data-vehicle-card]')).forEach(prepareVehicleCard);
+  document.getElementById('add-vehicle-card').addEventListener('click', () => {
+    const index = Number(totalForms.value);
+    const html = vehicleTemplate.innerHTML.replaceAll('__prefix__', String(index));
+    vehicleList.insertAdjacentHTML('beforeend', html);
+    const card = vehicleList.lastElementChild;
+    totalForms.value = String(index + 1);
+    prepareVehicleCard(card, index);
+    card.querySelector('input:not([type="hidden"]), select')?.focus();
+  });
+
+  const idInput = document.getElementById('id_valid_id_image');
+  let residentIdPreviewUrl = null;
+  idInput?.addEventListener('change', () => {
+    const file = idInput.files?.[0];
+    const preview = document.getElementById('resident-id-preview');
+    const imagePreview = document.getElementById('resident-id-image-preview');
+    const pdfPreview = document.getElementById('resident-id-pdf-preview');
+    document.getElementById('resident-id-file-name').textContent = file?.name || '';
+    imagePreview.classList.add('hidden');
+    pdfPreview.classList.add('hidden');
+    if (residentIdPreviewUrl) URL.revokeObjectURL(residentIdPreviewUrl);
+    residentIdPreviewUrl = null;
+    preview.classList.toggle('hidden', !file);
+    if (!file) return;
+
+    residentIdPreviewUrl = URL.createObjectURL(file);
+    if (file.type === 'application/pdf') {
+      pdfPreview.href = residentIdPreviewUrl;
+      pdfPreview.textContent = `Preview ${file.name}`;
+      pdfPreview.classList.remove('hidden');
+    } else if (file.type.startsWith('image/')) {
+      imagePreview.src = residentIdPreviewUrl;
+      imagePreview.classList.remove('hidden');
+    }
+  });
+
+  function closePrivacyModal() {
+    privacyModal.classList.add('hidden');
+    privacyModal.classList.remove('flex');
+    document.getElementById('open-privacy-notice').focus();
+  }
+  document.getElementById('open-privacy-notice').addEventListener('click', () => {
+    privacyModal.classList.remove('hidden');
+    privacyModal.classList.add('flex');
+    const privacyFrame = privacyModal.querySelector('iframe');
+    if (!privacyFrame.hasAttribute('src')) privacyFrame.src = privacyFrame.dataset.src;
+    document.getElementById('close-privacy-notice').focus();
+  });
+  document.getElementById('close-privacy-notice').addEventListener('click', closePrivacyModal);
+  document.getElementById('privacy-notice-done').addEventListener('click', closePrivacyModal);
+  privacyModal.addEventListener('click', (event) => {
+    if (event.target === privacyModal) closePrivacyModal();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !privacyModal.classList.contains('hidden')) closePrivacyModal();
+  });
+
+  setStep(activeStep);
 })();
 </script>
 {% endblock %}

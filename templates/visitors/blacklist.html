@@ -192,17 +192,17 @@
 <!-- Add Blacklist Modal -->
 <div id="blacklist-add-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/50" onclick="document.getElementById('blacklist-add-modal').classList.add('hidden'); document.getElementById('blacklist-add-modal').classList.remove('flex');"></div>
-  <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+  <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl form-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="blacklist-add-title">
+    <div class="form-modal-header px-6 py-4 border-b border-slate-100 flex items-center justify-between">
       <div>
-        <h3 class="text-lg font-bold text-slate-800">Add Blacklist</h3>
+        <h3 id="blacklist-add-title" class="text-lg font-bold text-slate-800">Add Blacklist</h3>
         <p class="text-xs text-slate-400 mt-0.5">Add, activate, or reactivate a blacklisted plate number.</p>
       </div>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="document.getElementById('blacklist-add-modal').classList.add('hidden'); document.getElementById('blacklist-add-modal').classList.remove('flex');">
+      <button type="button" class="text-slate-400 hover:text-slate-600" aria-label="Close blacklist form" onclick="document.getElementById('blacklist-add-modal').classList.add('hidden'); document.getElementById('blacklist-add-modal').classList.remove('flex');">
         <i class="fa fa-xmark text-xl"></i>
       </button>
     </div>
-    <form method="post" class="px-6 py-5 space-y-3 overflow-y-auto" novalidate>
+    <form method="post" class="form-modal-content px-6 py-5 space-y-3" novalidate>
       {% csrf_token %}
       {% for field in form %}
         <div>
@@ -213,7 +213,7 @@
           {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
         </div>
       {% endfor %}
-      <div class="pt-2 flex justify-end gap-2">
+      <div class="form-modal-actions flex justify-end gap-2">
         <button type="button" class="btn btn-ghost" onclick="document.getElementById('blacklist-add-modal').classList.add('hidden'); document.getElementById('blacklist-add-modal').classList.remove('flex');">Cancel</button>
         <button type="submit" class="btn bg-red-600 hover:bg-red-700 border-0 text-white">
           <i class="fa fa-ban mr-1"></i> Save Blacklist

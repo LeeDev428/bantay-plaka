@@ -126,6 +126,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+PRIVATE_MEDIA_ROOT = BASE_DIR / 'private_media'
 MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
 (MEDIA_ROOT / 'resident_ids').mkdir(parents=True, exist_ok=True)
 (MEDIA_ROOT / 'snapshots').mkdir(parents=True, exist_ok=True)

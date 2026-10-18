@@ -114,12 +114,12 @@
 <!-- Add Manual Entry Modal -->
 <div id="manual-log-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeManualLogModal()"></div>
-  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-      <h3 class="text-lg font-bold text-slate-800">Add Manual Log Entry</h3>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeManualLogModal()"><i class="fa fa-xmark text-xl"></i></button>
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl form-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="manual-log-title">
+    <div class="form-modal-header px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h3 id="manual-log-title" class="text-lg font-bold text-slate-800">Add Manual Log Entry</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" aria-label="Close manual log form" onclick="closeManualLogModal()"><i class="fa fa-xmark text-xl"></i></button>
     </div>
-    <form method="post" class="px-6 py-5 space-y-3 overflow-y-auto" novalidate>
+    <form method="post" class="form-modal-content px-6 py-5 space-y-3" novalidate>
       {% csrf_token %}
       {% for field in form %}
         <div id="manual-{{ field.name }}-wrap">
@@ -130,7 +130,7 @@
           {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
         </div>
       {% endfor %}
-      <div class="pt-2 flex justify-end gap-2">
+      <div class="form-modal-actions flex justify-end gap-2">
         <button type="button" class="btn btn-ghost" onclick="closeManualLogModal()">Cancel</button>
         <button type="submit" class="btn bg-amber-500 hover:bg-amber-600 border-0 text-white">Save Log Entry</button>
       </div>

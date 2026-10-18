@@ -68,6 +68,28 @@
     }
     .stat-card:hover { transform: translateY(-2px); }
 
+    .form-modal-dialog {
+      display: flex;
+      flex-direction: column;
+      max-height: min(90vh, 56rem);
+      max-height: min(90dvh, 56rem);
+      overflow: hidden;
+    }
+    .form-modal-header { flex: none; }
+    .form-modal-content {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .form-modal-actions {
+      position: sticky;
+      bottom: -1.25rem;
+      margin: 1rem -1.5rem -1.25rem;
+      padding: 0.875rem 1.5rem;
+      background: #fff;
+      border-top: 1px solid rgb(226 232 240);
+    }
+
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 

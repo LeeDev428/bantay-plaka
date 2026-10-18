@@ -1,9 +1,12 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db.models import Q
+from pathlib import PurePath
+import mimetypes
 
 from apps.accounts.views import admin_required
 from apps.accounts.models import User
@@ -40,7 +43,7 @@ def resident_list(request):
             messages.error(request, 'Failed to register resident. Please check the required fields.')
 
         if action == 'create_vehicle':
-            vehicle_form = VehicleForm(request.POST, prefix='vehicle')
+            vehicle_form = VehicleForm(request.POST, request.FILES, prefix='vehicle')
             resident_pk = request.POST.get('resident_pk')
             resident = get_object_or_404(Resident, pk=resident_pk) if resident_pk else None
             if resident and vehicle_form.is_valid():
@@ -107,7 +110,7 @@ def resident_vehicle_create_self(request):
     if request.method != 'POST':
         return redirect('resident_vehicles')
 
-    form = VehicleForm(request.POST)
+    form = VehicleForm(request.POST, request.FILES)
     if form.is_valid():
         vehicle = form.save(commit=False)
         vehicle.resident = resident
@@ -125,6 +128,51 @@ def resident_vehicle_create_self(request):
                 messages.error(request, err)
 
     return redirect('resident_vehicles')
+
+
+@login_required
+def resident_id_document(request, pk):
+    resident = get_object_or_404(Resident, pk=pk)
+    if not (
+        request.user.is_admin()
+        or (request.user.is_resident() and resident.user_id == request.user.pk)
+    ):
+        return HttpResponseForbidden('You do not have permission to view this document.')
+    if not resident.valid_id_image:
+        raise Http404('Resident ID document not found.')
+
+    return _registration_document_response(resident.valid_id_image, 'resident-id')
+
+
+@login_required
+def vehicle_registration_document(request, pk, document_type):
+    if document_type not in {'or', 'cr'}:
+        raise Http404('Vehicle document not found.')
+
+    vehicle = get_object_or_404(Vehicle.objects.select_related('resident'), pk=pk)
+    if not (
+        request.user.is_admin()
+        or (request.user.is_resident() and vehicle.resident.user_id == request.user.pk)
+    ):
+        return HttpResponseForbidden('You do not have permission to view this document.')
+
+    document = vehicle.or_document if document_type == 'or' else vehicle.cr_document
+    if not document:
+        raise Http404('Vehicle document not found.')
+    return _registration_document_response(document, f'vehicle-{document_type}')
+
+
+def _registration_document_response(document, filename):
+    content_type = mimetypes.guess_type(document.name)[0] or 'application/octet-stream'
+    response = FileResponse(
+        document.open('rb'),
+        as_attachment=False,
+        filename=f'{filename}{PurePath(document.name).suffix.lower()}',
+        content_type=content_type,
+    )
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    return response
 
 
 @admin_required
@@ -210,7 +258,7 @@ def resident_reject(request, pk):
 def vehicle_create(request, resident_pk):
     resident = get_object_or_404(Resident, pk=resident_pk)
     if request.method == 'POST':
-        form = VehicleForm(request.POST)
+        form = VehicleForm(request.POST, request.FILES)
         if form.is_valid():
             vehicle = form.save(commit=False)
             vehicle.resident = resident
@@ -243,7 +291,7 @@ def vehicle_approval_list(request):
     if request.method == 'POST':
         action = (request.POST.get('action') or '').strip()
         if action == 'create_vehicle':
-            vehicle_form = VehicleForm(request.POST, prefix='vehicle')
+            vehicle_form = VehicleForm(request.POST, request.FILES, prefix='vehicle')
             resident_pk = request.POST.get('resident_pk')
             resident = get_object_or_404(Resident, pk=resident_pk) if resident_pk else None
             if resident and vehicle_form.is_valid():

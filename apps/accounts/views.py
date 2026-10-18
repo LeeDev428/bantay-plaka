@@ -9,11 +9,18 @@ from django.core.paginator import Paginator
 import datetime
 from datetime import timedelta
 
-from apps.accounts.forms import LoginForm, UserCreateForm, UserEditForm, ResidentSignupForm
+from apps.accounts.forms import (
+    LoginForm,
+    PRIVACY_NOTICE_VERSION,
+    UserCreateForm,
+    UserEditForm,
+    ResidentSignupForm,
+)
 from apps.accounts.models import User
 from apps.logs.models import VehicleLog, CameraFeedSnapshot, UnrecognizedPlateAlert
 from apps.logs.forms import ManualLogForm
 from apps.logs.services import attach_blacklist_metadata, broadcast_log
+from apps.residents.forms import VehicleRegistrationFormSetFactory
 from apps.residents.models import Resident, Vehicle
 from apps.visitors.models import BlacklistEntry, Visitor
 
@@ -91,20 +98,53 @@ def resident_register(request):
         return redirect('dashboard')
 
     form = ResidentSignupForm()
+    vehicle_formset = VehicleRegistrationFormSetFactory(prefix='vehicles')
     if request.method == 'POST':
         form = ResidentSignupForm(request.POST, request.FILES)
-        if form.is_valid():
-            _, resident = form.save()
+        vehicle_formset = VehicleRegistrationFormSetFactory(
+            request.POST,
+            request.FILES,
+            prefix='vehicles',
+        )
+        form_valid = form.is_valid()
+        vehicles_valid = vehicle_formset.is_valid()
+        if form_valid and vehicles_valid:
+            user, resident = form.save(vehicle_formset)
+            vehicle_count = len(vehicle_formset.forms) - len(vehicle_formset.deleted_forms)
             messages.success(
                 request,
                 (
                     f'Registration submitted for {resident.full_name}. '
-                    'Please wait for admin approval before login and present your OR/CR requirements to HOA admin.'
+                    f'Your generated username is {user.username}. '
+                    f'{vehicle_count} vehicle registration(s) submitted. '
+                    'Please wait for admin approval before logging in.'
                 )
             )
             return redirect('login')
 
-    return render(request, 'residents/register.html', {'form': form})
+    wizard_step = 1
+    if form.errors:
+        step_one_fields = {
+            'email', 'password1', 'password2', 'first_name', 'middle_name',
+            'last_name', 'suffix', 'sex', 'birth_date',
+        }
+        step_three_fields = {'privacy_consent'}
+        if any(form.errors.get(name) for name in step_one_fields):
+            wizard_step = 1
+        elif any(form.errors.get(name) for name in step_three_fields):
+            wizard_step = 3
+        else:
+            wizard_step = 2
+    if vehicle_formset.non_form_errors() or any(vehicle_form.errors for vehicle_form in vehicle_formset.forms):
+        wizard_step = 3
+
+    return render(request, 'residents/register.html', {
+        'form': form,
+        'vehicle_formset': vehicle_formset,
+        'wizard_step': wizard_step,
+        'privacy_notice_version': PRIVACY_NOTICE_VERSION,
+        'local_date': timezone.localdate(),
+    })
 
 
 @login_required

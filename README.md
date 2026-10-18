@@ -40,6 +40,9 @@ Choose one:
 1. Preferred: 2x PoE injectors (one per camera), plus short patch cables.
 2. Alternative: 2x correct 12V camera power adapters if your camera model supports direct DC input.
 
+### Resident document storage
+Resident IDs and vehicle OR/CR documents use private storage: authenticated Cloudinary assets in production and a local directory outside `/media/` in development. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` for production. The Railway/Procfile startup runs `migrate_registration_documents` before serving requests; it moves existing public registration documents into private storage and removes their public copies. A failed migration prevents the app from starting, so resolve the storage/API error before retrying deployment.
+
 ---
 
 ## 3. Current Camera Network Plan

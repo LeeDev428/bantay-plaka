@@ -109,18 +109,23 @@
           <td class="text-sm text-slate-500">
             {{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address }}
           </td>
-          <td class="text-sm text-slate-500">{{ resident.contact_number|default:'—' }}</td>
+          <td class="text-sm text-slate-500">
+            {{ resident.contact_number|default:'—' }}
+            {% if resident.telephone_number %}<span class="block text-xs text-slate-400">Tel: {{ resident.telephone_number }}</span>{% endif %}
+          </td>
           <td>
             <p class="text-xs text-slate-600 font-medium">{{ resident.get_valid_id_type_display|default:'Not set' }}</p>
-            {% if resident.has_valid_id_image %}
-              <a href="{{ resident.valid_id_image.url }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-800 mt-1">
+            {% if resident.has_valid_id_document and user.is_admin %}
+              <a href="{% url 'resident_id_document' resident.pk %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-800 mt-1">
                 <i class="fa fa-up-right-from-square text-[10px]"></i> View Attached ID
               </a>
-              <a href="{{ resident.valid_id_image.url }}" target="_blank" class="block mt-2 w-fit">
-                <img src="{{ resident.valid_id_image.url }}" alt="Resident valid ID" class="h-12 w-20 rounded border border-slate-200 object-cover" />
-              </a>
+              {% if resident.valid_id_is_image %}
+                <a href="{% url 'resident_id_document' resident.pk %}" target="_blank" rel="noopener noreferrer" class="block mt-2 w-fit">
+                  <img src="{% url 'resident_id_document' resident.pk %}" alt="Resident valid ID" class="h-12 w-20 rounded border border-slate-200 object-cover" />
+                </a>
+              {% endif %}
             {% else %}
-              <p class="text-[11px] text-slate-400 mt-1">No uploaded ID or file unavailable.</p>
+              <p class="text-[11px] text-slate-400 mt-1">{% if user.is_admin %}No uploaded ID or file unavailable.{% else %}Private{% endif %}</p>
             {% endif %}
           </td>
           <td>
@@ -165,6 +170,12 @@
                       <span class="mx-1">·</span>
                       Color: {{ v.color|default:'—' }}
                     </p>
+                    {% if user.is_admin %}
+                      <div class="flex gap-3 text-xs mt-2">
+                        {% if v.or_document %}<a href="{% url 'vehicle_registration_document' v.pk 'or' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">View OR</a>{% endif %}
+                        {% if v.cr_document %}<a href="{% url 'vehicle_registration_document' v.pk 'cr' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">View CR</a>{% endif %}
+                      </div>
+                    {% endif %}
                     {% if v.is_approved %}
                       <span class="inline-flex mt-2 items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Approved</span>
                     {% elif v.approval_notes %}
@@ -263,14 +274,14 @@
 {% if user.is_admin %}
 <div id="resident-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeResidentModal()"></div>
-  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-      <h3 class="text-lg font-bold text-slate-800">Register Resident</h3>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeResidentModal()">
+  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl form-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="resident-modal-title">
+    <div class="form-modal-header px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h3 id="resident-modal-title" class="text-lg font-bold text-slate-800">Register Resident</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" aria-label="Close resident form" onclick="closeResidentModal()">
         <i class="fa fa-xmark text-xl"></i>
       </button>
     </div>
-    <form method="post" enctype="multipart/form-data" class="px-6 py-5">
+    <form method="post" enctype="multipart/form-data" class="form-modal-content px-6 py-5">
       {% csrf_token %}
       <input type="hidden" name="action" value="create_resident">
       <div class="grid md:grid-cols-2 gap-3">
@@ -284,7 +295,7 @@
         </div>
       {% endfor %}
       </div>
-      <div class="pt-2 flex justify-end gap-2">
+      <div class="form-modal-actions flex justify-end gap-2">
         <button type="button" class="btn btn-ghost" onclick="closeResidentModal()">Cancel</button>
         <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Resident</button>
       </div>
@@ -294,17 +305,17 @@
 
 <div id="vehicle-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeVehicleModal()"></div>
-  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl form-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="vehicle-modal-title">
+    <div class="form-modal-header px-6 py-4 border-b border-slate-100 flex items-center justify-between">
       <div>
-        <h3 class="text-lg font-bold text-slate-800">Add Vehicle</h3>
+        <h3 id="vehicle-modal-title" class="text-lg font-bold text-slate-800">Add Vehicle</h3>
         <p id="vehicle-modal-resident" class="text-xs text-slate-500"></p>
       </div>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeVehicleModal()">
+      <button type="button" class="text-slate-400 hover:text-slate-600" aria-label="Close vehicle form" onclick="closeVehicleModal()">
         <i class="fa fa-xmark text-xl"></i>
       </button>
     </div>
-    <form method="post" class="px-6 py-5 space-y-3">
+    <form method="post" enctype="multipart/form-data" class="form-modal-content px-6 py-5 space-y-3">
       {% csrf_token %}
       <input type="hidden" name="action" value="create_vehicle">
       <input type="hidden" name="resident_pk" id="vehicle-resident-pk" value="">
@@ -317,7 +328,7 @@
           {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
         </div>
       {% endfor %}
-      <div class="pt-2 flex justify-end gap-2">
+      <div class="form-modal-actions flex justify-end gap-2">
         <button type="button" class="btn btn-ghost" onclick="closeVehicleModal()">Cancel</button>
         <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Vehicle</button>
       </div>

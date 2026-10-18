@@ -1,9 +1,23 @@
-from tokenize import Comment
+import uuid
+from pathlib import PurePath
 
 from django.db import models
-from django.core.files.storage import default_storage
 from apps.accounts.models import User
 from apps.core.models import Archivable
+from apps.residents.storage import PrivateRegistrationDocumentStorage
+from apps.residents.validators import validate_uploaded_document
+
+
+def resident_id_upload_path(_instance, filename):
+    return f"resident_ids/{uuid.uuid4().hex}{PurePath(filename).suffix.lower()}"
+
+
+def vehicle_or_upload_path(_instance, filename):
+    return f"vehicle_documents/or/{uuid.uuid4().hex}{PurePath(filename).suffix.lower()}"
+
+
+def vehicle_cr_upload_path(_instance, filename):
+    return f"vehicle_documents/cr/{uuid.uuid4().hex}{PurePath(filename).suffix.lower()}"
 
 
 class Resident(Archivable, models.Model):
@@ -15,7 +29,18 @@ class Resident(Archivable, models.Model):
     ]
     VALID_ID_TYPE_CHOICES = [
         ('', "-- Select --"),
+        ('PHILSYS_ID', "Philippine National ID (PhilID)"),
+        ('PASSPORT', "Philippine Passport"),
         ('DRIVERS_LICENSE', "Driver's License"),
+        ('UMID', "UMID"),
+        ('VOTERS_ID', "Voter's ID"),
+        ('POSTAL_ID', "Postal ID"),
+        ('PRC_ID', "PRC ID"),
+        ('PHILHEALTH_ID', "PhilHealth ID"),
+        ('SSS_ID', "SSS ID"),
+        ('GSIS_ID', "GSIS ID"),
+        ('TIN_ID', "TIN ID"),
+        ('OTHER_GOVERNMENT_ID', "Other government-issued ID"),
     ]
 
     first_name = models.CharField(max_length=100)
@@ -29,8 +54,17 @@ class Resident(Archivable, models.Model):
     street_number = models.CharField(max_length=50, blank=True)
     street_name = models.CharField(max_length=150, blank=True)
     contact_number = models.CharField(max_length=20, blank=True)
+    telephone_number = models.CharField(max_length=20, blank=True)
     valid_id_type = models.CharField(max_length=80, choices=VALID_ID_TYPE_CHOICES, blank=True)
-    valid_id_image = models.ImageField(upload_to='resident_ids/', null=True, blank=True)
+    valid_id_image = models.FileField(
+        upload_to=resident_id_upload_path,
+        null=True,
+        blank=True,
+        storage=PrivateRegistrationDocumentStorage(),
+        validators=[validate_uploaded_document],
+    )
+    privacy_consent_at = models.DateTimeField(null=True, blank=True)
+    privacy_notice_version = models.CharField(max_length=32, blank=True)
     user = models.OneToOneField(
         User,
         on_delete=models.SET_NULL,
@@ -74,10 +108,19 @@ class Resident(Archivable, models.Model):
         name = (self.valid_id_image.name or '').strip()
         if not name:
             return False
-        try:
-            return default_storage.exists(name)
-        except Exception:
+        return self.valid_id_image.storage.exists(name)
+
+    @property
+    def has_valid_id_document(self):
+        if not self.valid_id_image:
             return False
+        return self.valid_id_image.storage.exists(self.valid_id_image.name)
+
+    @property
+    def valid_id_is_image(self):
+        if not self.valid_id_image:
+            return False
+        return PurePath(self.valid_id_image.name).suffix.lower() in {'.jpg', '.jpeg', '.png'}
 
 
 class Vehicle(Archivable, models.Model):
@@ -100,6 +143,20 @@ class Vehicle(Archivable, models.Model):
     make = models.CharField(max_length=100, blank=True)
     model = models.CharField(max_length=100, blank=True)
     color = models.CharField(max_length=50, blank=True)
+    or_document = models.FileField(
+        upload_to=vehicle_or_upload_path,
+        null=True,
+        blank=True,
+        storage=PrivateRegistrationDocumentStorage(),
+        validators=[validate_uploaded_document],
+    )
+    cr_document = models.FileField(
+        upload_to=vehicle_cr_upload_path,
+        null=True,
+        blank=True,
+        storage=PrivateRegistrationDocumentStorage(),
+        validators=[validate_uploaded_document],
+    )
     is_approved = models.BooleanField(default=True, db_index=True)
     approved_by = models.ForeignKey(
         User,

@@ -19,14 +19,14 @@
 <!-- Register Vehicle Modal -->
 <div id="approval-register-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeApprovalRegisterModal()"></div>
-  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-      <h3 class="text-lg font-bold text-slate-800">Register Vehicle</h3>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeApprovalRegisterModal()">
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl form-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="approval-register-title">
+    <div class="form-modal-header px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h3 id="approval-register-title" class="text-lg font-bold text-slate-800">Register Vehicle</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" aria-label="Close vehicle form" onclick="closeApprovalRegisterModal()">
         <i class="fa fa-xmark text-xl"></i>
       </button>
     </div>
-    <form method="post" class="px-6 py-5 space-y-3" novalidate>
+    <form method="post" enctype="multipart/form-data" class="form-modal-content px-6 py-5 space-y-3" novalidate>
       {% csrf_token %}
       <input type="hidden" name="action" value="create_vehicle">
       <div>
@@ -47,7 +47,7 @@
           {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
         </div>
       {% endfor %}
-      <div class="pt-2 flex justify-end gap-2">
+      <div class="form-modal-actions flex justify-end gap-2">
         <button type="button" class="btn btn-ghost" onclick="closeApprovalRegisterModal()">Cancel</button>
         <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Vehicle</button>
       </div>
@@ -126,7 +126,13 @@
         <tr class="hover:bg-slate-50 transition-colors">
           <td class="font-mono font-semibold text-slate-800">{{ vehicle.plate_number }}</td>
           <td class="text-sm text-slate-600">{{ vehicle.resident.full_name }}</td>
-          <td class="text-xs text-slate-500">{{ vehicle.get_vehicle_type_display }}{% if vehicle.color %} – {{ vehicle.color }}{% endif %}{% if vehicle.make or vehicle.model %} – {{ vehicle.make }} {{ vehicle.model }}{% endif %}</td>
+          <td class="text-xs text-slate-500">
+            {{ vehicle.get_vehicle_type_display }}{% if vehicle.color %} – {{ vehicle.color }}{% endif %}{% if vehicle.make or vehicle.model %} – {{ vehicle.make }} {{ vehicle.model }}{% endif %}
+            <div class="flex gap-2 mt-1">
+              {% if vehicle.or_document %}<a href="{% url 'vehicle_registration_document' vehicle.pk 'or' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">OR</a>{% endif %}
+              {% if vehicle.cr_document %}<a href="{% url 'vehicle_registration_document' vehicle.pk 'cr' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">CR</a>{% endif %}
+            </div>
+          </td>
           <td class="text-xs text-slate-400">{{ vehicle.created_at|date:"M d, Y h:i A" }}</td>
           <td>
             <div class="flex items-center gap-1 flex-wrap">

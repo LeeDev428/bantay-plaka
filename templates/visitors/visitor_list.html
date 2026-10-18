@@ -178,12 +178,12 @@
 <!-- Create Modal -->
 <div id="visitor-create-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeVisitorCreateModal()"></div>
-  <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-      <h3 class="text-lg font-bold text-slate-800">Log Visitor</h3>
-      <button type="button" class="text-slate-400 hover:text-slate-600" onclick="closeVisitorCreateModal()"><i class="fa fa-xmark text-xl"></i></button>
+  <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl form-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="visitor-create-title">
+    <div class="form-modal-header px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h3 id="visitor-create-title" class="text-lg font-bold text-slate-800">Log Visitor</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" aria-label="Close visitor form" onclick="closeVisitorCreateModal()"><i class="fa fa-xmark text-xl"></i></button>
     </div>
-    <form method="post" class="px-6 py-5 space-y-3 overflow-y-auto" novalidate>
+    <form method="post" class="form-modal-content px-6 py-5 space-y-3" novalidate>
       {% csrf_token %}
       <input type="hidden" name="action" value="create_visitor">
       <div class="grid sm:grid-cols-2 gap-3">
@@ -197,7 +197,7 @@
           </div>
         {% endfor %}
       </div>
-      <div class="pt-2 flex justify-end gap-2">
+      <div class="form-modal-actions flex justify-end gap-2">
         <button type="button" class="btn btn-ghost" onclick="closeVisitorCreateModal()">Cancel</button>
         <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Visitor Log</button>
       </div>

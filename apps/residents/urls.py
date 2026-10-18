@@ -3,6 +3,8 @@ from apps.residents import views
 from apps.residents import export_views
 
 urlpatterns = [
+    path('<int:pk>/id-document/', views.resident_id_document, name='resident_id_document'),
+    path('vehicles/<int:pk>/documents/<str:document_type>/', views.vehicle_registration_document, name='vehicle_registration_document'),
     path('', views.resident_list, name='resident_list'),
     path('create/', views.resident_create, name='resident_create'),
     path('<int:pk>/edit/', views.resident_edit, name='resident_edit'),

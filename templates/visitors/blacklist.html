@@ -131,7 +131,7 @@
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Inactive</span>
             {% endif %}
           </td>
-          <td class="text-xs text-slate-500">{{ entry.created_by.get_full_name|default:'—' }}</td>
+          <td class="text-xs text-slate-500">{% if entry.created_by %}{{ entry.created_by.get_full_name|default:entry.created_by.username }}{% else %}—{% endif %}</td>
           <td class="text-xs text-slate-400">{{ entry.created_at|date:"M d, Y h:i A" }}</td>
           <td>
             <div class="flex flex-wrap gap-1">

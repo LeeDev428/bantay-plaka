@@ -62,7 +62,7 @@ class ArchiveListTests(SimpleTestCase):
             [('recent-items', slice(None, 5, None))] * 2,
         )
 
-    def test_search_category_and_archived_date_filters_apply_to_sections(self):
+    def test_category_selection_preserves_other_filtered_section_counts(self):
         class ArchivedQuerySet:
             def __init__(self, count):
                 self.item_count = count
@@ -77,9 +77,6 @@ class ArchiveListTests(SimpleTestCase):
 
             def exclude(self, **_kwargs):
                 return self
-
-            def none(self):
-                return ArchivedQuerySet(0)
 
             def count(self):
                 return self.item_count
@@ -118,7 +115,8 @@ class ArchiveListTests(SimpleTestCase):
         self.assertEqual(context['category'], 'visitors')
         self.assertEqual(context['date_from'], '2026-10-01')
         self.assertEqual(context['date_to'], '2026-10-12')
-        self.assertEqual(context['total_count'], 4)
+        self.assertEqual(context['total_count'], 7)
+        self.assertEqual([section['count'] for section in context['sections']], [4, 3])
         date_filters = [kwargs for _args, kwargs in visitors.filters if kwargs]
         self.assertIn({'archived_at__date__gte': datetime.date(2026, 10, 1)}, date_filters)
         self.assertIn({'archived_at__date__lte': datetime.date(2026, 10, 12)}, date_filters)

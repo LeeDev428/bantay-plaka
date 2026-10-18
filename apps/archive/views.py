@@ -58,8 +58,6 @@ def archive_list(request):
     total_count = 0
     for slug, config in ARCHIVE_REGISTRY.items():
         qs = config["model"].archived_objects.order_by("-archived_at")
-        if category and category != slug:
-            qs = qs.none()
         if slug == "logs":
             qs = qs.filter(Q(snapshot__isnull=True) | Q(snapshot=""))
         elif slug == "snapshots":

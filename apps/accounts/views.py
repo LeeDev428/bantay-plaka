@@ -378,6 +378,9 @@ def resident_dashboard(request):
 
     vehicles = list(resident.vehicles.all())
     plates = [v.plate_number for v in vehicles if v.plate_number]
+    today = timezone.localdate()
+    today_start = timezone.make_aware(datetime.datetime.combine(today, datetime.time.min))
+    tomorrow_start = today_start + datetime.timedelta(days=1)
     active_blacklist = list(
         BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
     )
@@ -386,7 +389,11 @@ def resident_dashboard(request):
         vehicle.blacklist_entry = bl_map.get((vehicle.plate_number or '').upper())
 
     logs_qs = VehicleLog.objects.filter(plate_number__in=plates).order_by('-timestamp')
-    logs = logs_qs[:10]
+    logs = logs_qs[:5]
+    today_log_count = logs_qs.filter(
+        timestamp__gte=today_start,
+        timestamp__lt=tomorrow_start,
+    ).count()
 
     if active_blacklist:
         resident_status = 'BLACKLISTED'
@@ -406,6 +413,9 @@ def resident_dashboard(request):
         'vehicles': vehicles,
         'logs': logs,
         'active_blacklist': active_blacklist,
+        'approved_vehicle_count': sum(1 for vehicle in vehicles if vehicle.is_approved),
+        'pending_vehicle_count': sum(1 for vehicle in vehicles if not vehicle.is_approved),
+        'today_log_count': today_log_count,
         'resident_status': resident_status,
         'resident_status_reason': resident_status_reason,
         'now_local': timezone.localtime(),
@@ -431,6 +441,8 @@ def resident_vehicles(request):
     context = {
         'resident': resident,
         'vehicles': vehicles,
+        'pending_vehicle_count': sum(1 for vehicle in vehicles if not vehicle.is_approved),
+        'active_blacklist_count': len(active_blacklist),
         'now_local': timezone.localtime(),
     }
     return render(request, 'dashboard/resident/vehicles.html', context)
@@ -459,7 +471,7 @@ def resident_profile(request):
     if not request.user.is_resident():
         return redirect('dashboard')
 
-    resident = get_object_or_404(Resident, user=request.user)
+    resident = get_object_or_404(Resident.objects.select_related('user'), user=request.user)
     plates = list(resident.vehicles.values_list('plate_number', flat=True))
     active_blacklist = BlacklistEntry.objects.filter(plate_number__in=plates, is_active=True).order_by('-updated_at')
     if active_blacklist.exists():
@@ -477,6 +489,8 @@ def resident_profile(request):
 
     context = {
         'resident': resident,
+        'vehicle_count': resident.vehicles.count(),
+        'pending_vehicle_count': resident.vehicles.filter(is_approved=False).count(),
         'resident_status': resident_status,
         'resident_status_reason': resident_status_reason,
         'now_local': timezone.localtime(),

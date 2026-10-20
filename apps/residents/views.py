@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -126,6 +127,7 @@ def resident_vehicle_create_self(request):
         for field_errors in form.errors.values():
             for err in field_errors:
                 messages.error(request, err)
+        return redirect(f"{reverse('resident_vehicles')}?add_vehicle=1")
 
     return redirect('resident_vehicles')
 

@@ -23,19 +23,33 @@
 
     <p class="text-sm text-slate-600 mt-3">{{ resident_status_reason }}</p>
     <p class="text-xs text-slate-400 mt-2">Updated {{ now_local|date:"M d, Y h:i A" }}</p>
+    <div class="mt-5 pt-4 border-t border-slate-100">
+      <h3 class="text-sm font-semibold text-slate-800">Resident account</h3>
+      <p class="text-sm text-slate-600 mt-2">Vehicle registrations: <span class="font-medium text-slate-800">{{ vehicle_count }}</span></p>
+      <p class="text-sm text-slate-600 mt-1">Pending vehicle approvals: <span class="font-medium text-slate-800">{{ pending_vehicle_count }}</span></p>
+    </div>
   </div>
 
   <div class="lg:col-span-2 page-card p-5">
-    <h2 class="font-semibold text-slate-800 mb-4">Resident Information</h2>
-    <div class="grid md:grid-cols-2 gap-4 text-sm text-slate-700">
-      <p><span class="text-slate-500">Full Name:</span> {{ resident.full_name }}</p>
-      <p><span class="text-slate-500">Sex:</span> {{ resident.get_sex_display|default:'Not set' }}</p>
-      <p><span class="text-slate-500">Birth Date:</span> {{ resident.birth_date|date:"F d, Y"|default:'Not set' }}</p>
-      <p><span class="text-slate-500">Age:</span> {{ resident.age|default:'Not set' }}</p>
-      <p><span class="text-slate-500">Contact Number:</span> {{ resident.contact_number|default:'Not set' }}</p>
-      {% if resident.telephone_number %}<p><span class="text-slate-500">Telephone:</span> {{ resident.telephone_number }}</p>{% endif %}
-      <p><span class="text-slate-500">Valid ID Type:</span> {{ resident.get_valid_id_type_display|default:'Not set' }}</p>
-      <p class="md:col-span-2"><span class="text-slate-500">Address:</span> {{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address }}</p>
+    <h2 class="font-semibold text-slate-800 mb-4">Account Information</h2>
+    <div class="grid md:grid-cols-2 gap-4 text-sm">
+      <p><span class="block text-xs text-slate-500">Username</span><span class="font-medium text-slate-800">{{ request.user.username|default:'Not set' }}</span></p>
+      <p><span class="block text-xs text-slate-500">Email address</span><span class="font-medium text-slate-800 break-all">{{ request.user.email|default:'Not set' }}</span></p>
+      <p><span class="block text-xs text-slate-500">Account type</span><span class="font-medium text-slate-800">{{ request.user.get_role_display }}</span></p>
+      <p><span class="block text-xs text-slate-500">Account created</span><span class="font-medium text-slate-800">{{ request.user.date_joined|date:"F d, Y" }}</span></p>
+    </div>
+
+    <h2 class="font-semibold text-slate-800 mt-7 mb-4">Resident Information</h2>
+    <div class="grid md:grid-cols-2 gap-4 text-sm">
+      <p><span class="block text-xs text-slate-500">Full name</span><span class="font-medium text-slate-800">{{ resident.full_name }}</span></p>
+      <p><span class="block text-xs text-slate-500">Sex</span><span class="font-medium text-slate-800">{{ resident.get_sex_display|default:'Not set' }}</span></p>
+      <p><span class="block text-xs text-slate-500">Birth date</span><span class="font-medium text-slate-800">{{ resident.birth_date|date:"F d, Y"|default:'Not set' }}</span></p>
+      <p><span class="block text-xs text-slate-500">Age</span><span class="font-medium text-slate-800">{{ resident.age|default:'Not set' }}</span></p>
+      <p><span class="block text-xs text-slate-500">Mobile number</span><span class="font-medium text-slate-800">{{ resident.contact_number|default:'Not set' }}</span></p>
+      <p><span class="block text-xs text-slate-500">Telephone</span><span class="font-medium text-slate-800">{{ resident.telephone_number|default:'Not set' }}</span></p>
+      <p><span class="block text-xs text-slate-500">Valid ID type</span><span class="font-medium text-slate-800">{{ resident.get_valid_id_type_display|default:'Not set' }}</span></p>
+      <p><span class="block text-xs text-slate-500">Privacy notice accepted</span><span class="font-medium text-slate-800">{% if resident.privacy_consent_at %}{{ resident.privacy_consent_at|date:"F d, Y" }} ({{ resident.privacy_notice_version }}){% else %}Not recorded{% endif %}</span></p>
+      <p class="md:col-span-2"><span class="block text-xs text-slate-500">Address</span><span class="font-medium text-slate-800">{{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address|default:'Not set' }}</span></p>
     </div>
 
     {% if resident.has_valid_id_document %}

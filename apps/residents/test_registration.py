@@ -76,15 +76,21 @@ class ResidentRegistrationWizardTests(SimpleTestCase):
         self.assertEqual(formset.forms, [])
 
     @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
-    def test_registration_page_renders_three_steps_and_privacy_modal(self):
+    def test_registration_page_renders_review_step_and_local_privacy_text(self):
         response = Client().get('/resident/register/')
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Account &amp; Personal')
         self.assertContains(response, 'Contact &amp; Address')
         self.assertContains(response, 'Vehicles &amp; Consent')
+        self.assertContains(response, 'Review &amp; Submit')
+        self.assertContains(response, 'Please note your username before continuing.')
+        self.assertContains(response, 'registration-review-content')
         self.assertContains(response, 'privacy-notice-modal')
+        self.assertContains(response, 'selected readable provisions')
+        self.assertContains(response, 'Section 11. General Data Privacy Principles.')
         self.assertContains(response, 'https://privacy.gov.ph/data-privacy-act/')
+        self.assertNotContains(response, '<iframe')
 
 
 class PrivateRegistrationDocumentStorageTests(SimpleTestCase):

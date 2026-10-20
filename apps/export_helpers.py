@@ -106,8 +106,30 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
         c.fill = fill(BLUE); c.alignment = center; c.border = border
     ws.row_dimensions[4].height = 20
 
-    # Start with requested widths, then auto-expand based on content.
-    computed_widths = {i: float(w) for i, w in enumerate(col_widths, 1)}
+    # Start with requested widths, then auto-expand based on headers and content.
+    computed_widths = {}
+    for c_idx, header in enumerate(headers, 1):
+        requested_width = float(col_widths[c_idx - 1]) if c_idx <= len(col_widths) else 8.0
+        header_width = max((len(line) for line in str(header).splitlines()), default=0) + 2.0
+        computed_widths[c_idx] = min(60.0, max(8.0, requested_width, header_width))
+
+    for row in rows:
+        for c_idx, val in enumerate(row, 1):
+            text = '' if val is None else str(val)
+            longest_line = max((len(line) for line in text.splitlines()), default=0)
+            computed_widths[c_idx] = max(
+                computed_widths.get(c_idx, 8.0),
+                min(60.0, longest_line + 2.0),
+            )
+
+    header_lines = 1
+    for c_idx, header in enumerate(headers, 1):
+        text = str(header)
+        longest_line = max((len(line) for line in text.splitlines()), default=0)
+        col_width = max(computed_widths.get(c_idx, 8.0), 8.0)
+        wrapped_lines = max(1, math.ceil(max(1, longest_line) / max(8.0, col_width - 1.5)))
+        header_lines = max(header_lines, wrapped_lines, text.count('\n') + 1)
+    ws.row_dimensions[4].height = min(60, max(20, 15 * header_lines))
 
     # ── Data rows ──
     for r_idx, row in enumerate(rows, 1):
@@ -122,8 +144,6 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
 
             text = '' if val is None else str(val)
             longest_line = max((len(line) for line in text.splitlines()), default=0)
-            computed_widths[c_idx] = max(computed_widths.get(c_idx, 8.0), min(60.0, longest_line + 2.0))
-
             col_width = max(computed_widths.get(c_idx, 8.0), 8.0)
             wrapped_lines = max(1, math.ceil(max(1, longest_line) / max(8.0, col_width - 1.5)))
             explicit_lines = max(1, text.count('\n') + 1)
@@ -141,6 +161,12 @@ def build_excel_response(filename_base, sheet_title, headers, col_widths,
 
     for c_idx, width in computed_widths.items():
         ws.column_dimensions[get_column_letter(c_idx)].width = width
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.print_title_rows = '1:4'
 
     if rows:
         ws.freeze_panes = 'A5'
@@ -257,9 +283,11 @@ def build_pdf_response(filename_base, report_title, headers, col_widths_mm,
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.graphics.charts.barcharts import VerticalBarChart
     from reportlab.graphics.charts.piecharts import Pie
     from reportlab.graphics.shapes import Drawing, String
+    from xml.sax.saxutils import escape
 
     resp = HttpResponse(content_type='application/pdf')
     resp['Content-Disposition'] = (
@@ -377,8 +405,70 @@ def build_pdf_response(filename_base, report_title, headers, col_widths_mm,
         ]))
         elems.extend([charts_table, Spacer(1, 5*mm)])
 
-    data = [headers] + [[str(v) if v is not None else '' for v in r] for r in rows]
-    table = Table(data, colWidths=[w*mm for w in col_widths_mm], repeatRows=1)
+    available_width = landscape(A4)[0] - doc.leftMargin - doc.rightMargin
+    column_widths = []
+    for index, header in enumerate(headers):
+        requested_width = float(col_widths_mm[index]) if index < len(col_widths_mm) else 1.0
+        content_width = max(
+            stringWidth(line, 'Helvetica', 7)
+            for value in [header] + [row[index] if index < len(row) else '' for row in rows]
+            for line in str(value if value is not None else '').splitlines() or ['']
+        ) / mm + 4
+        column_widths.append(max(requested_width, min(80.0, content_width)))
+    total_column_width = sum(column_widths) or 1.0
+    column_widths_pts = [width * available_width / total_column_width for width in column_widths]
+
+    header_style = ParagraphStyle(
+        'ExportTableHeader',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        leading=10,
+        alignment=1,
+        textColor=colors.white,
+        wordWrap='CJK',
+    )
+    cell_style = ParagraphStyle(
+        'ExportTableCell',
+        parent=styles['Normal'],
+        fontSize=7,
+        leading=9,
+        wordWrap='CJK',
+    )
+    highlighted_cell_style = ParagraphStyle(
+        'ExportTableHighlightedCell',
+        parent=cell_style,
+        textColor=colors.HexColor('#DC2626'),
+    )
+    mono_cell_style = ParagraphStyle(
+        'ExportTableMonoCell',
+        parent=cell_style,
+        fontName='Courier-Bold',
+    )
+    highlighted_mono_cell_style = ParagraphStyle(
+        'ExportTableHighlightedMonoCell',
+        parent=mono_cell_style,
+        textColor=colors.HexColor('#DC2626'),
+    )
+
+    def table_cell(value, style):
+        text = '' if value is None else str(value)
+        return Paragraph(escape(text).replace('\n', '<br/>'), style)
+
+    data = [[table_cell(header, header_style) for header in headers]]
+    highlighted_rows = []
+    for row in rows:
+        flagged = highlight_fn(row) if highlight_fn else False
+        highlighted_rows.append(flagged)
+        row_cells = []
+        for index, value in enumerate(row):
+            if index == mono_col_idx:
+                row_style = highlighted_mono_cell_style if flagged else mono_cell_style
+            else:
+                row_style = highlighted_cell_style if flagged else cell_style
+            row_cells.append(table_cell(value, row_style))
+        data.append(row_cells)
+    table = Table(data, colWidths=column_widths_pts, repeatRows=1)
 
     style_cmds = [
         ('BACKGROUND',    (0,0), (-1,0), colors.HexColor(f'#{NAVY}')),
@@ -394,8 +484,8 @@ def build_pdf_response(filename_base, report_title, headers, col_widths_mm,
         ('ALIGN',         (0,0), (-1,0),  'CENTER'),
     ]
     if highlight_fn:
-        for i, row in enumerate(rows, 1):
-            if highlight_fn(row):
+        for i, flagged in enumerate(highlighted_rows, 1):
+            if flagged:
                 style_cmds += [
                     ('BACKGROUND', (0,i), (-1,i), colors.HexColor(f'#{REDBG}')),
                     ('TEXTCOLOR',  (0,i), (-1,i), colors.HexColor('#DC2626')),

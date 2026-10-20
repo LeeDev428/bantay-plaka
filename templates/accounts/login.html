@@ -28,7 +28,7 @@
           {% csrf_token %}
 
           <div class="mb-4">
-            <label class="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Username or email address</label>
             {{ form.username }}
             {% if form.username.errors %}
               <p class="text-red-500 text-xs mt-1">{{ form.username.errors.0 }}</p>

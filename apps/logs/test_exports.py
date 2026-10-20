@@ -1,12 +1,12 @@
 from datetime import datetime, timezone as datetime_timezone
 from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import RequestFactory, SimpleTestCase
 from openpyxl import load_workbook
 
-from apps.export_helpers import build_export_chart_data
+from apps.export_helpers import build_excel_response, build_export_chart_data, build_pdf_response
 from apps.logs.export_views import export_logs_excel, export_logs_pdf
 
 
@@ -135,3 +135,48 @@ class VehicleLogExportChartTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.content.startswith(b'%PDF-'))
         self.assertGreater(len(response.content), 1000)
+
+
+class ExportTableSizingTests(SimpleTestCase):
+    def test_excel_columns_expand_for_long_headers_and_values(self):
+        response = build_excel_response(
+            'sizing_test',
+            'Sizing Test',
+            headers=['Record identifier', 'Description'],
+            col_widths=[5, 8],
+            rows=[[1, 'A description that should widen its column']],
+        )
+        worksheet = load_workbook(BytesIO(response.content)).active
+
+        self.assertGreaterEqual(worksheet.column_dimensions['A'].width, len('Record identifier') + 2)
+        self.assertGreaterEqual(
+            worksheet.column_dimensions['B'].width,
+            len('A description that should widen its column') + 2,
+        )
+        self.assertTrue(worksheet.sheet_properties.pageSetUpPr.fitToPage)
+        self.assertEqual(worksheet.page_setup.fitToWidth, 1)
+        self.assertEqual(worksheet.page_setup.orientation, 'landscape')
+
+    def test_pdf_table_fits_landscape_page_and_wraps_cell_content(self):
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.units import mm
+
+        document_instance = Mock()
+        document_instance.leftMargin = 12 * mm
+        document_instance.rightMargin = 12 * mm
+        with patch('reportlab.platypus.SimpleDocTemplate', return_value=document_instance):
+            response = build_pdf_response(
+                'sizing_test',
+                'Sizing Test',
+                headers=['Name', 'Description'],
+                col_widths_mm=[10, 10],
+                rows=[['Resident', 'Long text with <markup> that should wrap within the page']],
+                mono_col_idx=0,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        table = document_instance.build.call_args.args[0][-1]
+        available_width = landscape(A4)[0] - 24 * mm
+        self.assertAlmostEqual(sum(table._argW), available_width)
+        self.assertEqual(table._cellvalues[1][0].style.fontName, 'Courier-Bold')
+        self.assertEqual(table._cellvalues[1][1].text, 'Long text with &lt;markup&gt; that should wrap within the page')

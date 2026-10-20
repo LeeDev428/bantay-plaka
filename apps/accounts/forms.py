@@ -16,7 +16,7 @@ from apps.residents.validators import validate_uploaded_document
 
 
 CONTACT_NUMBER_REGEX = re.compile(r'^09\d{9}$')
-PRIVACY_NOTICE_VERSION = '2026-10-v1'
+PRIVACY_NOTICE_VERSION = '2026-10-v2'
 
 
 def _normalize_contact_number(raw_value: str) -> str:
@@ -43,7 +43,7 @@ class LoginForm(AuthenticationForm):
     username = forms.CharField(
         widget=forms.TextInput(attrs={
             'class': 'input input-bordered w-full',
-            'placeholder': 'Username',
+            'placeholder': 'Username or email address',
             'autofocus': True,
         })
     )
@@ -57,6 +57,14 @@ class LoginForm(AuthenticationForm):
     def clean(self):
         username = self.cleaned_data.get('username')
         password = self.cleaned_data.get('password')
+
+        if username:
+            user_model = get_user_model()
+            username_match = user_model._default_manager.filter(username__iexact=username).first()
+            if username_match is None:
+                email_match = user_model._default_manager.filter(email__iexact=username).first()
+                if email_match:
+                    username = email_match.username
 
         if username and password:
             self.user_cache = authenticate(self.request, username=username, password=password)

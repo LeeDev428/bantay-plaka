@@ -3,24 +3,24 @@
 {% block breadcrumb %}Dashboard &raquo; Resident{% endblock %}
 
 {% block content %}
-<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5 sm:mb-6">
   <div>
-    <h1 class="text-2xl font-bold text-slate-800">Resident Dashboard</h1>
+    <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Resident Dashboard</h1>
     <p class="text-sm text-slate-500 mt-0.5">Welcome, {{ resident.full_name }}. Here is what needs your attention.</p>
   </div>
   {% if resident_status == 'APPROVED' %}
-    <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">Resident account approved</span>
+    <span class="inline-flex w-fit items-center px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">Resident account approved</span>
   {% elif resident_status == 'BLACKLISTED' %}
-    <span class="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">Action needed: vehicle has an active blacklist record</span>
+    <span class="inline-flex w-fit max-w-full items-center px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold">Action needed: vehicle has an active blacklist record</span>
   {% elif resident_status == 'NOT_APPROVED' %}
-    <span class="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Resident account not approved</span>
+    <span class="inline-flex w-fit items-center px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Resident account not approved</span>
   {% else %}
-    <span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold">Resident account pending approval</span>
+    <span class="inline-flex w-fit items-center px-3 py-1.5 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold">Resident account pending approval</span>
   {% endif %}
 </div>
 
 {% if resident_status == 'BLACKLISTED' or resident_status == 'NOT_APPROVED' or resident_status == 'PENDING' %}
-  <div class="page-card p-4 mb-6 border-l-4 {% if resident_status == 'BLACKLISTED' %}border-red-500 bg-red-50{% else %}border-amber-400 bg-amber-50{% endif %}" role="status">
+  <div class="page-card p-3 sm:p-4 mb-5 sm:mb-6 border-l-4 {% if resident_status == 'BLACKLISTED' %}border-red-500 bg-red-50{% else %}border-amber-400 bg-amber-50{% endif %}" role="status">
     <h2 class="font-semibold text-slate-800">Account status</h2>
     <p class="text-sm text-slate-700 mt-1">{{ resident_status_reason }}</p>
     {% if resident_status == 'PENDING' %}
@@ -29,54 +29,54 @@
   </div>
 {% endif %}
 
-<div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-  <div class="stat-card">
-    <p class="text-xs uppercase tracking-wide text-slate-500">My vehicles</p>
-    <p class="text-3xl font-bold text-slate-800 mt-1">{{ vehicles|length }}</p>
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-4 mb-5 sm:mb-6">
+  <div class="stat-card p-3 sm:p-5">
+    <p class="text-[10px] sm:text-xs uppercase tracking-wide text-slate-500">My vehicles</p>
+    <p class="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{{ vehicles|length }}</p>
     <p class="text-xs text-slate-500 mt-1">{{ approved_vehicle_count }} approved{% if pending_vehicle_count %}, {{ pending_vehicle_count }} pending{% endif %}</p>
   </div>
-  <div class="stat-card">
-    <p class="text-xs uppercase tracking-wide text-slate-500">Gate movements today</p>
-    <p class="text-3xl font-bold text-slate-800 mt-1">{{ today_log_count }}</p>
+  <div class="stat-card p-3 sm:p-5">
+    <p class="text-[10px] sm:text-xs uppercase tracking-wide text-slate-500">Gate movements today</p>
+    <p class="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{{ today_log_count }}</p>
     <p class="text-xs text-slate-500 mt-1">For your registered vehicle plates</p>
   </div>
-  <div class="stat-card">
-    <p class="text-xs uppercase tracking-wide text-slate-500">Pending vehicle approvals</p>
-    <p class="text-3xl font-bold {% if pending_vehicle_count %}text-amber-600{% else %}text-emerald-600{% endif %} mt-1">{{ pending_vehicle_count }}</p>
+  <div class="stat-card p-3 sm:p-5">
+    <p class="text-[10px] sm:text-xs uppercase tracking-wide text-slate-500">Pending approvals</p>
+    <p class="text-2xl sm:text-3xl font-bold {% if pending_vehicle_count %}text-amber-600{% else %}text-emerald-600{% endif %} mt-1">{{ pending_vehicle_count }}</p>
     <p class="text-xs text-slate-500 mt-1">{% if pending_vehicle_count %}Awaiting administration review{% else %}No vehicle approvals waiting{% endif %}</p>
   </div>
-  <div class="stat-card">
-    <p class="text-xs uppercase tracking-wide text-slate-500">Active vehicle alerts</p>
-    <p class="text-3xl font-bold {% if active_blacklist %}text-red-600{% else %}text-emerald-600{% endif %} mt-1">{{ active_blacklist|length }}</p>
+  <div class="stat-card p-3 sm:p-5">
+    <p class="text-[10px] sm:text-xs uppercase tracking-wide text-slate-500">Active alerts</p>
+    <p class="text-2xl sm:text-3xl font-bold {% if active_blacklist %}text-red-600{% else %}text-emerald-600{% endif %} mt-1">{{ active_blacklist|length }}</p>
     <p class="text-xs text-slate-500 mt-1">{% if active_blacklist %}Review the affected vehicle below{% else %}No active blacklist records{% endif %}</p>
   </div>
 </div>
 
-<div class="grid sm:grid-cols-3 gap-3 mb-6">
-  <a href="{% url 'resident_vehicles' %}" class="page-card p-4 border-l-4 border-blue-400 hover:border-blue-500 transition-colors">
-    <p class="text-xs uppercase text-slate-500">My Vehicles</p>
-    <p class="text-sm font-semibold text-slate-800 mt-1">View vehicles or submit a new one</p>
+<div class="grid sm:grid-cols-3 gap-2 sm:gap-3 mb-5 sm:mb-6">
+  <a href="{% url 'resident_vehicles' %}" class="page-card min-h-[76px] p-3 sm:p-4 border-l-4 border-blue-400 hover:border-blue-500 transition-colors flex items-center justify-between gap-2">
+    <span><span class="block text-xs uppercase text-slate-500">My Vehicles</span><span class="block text-xs sm:text-sm font-semibold text-slate-800 mt-1">View plates and approvals</span></span>
+    <i class="fa fa-car-side text-blue-600" aria-hidden="true"></i>
   </a>
-  <a href="{% url 'resident_logs' %}" class="page-card p-4 border-l-4 border-emerald-400 hover:border-emerald-500 transition-colors">
-    <p class="text-xs uppercase text-slate-500">Gate Activity</p>
-    <p class="text-sm font-semibold text-slate-800 mt-1">Review your vehicle in/out history</p>
+  <a href="{% url 'resident_logs' %}" class="page-card min-h-[76px] p-3 sm:p-4 border-l-4 border-emerald-400 hover:border-emerald-500 transition-colors flex items-center justify-between gap-2">
+    <span><span class="block text-xs uppercase text-slate-500">Gate Activity</span><span class="block text-xs sm:text-sm font-semibold text-slate-800 mt-1">Review in/out history</span></span>
+    <i class="fa fa-right-left text-emerald-600" aria-hidden="true"></i>
   </a>
-  <a href="{% url 'resident_profile' %}" class="page-card p-4 border-l-4 border-amber-400 hover:border-amber-500 transition-colors">
-    <p class="text-xs uppercase text-slate-500">My Profile</p>
-    <p class="text-sm font-semibold text-slate-800 mt-1">Check your account and contact details</p>
+  <a href="{% url 'resident_profile' %}" class="page-card min-h-[76px] p-3 sm:p-4 border-l-4 border-amber-400 hover:border-amber-500 transition-colors flex items-center justify-between gap-2">
+    <span><span class="block text-xs uppercase text-slate-500">My Profile</span><span class="block text-xs sm:text-sm font-semibold text-slate-800 mt-1">Account and contact details</span></span>
+    <i class="fa fa-id-card text-amber-600" aria-hidden="true"></i>
   </a>
 </div>
 
 <div class="grid xl:grid-cols-3 gap-5">
   <section class="page-card xl:col-span-2">
-    <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+    <div class="flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-100">
       <div>
         <h2 class="font-semibold text-slate-800">Recent gate activity</h2>
         <p class="text-xs text-slate-500 mt-1">Latest movements recorded for your plates</p>
       </div>
       <a href="{% url 'resident_logs' %}" class="text-sm font-semibold text-blue-700 hover:text-blue-800">View all</a>
     </div>
-    <div class="overflow-x-auto">
+    <div class="hidden sm:block overflow-x-auto">
       <table class="table table-sm">
         <thead>
           <tr class="bg-slate-50 text-xs uppercase text-slate-500">
@@ -106,9 +106,26 @@
         </tbody>
       </table>
     </div>
+    <div class="sm:hidden divide-y divide-slate-100">
+      {% for log in logs %}
+        <div class="px-4 py-3 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-mono font-semibold text-sm text-slate-800">{{ log.plate_number }}</p>
+            <p class="text-xs text-slate-500 mt-1">{{ log.local_time|date:"M d, Y · h:i A" }} &middot; {{ log.get_source_display }}</p>
+          </div>
+          {% if log.status == 'TIME_IN' %}
+            <span class="inline-flex shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">IN</span>
+          {% else %}
+            <span class="inline-flex shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">OUT</span>
+          {% endif %}
+        </div>
+      {% empty %}
+        <p class="text-center text-sm text-slate-500 px-4 py-8">No gate activity has been recorded for your vehicles yet.</p>
+      {% endfor %}
+    </div>
   </section>
 
-  <section class="page-card p-5">
+  <section class="page-card p-4 sm:p-5">
     <h2 class="font-semibold text-slate-800">Vehicle status</h2>
     <p class="text-xs text-slate-500 mt-1 mb-4">Approval and active alerts for each registered plate</p>
     <div class="space-y-3">

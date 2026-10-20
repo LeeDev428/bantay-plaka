@@ -3,34 +3,34 @@
 {% block breadcrumb %}Resident &raquo; My Vehicles{% endblock %}
 
 {% block content %}
-<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 sm:mb-6">
   <div>
-    <h1 class="text-2xl font-bold text-slate-800">My Vehicles</h1>
+    <h1 class="text-xl sm:text-2xl font-bold text-slate-800">My Vehicles</h1>
     <p class="text-slate-500 text-sm mt-0.5">Review your registered plates, approval status, and vehicle documents.</p>
   </div>
-  <button type="button" id="open-add-vehicle" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">
+  <button type="button" id="open-add-vehicle" class="btn min-h-[44px] w-full sm:w-auto bg-blue-600 hover:bg-blue-700 border-0 text-white">
     <i class="fa fa-plus mr-1"></i> Register New Vehicle
   </button>
 </div>
 
-<div class="grid sm:grid-cols-3 gap-3 mb-6">
-  <div class="stat-card">
+<div class="grid grid-cols-3 gap-2 sm:gap-3 mb-5 sm:mb-6">
+  <div class="stat-card p-3 sm:p-5">
     <p class="text-xs uppercase text-slate-500">Total vehicles</p>
-    <p class="text-2xl font-bold text-slate-800 mt-1">{{ vehicles|length }}</p>
+    <p class="text-xl sm:text-2xl font-bold text-slate-800 mt-1">{{ vehicles|length }}</p>
   </div>
-  <div class="stat-card">
+  <div class="stat-card p-3 sm:p-5">
     <p class="text-xs uppercase text-slate-500">Pending approval</p>
-    <p class="text-2xl font-bold text-amber-600 mt-1">{{ pending_vehicle_count }}</p>
+    <p class="text-xl sm:text-2xl font-bold text-amber-600 mt-1">{{ pending_vehicle_count }}</p>
   </div>
-  <div class="stat-card">
+  <div class="stat-card p-3 sm:p-5">
     <p class="text-xs uppercase text-slate-500">Active alerts</p>
-    <p class="text-2xl font-bold {% if active_blacklist_count %}text-red-600{% else %}text-emerald-600{% endif %} mt-1">{{ active_blacklist_count }}</p>
+    <p class="text-xl sm:text-2xl font-bold {% if active_blacklist_count %}text-red-600{% else %}text-emerald-600{% endif %} mt-1">{{ active_blacklist_count }}</p>
   </div>
 </div>
 
-<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
   {% for vehicle in vehicles %}
-    <article class="page-card p-5">
+    <article class="page-card p-4 sm:p-5">
       <div class="flex items-start justify-between gap-3">
         <div>
           <p class="font-mono font-semibold text-slate-800 text-lg">{{ vehicle.plate_number }}</p>
@@ -80,37 +80,28 @@
   {% endfor %}
 </div>
 
-<div id="add-vehicle-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="add-vehicle-title">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-    <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-4">
+<div id="add-vehicle-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/60 p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="add-vehicle-title">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[calc(100vh-1.5rem)] max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
+    <div class="px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-200 flex items-center justify-between gap-3">
       <div>
-        <h2 id="add-vehicle-title" class="font-bold text-slate-800">Register New Vehicle</h2>
+        <h2 id="add-vehicle-title" class="font-bold text-slate-800 text-sm sm:text-base">Register New Vehicle</h2>
         <p class="text-xs text-slate-500 mt-1">Vehicle submissions require admin approval before use.</p>
       </div>
       <button type="button" id="close-add-vehicle" class="btn btn-ghost btn-sm" aria-label="Close vehicle registration">
         <i class="fa fa-xmark"></i>
       </button>
     </div>
-    <div class="overflow-y-auto p-5">
+    <div class="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5">
       <form method="post" action="{% url 'resident_vehicle_create_self' %}" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
-        <div class="grid md:grid-cols-2 gap-4">
+        <div class="grid md:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label for="resident-vehicle-plate" class="block text-sm font-medium text-slate-700 mb-1">Plate Number <span class="text-red-400">*</span></label>
-            <input type="text" name="plate_number" id="resident-vehicle-plate" class="input input-bordered w-full uppercase" placeholder="e.g. ABC 1234" maxlength="20" required>
-          </div>
-          <div>
-            <label for="resident-vehicle-plate-type" class="block text-sm font-medium text-slate-700 mb-1">Plate Type</label>
-            <select name="plate_type" id="resident-vehicle-plate-type" class="select select-bordered w-full">
-              <option value="REGULAR">Regular</option>
-              <option value="TEMPORARY">Temporary / Conduction sticker</option>
-              <option value="GOVERNMENT">Government</option>
-              <option value="DIPLOMAT">Diplomat</option>
-            </select>
+            <input type="text" name="plate_number" id="resident-vehicle-plate" class="input input-bordered w-full min-h-[44px] uppercase" placeholder="e.g. ABC 1234" maxlength="20" required>
           </div>
           <div>
             <label for="resident-vehicle-type" class="block text-sm font-medium text-slate-700 mb-1">Vehicle Type <span class="text-red-400">*</span></label>
-            <select name="vehicle_type" id="resident-vehicle-type" class="select select-bordered w-full" required>
+            <select name="vehicle_type" id="resident-vehicle-type" class="select select-bordered w-full min-h-[44px]" required>
               <option value="">-- Select --</option>
               <option value="CAR">Car</option>
               <option value="MOTORCYCLE">Motorcycle</option>
@@ -121,30 +112,30 @@
           </div>
           <div>
             <label for="resident-vehicle-make" class="block text-sm font-medium text-slate-700 mb-1">Brand <span class="text-red-400">*</span></label>
-            <input type="text" name="make" id="resident-vehicle-make" class="input input-bordered w-full" placeholder="e.g. Toyota" required>
+            <input type="text" name="make" id="resident-vehicle-make" class="input input-bordered w-full min-h-[44px]" placeholder="e.g. Toyota" required>
           </div>
           <div>
             <label for="resident-vehicle-model" class="block text-sm font-medium text-slate-700 mb-1">Model <span class="text-red-400">*</span></label>
-            <input type="text" name="model" id="resident-vehicle-model" class="input input-bordered w-full" placeholder="e.g. Vios" required>
+            <input type="text" name="model" id="resident-vehicle-model" class="input input-bordered w-full min-h-[44px]" placeholder="e.g. Vios" required>
           </div>
           <div>
             <label for="resident-vehicle-color" class="block text-sm font-medium text-slate-700 mb-1">Color <span class="text-red-400">*</span></label>
-            <input type="text" name="color" id="resident-vehicle-color" class="input input-bordered w-full" placeholder="e.g. White" required>
+            <input type="text" name="color" id="resident-vehicle-color" class="input input-bordered w-full min-h-[44px]" placeholder="e.g. White" required>
           </div>
           <div>
             <label for="resident-vehicle-or" class="block text-sm font-medium text-slate-700 mb-1">Official Receipt (OR) <span class="text-red-400">*</span></label>
-            <input type="file" name="or_document" id="resident-vehicle-or" class="file-input file-input-bordered w-full" accept=".jpg,.jpeg,.png,.pdf" required>
+            <input type="file" name="or_document" id="resident-vehicle-or" class="file-input file-input-bordered w-full min-h-[44px]" accept=".jpg,.jpeg,.png,.pdf" required>
             <p class="text-xs text-slate-400 mt-1">JPG, PNG, or PDF; max 5 MB.</p>
           </div>
           <div>
             <label for="resident-vehicle-cr" class="block text-sm font-medium text-slate-700 mb-1">Certificate of Registration (CR) <span class="text-red-400">*</span></label>
-            <input type="file" name="cr_document" id="resident-vehicle-cr" class="file-input file-input-bordered w-full" accept=".jpg,.jpeg,.png,.pdf" required>
+            <input type="file" name="cr_document" id="resident-vehicle-cr" class="file-input file-input-bordered w-full min-h-[44px]" accept=".jpg,.jpeg,.png,.pdf" required>
             <p class="text-xs text-slate-400 mt-1">JPG, PNG, or PDF; max 5 MB.</p>
           </div>
         </div>
-        <div class="mt-5 pt-4 border-t border-slate-100 flex justify-end gap-2">
-          <button type="button" id="cancel-add-vehicle" class="btn btn-ghost">Cancel</button>
-          <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Submit for Approval</button>
+        <div class="sticky bottom-[-1rem] mt-5 pt-4 pb-2 border-t border-slate-100 bg-white flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <button type="button" id="cancel-add-vehicle" class="btn min-h-[44px] btn-ghost">Cancel</button>
+          <button type="submit" class="btn min-h-[44px] bg-blue-600 hover:bg-blue-700 border-0 text-white">Submit for Approval</button>
         </div>
       </form>
     </div>
@@ -160,35 +151,23 @@
   const closeButton = document.getElementById('close-add-vehicle');
   const cancelButton = document.getElementById('cancel-add-vehicle');
   const form = modal.querySelector('form');
-  const typeSelect = document.getElementById('resident-vehicle-type');
   const plateInput = document.getElementById('resident-vehicle-plate');
-  const makeInput = document.getElementById('resident-vehicle-make');
-  const modelInput = document.getElementById('resident-vehicle-model');
-
-  const hints = {
-    CAR:        { plate: 'e.g. ABC 1234', make: 'e.g. Toyota', model: 'e.g. Vios' },
-    MOTORCYCLE: { plate: 'e.g. 1234AB',   make: 'e.g. Honda',  model: 'e.g. Click 125' },
-    TRUCK:      { plate: 'e.g. ABC 1234', make: 'e.g. Isuzu',  model: 'e.g. Elf' },
-    VAN:        { plate: 'e.g. ABC 1234', make: 'e.g. Toyota', model: 'e.g. Hi-Ace' },
-    OTHER:      { plate: 'e.g. ABC 1234', make: 'e.g. Brand',  model: 'e.g. Model' },
-  };
-
-  function applyHints() {
-    const values = hints[typeSelect?.value] || hints.CAR;
-    plateInput.placeholder = values.plate;
-    makeInput.placeholder = values.make;
-    modelInput.placeholder = values.model;
-  }
+  let previousFocus = null;
+  let previousBodyOverflow = '';
 
   function closeModal() {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
-    openButton.focus();
+    document.body.style.overflow = previousBodyOverflow;
+    if (previousFocus?.isConnected) previousFocus.focus();
   }
 
   function openModal() {
+    previousFocus = document.activeElement;
+    previousBodyOverflow = document.body.style.overflow;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
     plateInput.focus();
   }
 
@@ -205,8 +184,6 @@
   form.addEventListener('submit', (event) => {
     if (!form.reportValidity()) event.preventDefault();
   });
-  typeSelect.addEventListener('change', applyHints);
-  applyHints();
   if (new URLSearchParams(window.location.search).get('add_vehicle') === '1') openModal();
 })();
 </script>

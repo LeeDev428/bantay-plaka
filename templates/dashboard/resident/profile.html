@@ -3,13 +3,13 @@
 {% block breadcrumb %}Resident &raquo; Profile{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-bold text-slate-800">Profile</h1>
+<div class="mb-5 sm:mb-6">
+  <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Profile</h1>
   <p class="text-slate-500 text-sm mt-0.5">Your account information and approval status.</p>
 </div>
 
-<div class="grid lg:grid-cols-3 gap-5">
-  <div class="lg:col-span-1 page-card p-5">
+<div class="grid lg:grid-cols-3 gap-3 sm:gap-5">
+  <div class="lg:col-span-1 page-card p-4 sm:p-5">
     <h2 class="font-semibold text-slate-800 mb-3">Status</h2>
     {% if resident_status == 'APPROVED' %}
       <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">Approved</span>
@@ -30,26 +30,26 @@
     </div>
   </div>
 
-  <div class="lg:col-span-2 page-card p-5">
+  <div class="lg:col-span-2 page-card p-4 sm:p-5">
     <h2 class="font-semibold text-slate-800 mb-4">Account Information</h2>
-    <div class="grid md:grid-cols-2 gap-4 text-sm">
-      <p><span class="block text-xs text-slate-500">Username</span><span class="font-medium text-slate-800">{{ request.user.username|default:'Not set' }}</span></p>
-      <p><span class="block text-xs text-slate-500">Email address</span><span class="font-medium text-slate-800 break-all">{{ request.user.email|default:'Not set' }}</span></p>
-      <p><span class="block text-xs text-slate-500">Account type</span><span class="font-medium text-slate-800">{{ request.user.get_role_display }}</span></p>
-      <p><span class="block text-xs text-slate-500">Account created</span><span class="font-medium text-slate-800">{{ request.user.date_joined|date:"F d, Y" }}</span></p>
+    <div class="grid sm:grid-cols-2 gap-x-4 gap-y-3 sm:gap-4 text-sm">
+      <p class="min-w-0"><span class="block text-xs text-slate-500">Username</span><span class="font-medium text-slate-800 break-all">{{ request.user.username|default:'Not set' }}</span></p>
+      <p class="min-w-0"><span class="block text-xs text-slate-500">Email address</span><span class="font-medium text-slate-800 break-all">{{ request.user.email|default:'Not set' }}</span></p>
+      <p class="min-w-0"><span class="block text-xs text-slate-500">Account type</span><span class="font-medium text-slate-800">{{ request.user.get_role_display }}</span></p>
+      <p class="min-w-0"><span class="block text-xs text-slate-500">Account created</span><span class="font-medium text-slate-800">{{ request.user.date_joined|date:"F d, Y" }}</span></p>
     </div>
 
-    <h2 class="font-semibold text-slate-800 mt-7 mb-4">Resident Information</h2>
-    <div class="grid md:grid-cols-2 gap-4 text-sm">
-      <p><span class="block text-xs text-slate-500">Full name</span><span class="font-medium text-slate-800">{{ resident.full_name }}</span></p>
+    <h2 class="font-semibold text-slate-800 mt-6 sm:mt-7 mb-4">Resident Information</h2>
+    <div class="grid sm:grid-cols-2 gap-x-4 gap-y-3 sm:gap-4 text-sm">
+      <p class="min-w-0"><span class="block text-xs text-slate-500">Full name</span><span class="font-medium text-slate-800 break-words">{{ resident.full_name }}</span></p>
       <p><span class="block text-xs text-slate-500">Sex</span><span class="font-medium text-slate-800">{{ resident.get_sex_display|default:'Not set' }}</span></p>
       <p><span class="block text-xs text-slate-500">Birth date</span><span class="font-medium text-slate-800">{{ resident.birth_date|date:"F d, Y"|default:'Not set' }}</span></p>
       <p><span class="block text-xs text-slate-500">Age</span><span class="font-medium text-slate-800">{{ resident.age|default:'Not set' }}</span></p>
       <p><span class="block text-xs text-slate-500">Mobile number</span><span class="font-medium text-slate-800">{{ resident.contact_number|default:'Not set' }}</span></p>
       <p><span class="block text-xs text-slate-500">Telephone</span><span class="font-medium text-slate-800">{{ resident.telephone_number|default:'Not set' }}</span></p>
       <p><span class="block text-xs text-slate-500">Valid ID type</span><span class="font-medium text-slate-800">{{ resident.get_valid_id_type_display|default:'Not set' }}</span></p>
-      <p><span class="block text-xs text-slate-500">Privacy notice accepted</span><span class="font-medium text-slate-800">{% if resident.privacy_consent_at %}{{ resident.privacy_consent_at|date:"F d, Y" }} ({{ resident.privacy_notice_version }}){% else %}Not recorded{% endif %}</span></p>
-      <p class="md:col-span-2"><span class="block text-xs text-slate-500">Address</span><span class="font-medium text-slate-800">{{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address|default:'Not set' }}</span></p>
+      <p class="min-w-0"><span class="block text-xs text-slate-500">Privacy notice accepted</span><span class="font-medium text-slate-800 break-words">{% if resident.privacy_consent_at %}{{ resident.privacy_consent_at|date:"F d, Y" }} ({{ resident.privacy_notice_version }}){% else %}Not recorded{% endif %}</span></p>
+      <p class="sm:col-span-2 min-w-0"><span class="block text-xs text-slate-500">Address</span><span class="font-medium text-slate-800 break-words">{{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address|default:'Not set' }}</span></p>
     </div>
 
     {% if resident.has_valid_id_document %}

@@ -61,6 +61,8 @@ class ResidentAccountPageTests(TestCase):
         self.assertContains(response, 'add-vehicle-modal')
         self.assertContains(response, 'Submit for Approval')
         self.assertNotContains(response, 'name="year"')
+        self.assertNotContains(response, 'Plate Type')
+        self.assertNotContains(response, 'name="plate_type"')
         self.assertEqual(response.context['pending_vehicle_count'], 1)
 
     def test_invalid_vehicle_submission_reopens_registration_modal(self):

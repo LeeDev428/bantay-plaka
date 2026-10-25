@@ -43,6 +43,15 @@ Choose one:
 ### Resident document storage
 Resident IDs and vehicle OR/CR documents use private storage: authenticated Cloudinary assets in production and a local directory outside `/media/` in development. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` for production. The Railway/Procfile startup runs `migrate_registration_documents` before serving requests; it moves existing public registration documents into private storage and removes their public copies. A failed migration prevents the app from starting, so resolve the storage/API error before retrying deployment.
 
+### Password-reset email on Railway
+Railway Hobby blocks outbound SMTP, so configure a transactional email API such as Resend for password-reset messages. In Railway's app service Variables, set:
+
+- `EMAIL_BACKEND=apps.core.email_backend.ResendEmailBackend`
+- `RESEND_API_KEY` to an API key created in Resend
+- `DEFAULT_FROM_EMAIL` to a sender address/domain verified with Resend, for example `BantayPlaka <noreply@your-verified-domain.com>`
+
+Create the Resend API key and verify the sender domain in Resend before testing. Keep the API key only in Railway Variables, not in source control or chat. Redeploy after adding the variables. The reset link is sent to the email address entered on the form; Django does not send it for inactive accounts, including resident accounts awaiting approval.
+
 ---
 
 ## 3. Current Camera Network Plan

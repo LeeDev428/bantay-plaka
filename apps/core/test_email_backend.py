@@ -73,6 +73,10 @@ class ResendEmailBackendTests(SimpleTestCase):
         response = Mock(status_code=401)
         from requests import HTTPError
 
+        response.ok = False
+        response.json.return_value = {
+            'message': 'API key is invalid',
+        }
         response.raise_for_status.side_effect = HTTPError('Unauthorized')
         post.return_value = response
         message = EmailMultiAlternatives(
@@ -81,5 +85,5 @@ class ResendEmailBackendTests(SimpleTestCase):
             to=['resident@example.com'],
         )
 
-        with self.assertRaises(HTTPError):
+        with self.assertRaisesRegex(HTTPError, 'API key is invalid'):
             ResendEmailBackend().send_messages([message])

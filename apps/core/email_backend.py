@@ -57,7 +57,24 @@ class ResendEmailBackend(BaseEmailBackend):
                 headers={'Authorization': f'Bearer {api_key}'},
                 timeout=self.timeout,
             )
-            response.raise_for_status()
+            if not response.ok:
+                try:
+                    error_data = response.json()
+                except ValueError:
+                    error_message = response.text[:1000]
+                else:
+                    error_message = (
+                        error_data.get('message', '')
+                        if isinstance(error_data, dict)
+                        else ''
+                    )
+                raise requests.HTTPError(
+                    (
+                        f'Resend email request failed with HTTP '
+                        f'{response.status_code}: {error_message or "No error details provided."}'
+                    ),
+                    response=response,
+                )
             sent_count += 1
 
         return sent_count

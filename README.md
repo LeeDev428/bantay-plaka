@@ -49,6 +49,7 @@ Railway Hobby blocks outbound SMTP, so configure a transactional email API such 
 - `EMAIL_BACKEND=apps.core.email_backend.ResendEmailBackend`
 - `RESEND_API_KEY` to an API key created in Resend
 - `DEFAULT_FROM_EMAIL` to a sender address/domain verified with Resend, for example `BantayPlaka <noreply@your-verified-domain.com>`
+- `PASSWORD_RESET_DOMAIN=bantay-plaka-production-3246.up.railway.app` so reset links always use the current website host, regardless of which Railway hostname received the request. Update this value if the public domain changes.
 
 Create the Resend API key and verify the sender domain in Resend before testing. Keep the API key only in Railway Variables, not in source control or chat. Redeploy after adding the variables. The reset link is sent to the email address entered on the form; Django does not send it for inactive accounts, including resident accounts awaiting approval.
 

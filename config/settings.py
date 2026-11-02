@@ -27,6 +27,10 @@ def _as_bool_env(name: str, default: bool = False) -> bool:
 
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-this-in-production')
 DEBUG = env('DEBUG')
+PASSWORD_RESET_DOMAIN = env(
+    'PASSWORD_RESET_DOMAIN',
+    default='' if DEBUG else 'bantay-plaka-production-3246.up.railway.app',
+).strip()
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['127.0.0.1', 'localhost', '.up.railway.app'])
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 

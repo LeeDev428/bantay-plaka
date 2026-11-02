@@ -1,7 +1,8 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.core.exceptions import ValidationError
@@ -422,3 +423,11 @@ class UserEditForm(forms.ModelForm):
         if contact_number:
             return _normalize_contact_number(contact_number)
         return ''
+
+
+class BantayPlakaPasswordResetForm(PasswordResetForm):
+    def save(self, *args, **kwargs):
+        configured_domain = getattr(settings, 'PASSWORD_RESET_DOMAIN', '')
+        if configured_domain:
+            kwargs['domain_override'] = configured_domain
+        return super().save(*args, **kwargs)

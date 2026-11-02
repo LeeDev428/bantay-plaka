@@ -18,6 +18,7 @@ from apps.residents.validators import validate_uploaded_document
 
 CONTACT_NUMBER_REGEX = re.compile(r'^09\d{9}$')
 PRIVACY_NOTICE_VERSION = '2026-10-v2'
+TERMS_VERSION = '2026-11-v1'
 
 
 def _normalize_contact_number(raw_value: str) -> str:
@@ -216,6 +217,11 @@ class ResidentSignupForm(forms.Form):
         error_messages={'required': 'Please agree to the privacy and project-use notice before submitting.'},
         widget=forms.CheckboxInput(attrs={'class': 'checkbox checkbox-primary'}),
     )
+    terms_consent = forms.BooleanField(
+        required=True,
+        error_messages={'required': 'Please agree to the BantayPlaka Terms and Conditions before submitting.'},
+        widget=forms.CheckboxInput(attrs={'class': 'checkbox checkbox-primary'}),
+    )
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
@@ -309,6 +315,8 @@ class ResidentSignupForm(forms.Form):
             valid_id_image=self.cleaned_data.get('valid_id_image'),
             privacy_consent_at=timezone.now(),
             privacy_notice_version=PRIVACY_NOTICE_VERSION,
+            terms_consent_at=timezone.now(),
+            terms_version=TERMS_VERSION,
             is_approved=False,
             registered_by=None,
         )

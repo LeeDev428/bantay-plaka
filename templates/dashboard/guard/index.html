@@ -4,12 +4,13 @@
 
 {% block content %}
 <!-- Page Header -->
-<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
-  <div>
-    <h1 class="text-2xl font-bold text-slate-800">Gate Monitor</h1>
-    <p class="text-slate-500 text-sm mt-0.5">Real-time gate activity &mdash; {{ request.user.get_full_name }}</p>
-  </div>
-    <div class="flex items-center gap-2">
+<div class="flex flex-col xl:flex-row xl:items-center xl:justify-between mb-6 gap-4">
+  <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 min-w-0">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Gate Monitor</h1>
+      <p class="text-slate-500 text-sm mt-0.5">Real-time gate activity &mdash; {{ request.user.get_full_name }}</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
     {% if camera_stale %}
       <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">ANPR STALE</span>
       <span class="text-xs text-slate-500">
@@ -25,7 +26,8 @@
       <span class="text-xs text-slate-500">Last camera log {{ last_camera_log_local|date:"h:i:s A" }}</span>
     {% endif %}
   </div>
-  <div class="flex gap-2">
+  </div>
+  <div class="flex flex-wrap gap-2">
     <button type="button" id="open-guard-export-modal" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
       <i class="fa fa-file-arrow-down mr-1"></i> Export
     </button>
@@ -129,7 +131,8 @@
 </div>
 
 <!-- Live Detection Feed -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+<div class="grid grid-cols-1 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-4 items-start">
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4">
   <div class="page-card overflow-hidden">
     <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
       <h2 class="font-semibold text-slate-800">Entry Camera Feed</h2>
@@ -203,7 +206,7 @@
 </div>
 
 <!-- Live Gate Log -->
-<div class="page-card">
+<div class="page-card min-w-0">
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
     <div class="flex items-center gap-2">
       <span class="relative flex h-2.5 w-2.5">
@@ -236,6 +239,7 @@
       </tbody>
     </table>
   </div>
+</div>
 </div>
 {% endblock %}
 

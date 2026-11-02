@@ -65,6 +65,8 @@ class Resident(Archivable, models.Model):
     )
     privacy_consent_at = models.DateTimeField(null=True, blank=True)
     privacy_notice_version = models.CharField(max_length=32, blank=True)
+    terms_consent_at = models.DateTimeField(null=True, blank=True)
+    terms_version = models.CharField(max_length=32, blank=True)
     user = models.OneToOneField(
         User,
         on_delete=models.SET_NULL,

@@ -13,10 +13,15 @@
     <div class="text-center mb-6">
       <img src="{% static 'img/bantayplaka_register.png' %}" alt="BantayPlaka" class="h-20 w-auto object-contain mx-auto" />
       <h1 class="text-2xl md:text-3xl font-black text-white mt-3">Resident Account Registration</h1>
-      <p class="text-slate-300 text-sm mt-1">Complete the three steps to submit your account for approval.</p>
+      <p class="text-slate-300 text-sm mt-1">Complete all four steps to submit your account for approval.</p>
     </div>
 
     <div class="page-card p-5 md:p-8 rounded-2xl shadow-2xl">
+      <div class="flex justify-end mb-4">
+        <a href="{% url 'login' %}" class="btn btn-ghost btn-sm text-blue-700">
+          <i class="fa fa-arrow-left mr-1"></i> Back to Login
+        </a>
+      </div>
       <ol id="registration-progress" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-7" aria-label="Registration progress">
         <li data-progress-step="1" class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-center">
           <span class="block text-xs font-semibold uppercase tracking-wide text-blue-700">Step 1</span>
@@ -179,19 +184,37 @@
             {% endwith %}
           </template>
 
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 mt-6">
-            <div class="flex items-start gap-3">
-              {{ form.privacy_consent }}
-              <label for="{{ form.privacy_consent.id_for_label }}" class="text-sm text-slate-700">
-                I agree to share the information and documents I provide with the BantayPlaka project team for project purposes.
-                <span class="text-red-500">*</span>
-              </label>
+          <div class="space-y-3 mt-6">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div class="flex items-start gap-3">
+                {{ form.terms_consent }}
+                <div>
+                  <label for="{{ form.terms_consent.id_for_label }}" class="text-sm text-slate-700">
+                    I have read and agree to the BantayPlaka Terms and Conditions.
+                    <span class="text-red-500">*</span>
+                  </label>
+                  <button type="button" id="open-terms-and-conditions" class="block text-sm text-blue-700 underline mt-2">
+                    Read the Terms and Conditions
+                  </button>
+                </div>
+              </div>
+              {% if form.terms_consent.errors %}<p class="text-red-500 text-xs mt-2">{{ form.terms_consent.errors.0 }}</p>{% endif %}
+              <p class="text-xs text-slate-400 mt-1">Terms version {{ terms_version }}.</p>
             </div>
-            {% if form.privacy_consent.errors %}<p class="text-red-500 text-xs mt-2">{{ form.privacy_consent.errors.0 }}</p>{% endif %}
-            <button type="button" id="open-privacy-notice" class="text-sm text-blue-700 underline mt-3">
-              Read the Data Privacy Act information
-            </button>
-            <p class="text-xs text-slate-400 mt-1">Notice version {{ privacy_notice_version }}.</p>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div class="flex items-start gap-3">
+              {{ form.privacy_consent }}
+                <label for="{{ form.privacy_consent.id_for_label }}" class="text-sm text-slate-700">
+                  I have read the Data Privacy Act notice and consent to the processing of my registration information and vehicle documents for Paragon Village account administration and gate security.
+                  <span class="text-red-500">*</span>
+                </label>
+              </div>
+              {% if form.privacy_consent.errors %}<p class="text-red-500 text-xs mt-2">{{ form.privacy_consent.errors.0 }}</p>{% endif %}
+              <button type="button" id="open-privacy-notice" class="text-sm text-blue-700 underline mt-3">
+                Read the Data Privacy Act information
+              </button>
+              <p class="text-xs text-slate-400 mt-1">Notice version {{ privacy_notice_version }}.</p>
+            </div>
           </div>
         </section>
 
@@ -204,7 +227,6 @@
         </section>
 
         <div class="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 mt-7 pt-5 border-t border-slate-100">
-          <a href="{% url 'login' %}" class="btn btn-ghost">Back to Login</a>
           <div class="flex justify-end gap-2">
             <button type="button" id="registration-prev" class="btn btn-ghost hidden">Back</button>
             <button type="button" id="registration-next" class="btn bg-blue-700 hover:bg-blue-800 border-0 text-white">
@@ -218,6 +240,39 @@
       </form>
     </div>
     <p class="text-center text-xs text-slate-400 mt-4">Your account and vehicle submissions remain pending until reviewed by an administrator.</p>
+  </div>
+</div>
+
+<div id="terms-and-conditions-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="terms-and-conditions-title">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+      <div>
+        <h2 id="terms-and-conditions-title" class="font-bold text-slate-800">BantayPlaka Terms and Conditions</h2>
+        <p class="text-xs text-slate-500">Paragon Village Subdivision &mdash; version {{ terms_version }}</p>
+      </div>
+      <button type="button" id="close-terms-and-conditions" class="btn btn-ghost btn-sm" aria-label="Close Terms and Conditions">
+        <i class="fa fa-xmark"></i>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-6 py-5 text-sm leading-7 text-slate-700">
+      <p class="font-semibold text-slate-900">Please read these terms before creating a BantayPlaka resident account.</p>
+      <h3 class="font-semibold text-slate-900 mt-4">1. Purpose and eligibility</h3>
+      <p>BantayPlaka supports resident and vehicle registration and gate-security operations in Paragon Village Subdivision. Registration is for residents who are authorized to request an account. Submitting a registration does not guarantee approval or immediate access; an administrator must review and approve the account and any submitted vehicles.</p>
+      <h3 class="font-semibold text-slate-900 mt-4">2. Accurate information and documents</h3>
+      <p>You agree to provide accurate, current information and genuine vehicle and identification documents that you are authorized to submit. Keep your account details current, promptly report changes, and do not register a vehicle or use information that belongs to another person without authorization.</p>
+      <h3 class="font-semibold text-slate-900 mt-4">3. Automated Number Plate Recognition</h3>
+      <p>The system may process vehicle plate numbers and camera images or video at subdivision gates to assist with vehicle identification and gate-security records. Recognition may be incomplete or incorrect because of lighting, camera conditions, or plate visibility. Guards may need to verify a vehicle or record its entry manually; BantayPlaka does not guarantee that every plate will be recognized.</p>
+      <h3 class="font-semibold text-slate-900 mt-4">4. Information use and privacy</h3>
+      <p>Registration details, vehicle information, and related gate records are used to administer resident accounts, verify registered vehicles, support subdivision security, and maintain relevant operational records. Access is limited to authorized personnel for these purposes and any disclosure required by law. See the Data Privacy Act notice for information about personal-data processing and your rights.</p>
+      <h3 class="font-semibold text-slate-900 mt-4">5. Account security and acceptable use</h3>
+      <p>Keep your password confidential and notify the subdivision administrator if you suspect unauthorized account use. Do not attempt to access another person's account, interfere with cameras or system operation, or misuse information or images available through the system. Accounts may be suspended or corrected when needed to protect residents, system integrity, or subdivision operations.</p>
+      <h3 class="font-semibold text-slate-900 mt-4">6. Changes and questions</h3>
+      <p>These terms may be updated when system operations or applicable requirements change. The applicable version and your acceptance time are recorded with your registration. For corrections, account questions, or privacy requests, contact the Paragon Village subdivision administrator.</p>
+      <p class="mt-4 border-t border-slate-200 pt-4 text-xs text-slate-500">These terms describe the BantayPlaka registration and gate-monitoring service and are not legal advice.</p>
+    </div>
+    <div class="px-5 py-3 border-t border-slate-200 flex justify-end">
+      <button type="button" id="terms-and-conditions-done" class="btn btn-sm bg-blue-700 hover:bg-blue-800 border-0 text-white">Done</button>
+    </div>
   </div>
 </div>
 
@@ -268,6 +323,7 @@
   const totalForms = document.getElementById('id_vehicles-TOTAL_FORMS');
   const vehicleTemplate = document.getElementById('vehicle-form-template');
   const privacyModal = document.getElementById('privacy-notice-modal');
+  const termsModal = document.getElementById('terms-and-conditions-modal');
   let activeStep = {{ wizard_step|default:1 }};
 
   function fieldValue(field) {
@@ -347,7 +403,8 @@
       appendReviewGroup(review, 'Vehicles', [['Vehicle registrations', 'None added']]);
     }
     appendReviewGroup(review, 'Privacy consent', [
-      ['Consent to share the information and documents provided', valueFor('privacy_consent')],
+      ['Data Privacy Act and information-processing consent', valueFor('privacy_consent')],
+      ['BantayPlaka Terms and Conditions accepted', valueFor('terms_consent')],
     ]);
   }
 
@@ -483,23 +540,37 @@
     }
   });
 
-  function closePrivacyModal() {
-    privacyModal.classList.add('hidden');
-    privacyModal.classList.remove('flex');
-    document.getElementById('open-privacy-notice').focus();
+  function bindNoticeModal(modal, openButtonId, closeButtonId, doneButtonId) {
+    const openButton = document.getElementById(openButtonId);
+    const closeButton = document.getElementById(closeButtonId);
+    function closeModal() {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      openButton.focus();
+    }
+    openButton.addEventListener('click', () => {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      closeButton.focus();
+    });
+    closeButton.addEventListener('click', closeModal);
+    document.getElementById(doneButtonId).addEventListener('click', closeModal);
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+    return closeModal;
   }
-  document.getElementById('open-privacy-notice').addEventListener('click', () => {
-    privacyModal.classList.remove('hidden');
-    privacyModal.classList.add('flex');
-    document.getElementById('close-privacy-notice').focus();
-  });
-  document.getElementById('close-privacy-notice').addEventListener('click', closePrivacyModal);
-  document.getElementById('privacy-notice-done').addEventListener('click', closePrivacyModal);
-  privacyModal.addEventListener('click', (event) => {
-    if (event.target === privacyModal) closePrivacyModal();
-  });
+  const closePrivacyModal = bindNoticeModal(
+    privacyModal, 'open-privacy-notice', 'close-privacy-notice', 'privacy-notice-done',
+  );
+  const closeTermsModal = bindNoticeModal(
+    termsModal, 'open-terms-and-conditions', 'close-terms-and-conditions', 'terms-and-conditions-done',
+  );
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !privacyModal.classList.contains('hidden')) closePrivacyModal();
+    if (event.key === 'Escape') {
+      if (!privacyModal.classList.contains('hidden')) closePrivacyModal();
+      if (!termsModal.classList.contains('hidden')) closeTermsModal();
+    }
   });
 
   setStep(activeStep);

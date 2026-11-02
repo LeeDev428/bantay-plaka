@@ -53,7 +53,15 @@ class ResidentRegistrationWizardTests(SimpleTestCase):
         self.assertIn('telephone_number', form.fields)
         self.assertFalse(form.fields['telephone_number'].required)
         self.assertTrue(form.fields['privacy_consent'].required)
+        self.assertTrue(form.fields['terms_consent'].required)
         self.assertTrue(form.fields['valid_id_image'].required)
+
+    def test_signup_rejects_missing_privacy_or_terms_acceptance(self):
+        form = ResidentSignupForm(data={})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('privacy_consent', form.errors)
+        self.assertIn('terms_consent', form.errors)
 
     def test_vehicle_documents_are_required_when_a_vehicle_is_added(self):
         form = VehicleForm()
@@ -87,6 +95,8 @@ class ResidentRegistrationWizardTests(SimpleTestCase):
         self.assertContains(response, 'Please note your username before continuing.')
         self.assertContains(response, 'registration-review-content')
         self.assertContains(response, 'privacy-notice-modal')
+        self.assertContains(response, 'terms-and-conditions-modal')
+        self.assertContains(response, 'Back to Login')
         self.assertContains(response, 'selected readable provisions')
         self.assertContains(response, 'Section 11. General Data Privacy Principles.')
         self.assertContains(response, 'https://privacy.gov.ph/data-privacy-act/')

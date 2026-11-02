@@ -118,20 +118,20 @@
     if (old) old.remove();
     const banner = document.createElement('div');
     banner.id = 'unrecognized-plate-alert-banner';
-    banner.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[92%] max-w-2xl rounded-xl border border-amber-300 bg-amber-50 shadow-lg';
+    banner.className = 'fixed top-4 right-4 z-[9999] w-[calc(100%-2rem)] max-w-sm rounded-xl border border-amber-300 bg-amber-50 shadow-lg';
     const camera = data.camera_role === 'ENTRY_CAM' ? 'Entry' : data.camera_role === 'EXIT_CAM' ? 'Exit' : 'Camera';
     const evidenceMessage = data.snapshot_url
       ? 'Video and snapshot saved.'
       : 'Video saved; evidence snapshot unavailable.';
     banner.innerHTML = `
-      <div class="px-5 py-4">
+      <div class="px-3 py-2.5">
         <div class="flex items-start gap-3">
-          <i class="fa fa-triangle-exclamation text-amber-600 text-2xl mt-0.5"></i>
+          <i class="fa fa-triangle-exclamation text-amber-600 text-lg mt-0.5"></i>
           <div class="flex-1">
-            <p class="text-amber-800 font-bold text-lg leading-tight">${escapeHtml(data.title || 'Plate Could Not Be Recognized')}</p>
-            <p class="text-amber-800 text-sm mt-1">${escapeHtml(camera)} camera detected a vehicle without a readable plate. ${escapeHtml(evidenceMessage)}</p>
-            ${data.snapshot_url ? `<img src="${escapeHtml(data.snapshot_url)}" alt="Unrecognized plate evidence" class="mt-2 max-h-32 rounded-lg border border-amber-200">` : ''}
-            <a class="inline-block mt-2 text-sm font-semibold text-blue-700 hover:text-blue-800" href="${escapeHtml(data.alerts_url || '/logs/alerts/')}">Review alert and evidence &rarr;</a>
+            <p class="text-amber-800 font-bold text-sm leading-tight">${escapeHtml(data.title || 'Plate Could Not Be Recognized')}</p>
+            <p class="text-amber-800 text-xs mt-1">${escapeHtml(camera)} camera detected a vehicle without a readable plate. ${escapeHtml(evidenceMessage)}</p>
+            ${data.snapshot_url ? `<img src="${escapeHtml(data.snapshot_url)}" alt="Unrecognized plate evidence" class="mt-2 max-h-20 max-w-36 rounded-lg border border-amber-200 object-cover">` : ''}
+            <a class="inline-block mt-2 text-xs font-semibold text-blue-700 hover:text-blue-800" href="${escapeHtml(data.alerts_url || '/logs/alerts/')}">Review alert and evidence &rarr;</a>
           </div>
           <button id="close-unrecognized-alert" class="text-amber-600 hover:text-amber-800" aria-label="Dismiss alert"><i class="fa fa-xmark text-lg"></i></button>
         </div>
@@ -139,6 +139,9 @@
     `;
     document.body.appendChild(banner);
     document.getElementById('close-unrecognized-alert')?.addEventListener('click', () => banner.remove());
+    window.setTimeout(() => {
+      if (banner.isConnected) banner.remove();
+    }, 7000);
   }
 
   function highlightRecentRows() {

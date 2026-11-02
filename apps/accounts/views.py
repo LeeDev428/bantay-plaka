@@ -12,6 +12,7 @@ from datetime import timedelta
 from apps.accounts.forms import (
     LoginForm,
     PRIVACY_NOTICE_VERSION,
+    TERMS_VERSION,
     UserCreateForm,
     UserEditForm,
     ResidentSignupForm,
@@ -128,7 +129,7 @@ def resident_register(request):
             'email', 'password1', 'password2', 'first_name', 'middle_name',
             'last_name', 'suffix', 'sex', 'birth_date',
         }
-        step_three_fields = {'privacy_consent'}
+        step_three_fields = {'privacy_consent', 'terms_consent'}
         if any(form.errors.get(name) for name in step_one_fields):
             wizard_step = 1
         elif any(form.errors.get(name) for name in step_three_fields):
@@ -143,6 +144,7 @@ def resident_register(request):
         'vehicle_formset': vehicle_formset,
         'wizard_step': wizard_step,
         'privacy_notice_version': PRIVACY_NOTICE_VERSION,
+        'terms_version': TERMS_VERSION,
         'local_date': timezone.localdate(),
     })
 

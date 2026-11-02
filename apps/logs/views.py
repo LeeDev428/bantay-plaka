@@ -322,6 +322,7 @@ def video_gallery(request):
             'size_bytes': recording.size_bytes,
             'modified_at': recording.uploaded_at,
             'url': recording.video.url,
+            'thumbnail_url': recording.thumbnail.url if getattr(recording, 'thumbnail', None) else '',
             'is_cloud': True,
         })
 
@@ -372,6 +373,8 @@ def video_gallery(request):
                     timezone.get_current_timezone(),
                 ),
                 'url': reverse('recording_file', args=[path.name]),
+                'thumbnail_url': reverse('recording_thumbnail', args=[path.name])
+                if path.with_suffix('.jpg').is_file() else '',
                 'is_cloud': False,
             })
 
@@ -396,6 +399,20 @@ def recording_file(request, filename: str):
     if recording_path.parent != recordings_dir or not recording_path.is_file():
         raise Http404
     return FileResponse(recording_path.open('rb'), content_type='video/mp4')
+
+
+@login_required
+def recording_thumbnail(request, filename: str):
+    if request.user.is_resident():
+        raise Http404
+    if Path(filename).name != filename or Path(filename).suffix.lower() != '.mp4':
+        raise Http404
+
+    recordings_dir = Path(settings.ANPR_RECORDINGS_DIR).resolve()
+    thumbnail_path = (recordings_dir / Path(filename).with_suffix('.jpg')).resolve()
+    if thumbnail_path.parent != recordings_dir or not thumbnail_path.is_file():
+        raise Http404
+    return FileResponse(thumbnail_path.open('rb'), content_type='image/jpeg')
 
 
 @login_required

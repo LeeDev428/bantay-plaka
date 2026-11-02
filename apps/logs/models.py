@@ -112,6 +112,7 @@ class VideoRecording(Archivable, models.Model):
 
     source_filename = models.CharField(max_length=255, unique=True)
     video = models.FileField(upload_to='recordings/', storage=VideoMediaStorage())
+    thumbnail = models.ImageField(upload_to='recordings/thumbnails/', null=True, blank=True)
     camera_role = models.CharField(max_length=20, choices=CAMERA_ROLE_CHOICES, db_index=True)
     started_at = models.DateTimeField(null=True, blank=True, db_index=True)
     duration_seconds = models.FloatField(null=True, blank=True)

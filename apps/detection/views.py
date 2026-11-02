@@ -160,10 +160,16 @@ def ingest_recording(request):
         return JsonResponse({'error': 'alert snapshot exceeds the 10 MB limit'}, status=413)
     if alert_image is not None and Path(alert_image.name).suffix.lower() not in {'.jpg', '.jpeg'}:
         return JsonResponse({'error': 'alert snapshot must be a JPEG image'}, status=400)
+    thumbnail = request.FILES.get('thumbnail')
+    if thumbnail is not None and thumbnail.size > 10 * 1024 * 1024:
+        return JsonResponse({'error': 'recording thumbnail exceeds the 10 MB limit'}, status=413)
+    if thumbnail is not None and Path(thumbnail.name).suffix.lower() not in {'.jpg', '.jpeg'}:
+        return JsonResponse({'error': 'recording thumbnail must be a JPEG image'}, status=400)
 
     recording = VideoRecording.objects.create(
         source_filename=filename,
         video=uploaded,
+        thumbnail=thumbnail,
         camera_role=camera_role,
         started_at=started_at,
         duration_seconds=duration_seconds,

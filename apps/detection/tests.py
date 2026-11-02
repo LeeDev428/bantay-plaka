@@ -106,6 +106,21 @@ class RecordingIngestTests(SimpleTestCase):
         self.assertEqual(create.call_args.kwargs['camera_role'], 'ENTRY_CAM')
         self.assertEqual(create.call_args.kwargs['plate_search'], 'ABC1234')
 
+    def test_persists_recording_thumbnail(self):
+        saved = SimpleNamespace(pk=12)
+        thumbnail = SimpleUploadedFile(
+            'vehicle_entry.jpg', b'test-thumbnail', content_type='image/jpeg',
+        )
+        with patch.object(
+            views.VideoRecording.objects,
+            'filter',
+            return_value=SimpleNamespace(first=lambda: None),
+        ), patch.object(views.VideoRecording.objects, 'create', return_value=saved) as create:
+            response = self._post_recording(thumbnail=thumbnail)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(create.call_args.kwargs['thumbnail'].name, 'vehicle_entry.jpg')
+
     def test_requires_mp4(self):
         response = self._post_recording(
             recording=SimpleUploadedFile('vehicle_entry.txt', b'not-video', content_type='text/plain')

@@ -14,6 +14,7 @@ from apps.logs.views import (
     alert_gallery,
     recording_download,
     recording_file,
+    recording_thumbnail,
     snapshot_archive,
     snapshot_gallery,
     video_archive,
@@ -59,6 +60,7 @@ class VideoGalleryTests(SimpleTestCase):
     def test_video_gallery_renders_local_recording_metadata(self):
         recording = self.recordings_dir / 'vehicle_entry.mp4'
         recording.write_bytes(b'local-video')
+        recording.with_suffix('.jpg').write_bytes(b'jpeg-thumbnail')
         recording.with_suffix('.json').write_text(json.dumps({
             'camera_role': 'ENTRY_CAM',
             'started_at': '2026-10-07T03:00:00',
@@ -72,6 +74,7 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertContains(response, 'vehicle_entry.mp4')
         self.assertContains(response, 'ABC1234')
         self.assertContains(response, reverse('recording_file', args=['vehicle_entry.mp4']))
+        self.assertContains(response, reverse('recording_thumbnail', args=['vehicle_entry.mp4']))
         self.assertContains(response, reverse('recording_download', args=['vehicle_entry.mp4']))
         self.assertContains(response, 'data-media-preview')
         self.assertContains(response, 'media-preview-modal')
@@ -120,6 +123,18 @@ class VideoGalleryTests(SimpleTestCase):
     def test_recording_file_rejects_path_traversal(self):
         with self.assertRaises(Http404):
             recording_file(self._request('/logs/videos/../outside.mp4/'), '../outside.mp4')
+
+    def test_recording_thumbnail_serves_local_jpeg_companion(self):
+        thumbnail = self.recordings_dir / 'clip.jpg'
+        thumbnail.write_bytes(b'jpeg-thumbnail')
+
+        response = recording_thumbnail(
+            self._request('/logs/videos/clip.mp4/thumbnail/'),
+            'clip.mp4',
+        )
+
+        self.assertEqual(response['Content-Type'], 'image/jpeg')
+        self.assertEqual(b''.join(response.streaming_content), b'jpeg-thumbnail')
 
     def test_local_recording_download_is_an_attachment(self):
         recording = self.recordings_dir / 'clip.mp4'

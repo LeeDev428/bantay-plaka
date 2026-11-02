@@ -43,33 +43,6 @@
   </div>
 </div>
 
-{% if latest_unrecognized_alerts %}
-<section id="unrecognized-alerts" class="page-card border-l-4 border-amber-400 mb-6 p-4">
-  <div class="flex items-center justify-between gap-3 mb-3">
-    <div>
-      <h2 class="font-semibold text-amber-800"><i class="fa fa-triangle-exclamation mr-1"></i> Plate Recognition Alerts</h2>
-      <p class="text-xs text-slate-500">{{ unrecognized_alert_count }} vehicle clip{{ unrecognized_alert_count|pluralize }} have no readable plate.</p>
-    </div>
-    <a href="{% url 'alert_gallery' %}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">View all alerts &rarr;</a>
-  </div>
-  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-    {% for alert in latest_unrecognized_alerts %}
-    <a href="{% url 'alert_gallery' %}" class="flex items-center gap-3 rounded-lg bg-amber-50 p-3 hover:bg-amber-100">
-      {% if alert.snapshot %}
-      <img src="{{ alert.snapshot.url }}" alt="" class="h-14 w-20 rounded object-cover">
-      {% else %}
-      <span class="h-14 w-20 rounded bg-amber-100 flex items-center justify-center text-amber-600"><i class="fa fa-triangle-exclamation"></i></span>
-      {% endif %}
-      <span class="min-w-0">
-        <span class="block text-sm font-semibold text-slate-700">{{ alert.get_camera_role_display }} &middot; Plate unreadable</span>
-        <span class="block text-xs text-slate-500">{{ alert.created_at|date:"M d, h:i A" }}</span>
-      </span>
-    </a>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-
 <!-- Guard Export Modal -->
 <div id="guard-export-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeGuardExportModal()"></div>
@@ -131,8 +104,7 @@
 </div>
 
 <!-- Live Detection Feed -->
-<div class="grid grid-cols-1 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-4 items-start">
-  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
   <div class="page-card overflow-hidden">
     <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
       <h2 class="font-semibold text-slate-800">Entry Camera Feed</h2>
@@ -206,7 +178,7 @@
 </div>
 
 <!-- Live Gate Log -->
-<div class="page-card min-w-0">
+<div class="page-card min-w-0 mb-4">
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
     <div class="flex items-center gap-2">
       <span class="relative flex h-2.5 w-2.5">
@@ -240,7 +212,33 @@
     </table>
   </div>
 </div>
-</div>
+
+{% if latest_unrecognized_alerts %}
+<section id="unrecognized-alerts" class="page-card border-l-4 border-amber-400 p-4">
+  <div class="flex items-center justify-between gap-3 mb-3">
+    <div>
+      <h2 class="font-semibold text-amber-800"><i class="fa fa-triangle-exclamation mr-1"></i> Plate Recognition Alerts</h2>
+      <p class="text-xs text-slate-500">{{ unrecognized_alert_count }} vehicle clip{{ unrecognized_alert_count|pluralize }} have no readable plate.</p>
+    </div>
+    <a href="{% url 'alert_gallery' %}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">View all alerts &rarr;</a>
+  </div>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    {% for alert in latest_unrecognized_alerts %}
+    <a href="{% url 'alert_gallery' %}" class="flex items-center gap-3 rounded-lg bg-amber-50 p-3 hover:bg-amber-100">
+      {% if alert.snapshot %}
+      <img src="{{ alert.snapshot.url }}" alt="" class="h-14 w-20 rounded object-cover">
+      {% else %}
+      <span class="h-14 w-20 rounded bg-amber-100 flex items-center justify-center text-amber-600"><i class="fa fa-triangle-exclamation"></i></span>
+      {% endif %}
+      <span class="min-w-0">
+        <span class="block text-sm font-semibold text-slate-700">{{ alert.get_camera_role_display }} &middot; Plate unreadable</span>
+        <span class="block text-xs text-slate-500">{{ alert.created_at|date:"M d, h:i A" }}</span>
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}

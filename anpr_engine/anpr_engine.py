@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from contextlib import ExitStack
 import json
 import logging
 import os
@@ -1757,37 +1758,34 @@ class ANPREngine:
 
         for attempt in range(1, 3):
             try:
-                with path.open('rb') as video_file:
+                with ExitStack() as stack:
+                    video_file = stack.enter_context(path.open('rb'))
                     upload_files = {'recording': (path.name, video_file, 'video/mp4')}
                     snapshot_path = path.with_suffix('.jpg')
-                    if metadata.get('unrecognized_plate_alert') and snapshot_path.is_file():
-                        with snapshot_path.open('rb') as snapshot_file:
+                    if snapshot_path.is_file():
+                        thumbnail_file = stack.enter_context(snapshot_path.open('rb'))
+                        upload_files['thumbnail'] = (
+                            snapshot_path.name,
+                            thumbnail_file,
+                            'image/jpeg',
+                        )
+                        if metadata.get('unrecognized_plate_alert'):
+                            alert_file = stack.enter_context(snapshot_path.open('rb'))
                             upload_files['alert_snapshot'] = (
                                 snapshot_path.name,
-                                snapshot_file,
+                                alert_file,
                                 'image/jpeg',
                             )
-                            response = requests.post(
-                                self.ingest_recording_url,
-                                data={
-                                    'camera_role': self.camera_role,
-                                    'metadata': json.dumps(metadata),
-                                },
-                                files=upload_files,
-                                headers={'X-Api-Key': DJANGO_API_KEY},
-                                timeout=(10, 180),
-                            )
-                    else:
-                        response = requests.post(
-                            self.ingest_recording_url,
-                            data={
-                                'camera_role': self.camera_role,
-                                'metadata': json.dumps(metadata),
-                            },
-                            files=upload_files,
-                            headers={'X-Api-Key': DJANGO_API_KEY},
-                            timeout=(10, 180),
-                        )
+                    response = requests.post(
+                        self.ingest_recording_url,
+                        data={
+                            'camera_role': self.camera_role,
+                            'metadata': json.dumps(metadata),
+                        },
+                        files=upload_files,
+                        headers={'X-Api-Key': DJANGO_API_KEY},
+                        timeout=(10, 180),
+                    )
                 if response.status_code == 200:
                     log.info("Uploaded recording to hosted gallery: %s", path.name)
                     return

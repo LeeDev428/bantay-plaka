@@ -69,6 +69,7 @@ class VisitorArchiveTests(SimpleTestCase):
 
     def test_post_archives_visitor_and_redirects_to_current_page(self):
         visitor = SimpleNamespace(
+            pk=12,
             full_name='Test Visitor',
             archive=Mock(),
         )
@@ -80,6 +81,7 @@ class VisitorArchiveTests(SimpleTestCase):
 
         with (
             patch('apps.visitors.views.get_object_or_404', return_value=visitor),
+            patch('apps.visitors.views.record_user_activity'),
             patch('apps.visitors.views.messages.success') as success_message,
         ):
             response = visitor_archive(request, 12)
@@ -118,6 +120,7 @@ class VisitorArchiveTests(SimpleTestCase):
 
     def test_post_archives_blacklist_entry_and_redirects_to_current_page(self):
         entry = SimpleNamespace(
+            pk=12,
             plate_number='ABC1234',
             archive=Mock(),
         )
@@ -129,6 +132,7 @@ class VisitorArchiveTests(SimpleTestCase):
 
         with (
             patch('apps.visitors.views.get_object_or_404', return_value=entry),
+            patch('apps.visitors.views.record_user_activity'),
             patch('apps.visitors.views.messages.success') as success_message,
         ):
             response = blacklist_archive(request, 12)

@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.utils import timezone
 
+from apps.audit.services import audit_export
 from apps.accounts.views import admin_required
 from apps.residents.models import Resident, Vehicle
 from apps.export_helpers import build_excel_response, build_export_chart_data, build_pdf_response
@@ -25,6 +26,7 @@ def _resident_rows(qs):
 
 
 @admin_required
+@audit_export('resident list (Excel)')
 def export_residents_excel(request):
     qs = Resident.objects.prefetch_related('vehicles').order_by('last_name', 'first_name')
     rows = _resident_rows(qs)
@@ -47,6 +49,7 @@ def export_residents_excel(request):
 
 
 @admin_required
+@audit_export('resident list (PDF)')
 def export_residents_pdf(request):
     qs = Resident.objects.prefetch_related('vehicles').order_by('last_name', 'first_name')
     rows = _resident_rows(qs)
@@ -73,6 +76,7 @@ def _vehicle_rows(qs):
 
 
 @admin_required
+@audit_export('vehicle list (Excel)')
 def export_vehicles_excel(request):
     qs = Vehicle.objects.select_related('resident', 'approved_by').order_by('plate_number')
     rows = _vehicle_rows(qs)
@@ -93,6 +97,7 @@ def export_vehicles_excel(request):
 
 
 @admin_required
+@audit_export('vehicle list (PDF)')
 def export_vehicles_pdf(request):
     qs = Vehicle.objects.select_related('resident', 'approved_by').order_by('plate_number')
     rows = _vehicle_rows(qs)
@@ -118,6 +123,7 @@ def _approval_rows(qs):
 
 
 @admin_required
+@audit_export('vehicle approvals (Excel)')
 def export_approvals_excel(request):
     qs = Vehicle.objects.select_related('resident').filter(is_approved=False, approval_notes='').order_by('-created_at')
     rows = _approval_rows(qs)
@@ -131,6 +137,7 @@ def export_approvals_excel(request):
 
 
 @admin_required
+@audit_export('vehicle approvals (PDF)')
 def export_approvals_pdf(request):
     qs = Vehicle.objects.select_related('resident').filter(is_approved=False, approval_notes='').order_by('-created_at')
     rows = _approval_rows(qs)

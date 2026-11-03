@@ -13,16 +13,17 @@ from unittest.mock import Mock, patch
 from apps.logs.views import (
     alert_archive,
     alert_gallery,
+    log_edit,
+    log_list,
     recording_download,
     recording_file,
     recording_thumbnail,
     snapshot_archive,
     snapshot_gallery,
-    log_edit,
     video_archive,
     video_gallery,
 )
-from apps.logs.models import UnrecognizedPlateAlert, VehicleLog, VideoRecording
+from apps.logs.models import UnrecognizedPlateAlert, VehicleLog, VehicleLogEditHistory, VideoRecording
 from apps.archive.registry import ARCHIVE_REGISTRY
 
 
@@ -59,6 +60,7 @@ class VehicleLogEditHistoryTests(SimpleTestCase):
             patch('apps.logs.views.get_object_or_404', return_value=original_log),
             patch('apps.logs.views.LogEditForm', return_value=form),
             patch('apps.logs.views.VehicleLogEditHistory.objects.create') as create_history,
+            patch('apps.logs.views.record_user_activity'),
             patch('apps.logs.views.transaction.atomic', return_value=nullcontext()),
             patch('apps.logs.views.messages.success'),
         ):
@@ -78,6 +80,106 @@ class VehicleLogEditHistoryTests(SimpleTestCase):
             },
         )
         updated_log.save.assert_called_once_with()
+
+
+@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+class VehicleLogListTests(SimpleTestCase):
+    class LogQuery(list):
+        def __init__(self, items):
+            super().__init__(items)
+            self.filters = []
+
+        def select_related(self, *_args):
+            return self
+
+        def prefetch_related(self, *_args):
+            return self
+
+        def annotate(self, **_kwargs):
+            return self
+
+        def order_by(self, *_args):
+            return self
+
+        def filter(self, **kwargs):
+            self.filters.append(kwargs)
+            return self
+
+        def count(self):
+            return len(self)
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = SimpleNamespace(
+            is_authenticated=True,
+            is_resident=lambda: False,
+            username='test-guard',
+            first_name='Test',
+            role='GUARD',
+            get_full_name=lambda: 'Test Guard',
+            get_role_display=lambda: 'Security Guard',
+        )
+        edit = SimpleNamespace(
+            changed_at=datetime.datetime(2026, 11, 3, 3, 0, tzinfo=datetime.timezone.utc),
+            edited_by=SimpleNamespace(username='test-guard', get_full_name=lambda: 'Test Guard'),
+            changes={'Plate Number': {'old': 'OLD1234', 'new': 'ABC1234'}},
+        )
+        log = SimpleNamespace(
+            pk=12,
+            plate_number='ABC1234',
+            has_edits=True,
+            snapshot=SimpleNamespace(url='https://media.example/ABC1234.jpg'),
+            entry_type=VehicleLog.TYPE_VISITOR,
+            status=VehicleLog.STATUS_IN,
+            source=VehicleLog.SOURCE_CAMERA,
+            logged_by=None,
+            local_time=datetime.datetime(2026, 11, 3, 3, 0, tzinfo=datetime.timezone.utc),
+            resident_name='',
+            visitor_name='Visitor Name',
+            blacklist_tag='',
+            blacklist_remarks='',
+            edit_history=SimpleNamespace(all=lambda: [edit]),
+            get_display_name=lambda: 'Visitor Name',
+        )
+        self.query = self.LogQuery([log])
+
+    def test_list_shows_snapshot_edit_badge_and_edit_history(self):
+        request = self.factory.get('/logs/?edited=edited')
+        request.user = self.user
+
+        with (
+            patch('apps.logs.views.VehicleLog.objects.select_related', return_value=self.query),
+            patch('apps.logs.views.attach_blacklist_metadata'),
+        ):
+            response = log_list(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'See Snapshot')
+        self.assertContains(response, 'https://media.example/ABC1234.jpg')
+        self.assertContains(response, 'Edited')
+        self.assertContains(response, 'See Edit Logs')
+        self.assertContains(response, 'OLD1234')
+        self.assertContains(response, 'ABC1234')
+        self.assertContains(response, 'value="edited" selected')
+        self.assertIn({'has_edits': True}, self.query.filters)
+
+    def test_list_hides_snapshot_action_when_log_has_no_snapshot(self):
+        self.query[0].snapshot = None
+        self.query[0].has_edits = False
+        request = self.factory.get('/logs/?edited=not_edited')
+        request.user = self.user
+
+        with (
+            patch('apps.logs.views.VehicleLog.objects.select_related', return_value=self.query),
+            patch('apps.logs.views.attach_blacklist_metadata'),
+        ):
+            response = log_list(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'See Snapshot')
+        self.assertNotContains(response, 'See Edit Logs')
+        self.assertIn({'has_edits': False}, self.query.filters)
+        self.assertContains(response, 'value="not_edited" selected')
 
 
 class VideoGalleryTests(SimpleTestCase):

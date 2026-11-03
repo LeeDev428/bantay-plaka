@@ -1,4 +1,5 @@
 """apps/accounts/export_views.py"""
+from apps.audit.services import audit_export
 from apps.accounts.models import User
 from apps.accounts.views import admin_required
 from apps.export_helpers import build_excel_response, build_export_chart_data, build_pdf_response
@@ -16,6 +17,7 @@ def _user_rows(qs):
 
 
 @admin_required
+@audit_export('user list (Excel)')
 def export_users_excel(request):
     qs = User.objects.exclude(role=User.ROLE_RESIDENT).order_by('role', 'last_name')
     rows = _user_rows(qs)
@@ -38,6 +40,7 @@ def export_users_excel(request):
 
 
 @admin_required
+@audit_export('user list (PDF)')
 def export_users_pdf(request):
     qs = User.objects.exclude(role=User.ROLE_RESIDENT).order_by('role', 'last_name')
     rows = _user_rows(qs)

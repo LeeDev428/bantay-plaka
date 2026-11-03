@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}User Activity Logs{% endblock %}
+{% block breadcrumb %}Administration &raquo; User Activity Logs{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold text-slate-800">User Activity Logs</h1>
+  <p class="mt-0.5 text-sm text-slate-500">Review sign-ins, data changes, and report exports across the system.</p>
+</div>
+
+<div class="page-card p-4 mb-4">
+  <form method="get" class="flex flex-wrap items-end gap-3">
+    <div>
+      <label class="mb-1 block text-xs font-medium text-slate-500">Search</label>
+      <input type="search" name="q" value="{{ search_q }}" placeholder="User, activity, or record"
+             class="input input-bordered input-sm w-56 bg-white">
+    </div>
+    <div>
+      <label class="mb-1 block text-xs font-medium text-slate-500">Activity</label>
+      <select name="action" class="select select-bordered select-sm bg-white">
+        <option value="">All activities</option>
+        {% for value, label in action_choices %}
+          <option value="{{ value }}" {% if action_q == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="mb-1 block text-xs font-medium text-slate-500">From</label>
+      <input type="date" name="date_from" value="{{ date_from_q }}" class="input input-bordered input-sm bg-white">
+    </div>
+    <div>
+      <label class="mb-1 block text-xs font-medium text-slate-500">To</label>
+      <input type="date" name="date_to" value="{{ date_to_q }}" class="input input-bordered input-sm bg-white">
+    </div>
+    <button type="submit" class="btn btn-sm border-0 bg-blue-600 text-white hover:bg-blue-700">
+      <i class="fa fa-magnifying-glass mr-1"></i> Search
+    </button>
+    <a href="{% url 'user_activity' %}" class="btn btn-ghost btn-sm text-slate-500">Clear filters</a>
+  </form>
+</div>
+
+<div class="page-card overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr class="bg-slate-50 text-xs uppercase text-slate-500">
+          <th>When</th><th>User</th><th>Activity</th><th>Details</th><th>Record</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in events %}
+        <tr class="hover:bg-slate-50">
+          <td class="whitespace-nowrap text-xs text-slate-500">{{ event.created_at|date:"M d, Y h:i:s A" }}</td>
+          <td>
+            <p class="text-sm font-medium text-slate-700">{{ event.actor_username }}</p>
+            {% if event.actor_role %}<p class="text-[11px] text-slate-400">{{ event.actor_role }}</p>{% endif %}
+          </td>
+          <td>
+            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold
+              {% if event.action == 'LOGIN' %}bg-emerald-100 text-emerald-700
+              {% elif event.action == 'LOGOUT' %}bg-slate-100 text-slate-600
+              {% elif event.action == 'EXPORT' %}bg-blue-100 text-blue-700
+              {% elif event.action == 'ARCHIVE' or event.action == 'REJECT' or event.action == 'DEACTIVATE' %}bg-amber-100 text-amber-700
+              {% else %}bg-violet-100 text-violet-700{% endif %}">
+              {{ event.get_action_display }}
+            </span>
+          </td>
+          <td class="max-w-xl whitespace-normal text-sm text-slate-600">
+            {{ event.summary }}
+            {% for field, values in event.details.changes.items %}
+              <p class="mt-1 text-xs text-slate-500">
+                {{ field }}: {{ values.old|default:"—" }} <i class="fa fa-arrow-right mx-1 text-[9px]"></i> {{ values.new|default:"—" }}
+              </p>
+            {% endfor %}
+          </td>
+          <td class="whitespace-nowrap text-xs text-slate-500">
+            {% if event.target_type %}{{ event.target_type }}{% if event.target_id %} #{{ event.target_id }}{% endif %}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="py-12 text-center text-slate-400">No activity records found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if events.paginator.num_pages > 1 %}
+  <div class="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+    <p class="text-xs text-slate-500">Page {{ events.number }} of {{ events.paginator.num_pages }}</p>
+    <div class="join">
+      {% if events.has_previous %}
+        <a class="join-item btn btn-sm" href="?q={{ search_q|urlencode }}&action={{ action_q|urlencode }}&date_from={{ date_from_q|urlencode }}&date_to={{ date_to_q|urlencode }}&page={{ events.previous_page_number }}">Prev</a>
+      {% endif %}
+      {% if events.has_next %}
+        <a class="join-item btn btn-sm" href="?q={{ search_q|urlencode }}&action={{ action_q|urlencode }}&date_from={{ date_from_q|urlencode }}&date_to={{ date_to_q|urlencode }}&page={{ events.next_page_number }}">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

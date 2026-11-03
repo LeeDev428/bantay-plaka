@@ -10,6 +10,8 @@ from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 
+from apps.audit.models import UserActivity
+from apps.audit.services import audit_export, record_user_activity
 from apps.visitors.models import Visitor, BlacklistEntry
 from apps.visitors.forms import VisitorForm, BlacklistEntryForm, VisitorEditForm
 from apps.logs.models import VehicleLog
@@ -41,6 +43,13 @@ def visitor_log_entry(request):
 
             visitor.logged_by = request.user
             visitor.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_CREATE,
+                summary=f'Added {visitor.get_visitor_type_display().lower()} {visitor.full_name}',
+                target_type='visitor',
+                target_id=visitor.pk,
+            )
 
             # create vehicle log time-in
             status = form.cleaned_data.get('status', VehicleLog.STATUS_IN)
@@ -82,6 +91,13 @@ def visitor_list(request):
                 else:
                     visitor.logged_by = request.user
                     visitor.save()
+                    record_user_activity(
+                        actor=request.user,
+                        action=UserActivity.ACTION_CREATE,
+                        summary=f'Added {visitor.get_visitor_type_display().lower()} {visitor.full_name}',
+                        target_type='visitor',
+                        target_id=visitor.pk,
+                    )
 
                     status = visitor_form.cleaned_data.get('status', VehicleLog.STATUS_IN)
                     log = VehicleLog.objects.create(
@@ -143,6 +159,13 @@ def visitor_edit(request, pk):
         form = VisitorEditForm(request.POST, request.FILES, instance=visitor)
         if form.is_valid():
             form.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_UPDATE,
+                summary=f'Updated visitor {visitor.full_name}',
+                target_type='visitor',
+                target_id=visitor.pk,
+            )
             messages.success(request, f'Visitor {visitor.full_name} updated.')
         else:
             errors = ' '.join(
@@ -198,11 +221,19 @@ def visitor_archive(request, pk):
     if request.method == 'POST':
         visitor = get_object_or_404(Visitor, pk=pk)
         visitor.archive(user=request.user)
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_ARCHIVE,
+            summary=f'Archived visitor {visitor.full_name}',
+            target_type='visitor',
+            target_id=visitor.pk,
+        )
         messages.success(request, f'Visitor {visitor.full_name} archived.')
     return redirect(request.POST.get('next', 'visitor_list'))
 
 
 @login_required
+@audit_export('visitor list (Excel)')
 def visitor_export_excel(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -263,6 +294,7 @@ def visitor_export_excel(request):
 
 
 @login_required
+@audit_export('visitor list (PDF)')
 def visitor_export_pdf(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -317,6 +349,7 @@ def visitor_export_pdf(request):
 
 
 @login_required
+@audit_export('blacklist report (Excel)')
 def blacklist_export_excel(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -376,6 +409,7 @@ def blacklist_export_excel(request):
 
 
 @login_required
+@audit_export('blacklist report (PDF)')
 def blacklist_export_pdf(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -453,6 +487,13 @@ def blacklist_list(request):
                 }
             )
             if created:
+                record_user_activity(
+                    actor=request.user,
+                    action=UserActivity.ACTION_CREATE,
+                    summary=f'Added blacklist entry for {entry.plate_number}',
+                    target_type='blacklist',
+                    target_id=entry.pk,
+                )
                 messages.success(request, f'Plate {entry.plate_number} added to blacklist.')
             else:
                 entry.tag = form.cleaned_data.get('tag', entry.tag)
@@ -460,6 +501,13 @@ def blacklist_list(request):
                 entry.remarks = form.cleaned_data['remarks']
                 entry.is_active = True
                 entry.save(update_fields=['tag', 'reason', 'remarks', 'is_active', 'updated_at'])
+                record_user_activity(
+                    actor=request.user,
+                    action=UserActivity.ACTION_UPDATE,
+                    summary=f'Reactivated/updated blacklist entry for {entry.plate_number}',
+                    target_type='blacklist',
+                    target_id=entry.pk,
+                )
                 messages.success(request, f'Plate {entry.plate_number} is now active in blacklist.')
             return redirect('blacklist_list')
 
@@ -507,6 +555,13 @@ def blacklist_toggle(request, pk):
         entry.is_active = not entry.is_active
         entry.save(update_fields=['is_active', 'updated_at'])
         state = 'activated' if entry.is_active else 'deactivated'
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_ACTIVATE if entry.is_active else UserActivity.ACTION_DEACTIVATE,
+            summary=f'{state.capitalize()} blacklist entry for {entry.plate_number}',
+            target_type='blacklist',
+            target_id=entry.pk,
+        )
         messages.success(request, f'Blacklist entry for {entry.plate_number} {state}.')
     return redirect(request.POST.get('next', 'blacklist_list'))
 
@@ -526,6 +581,13 @@ def blacklist_edit(request, pk):
         form = BlacklistEntryForm(request.POST, instance=entry)
         if form.is_valid():
             form.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_UPDATE,
+                summary=f'Updated blacklist entry for {entry.plate_number}',
+                target_type='blacklist',
+                target_id=entry.pk,
+            )
             messages.success(request, f'Blacklist entry for {entry.plate_number} updated.')
         else:
             messages.error(request, 'Failed to update blacklist entry.')
@@ -546,6 +608,13 @@ def blacklist_cancel(request, pk):
     if request.method == 'POST':
         entry.is_active = False
         entry.save(update_fields=['is_active', 'updated_at'])
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_DEACTIVATE,
+            summary=f'Cancelled blacklist entry for {entry.plate_number}',
+            target_type='blacklist',
+            target_id=entry.pk,
+        )
         messages.success(request, f'Blacklist for {entry.plate_number} cancelled.')
     return redirect(request.POST.get('next', 'blacklist_list'))
 
@@ -563,5 +632,12 @@ def blacklist_archive(request, pk):
     entry = get_object_or_404(BlacklistEntry, pk=pk)
     if request.method == 'POST':
         entry.archive(user=request.user)
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_ARCHIVE,
+            summary=f'Archived blacklist entry for {entry.plate_number}',
+            target_type='blacklist',
+            target_id=entry.pk,
+        )
         messages.success(request, f'Blacklist entry for {entry.plate_number} archived.')
     return redirect(request.POST.get('next', 'blacklist_list'))

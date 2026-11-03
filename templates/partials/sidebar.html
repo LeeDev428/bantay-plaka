@@ -76,6 +76,9 @@
     <a href="{% url 'user_management' %}" class="sidebar-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-users-gear w-5 text-center"></i> Guard &amp; Admin
     </a>
+    <a href="{% url 'user_activity' %}" class="sidebar-link {% if request.resolver_match.url_name == 'user_activity' %}active{% endif %}">
+      <i class="fa fa-list-check w-5 text-center"></i> User Activity Logs
+    </a>
     {% endif %}
 
     {% if user.is_resident %}

@@ -9,6 +9,8 @@ from django.db.models import Q
 from pathlib import PurePath
 import mimetypes
 
+from apps.audit.models import UserActivity
+from apps.audit.services import record_user_activity
 from apps.accounts.views import admin_required
 from apps.accounts.models import User
 from apps.residents.models import Resident, Vehicle
@@ -39,6 +41,13 @@ def resident_list(request):
                 resident.approved_at = timezone.now()
                 resident.approval_reason = ''
                 resident.save()
+                record_user_activity(
+                    actor=request.user,
+                    action=UserActivity.ACTION_CREATE,
+                    summary=f'Registered resident {resident.full_name}',
+                    target_type='resident',
+                    target_id=resident.pk,
+                )
                 messages.success(request, f'{resident.full_name} registered successfully.')
                 return redirect('resident_list')
             messages.error(request, 'Failed to register resident. Please check the required fields.')
@@ -51,6 +60,13 @@ def resident_list(request):
                 vehicle = vehicle_form.save(commit=False)
                 vehicle.resident = resident
                 vehicle.save()
+                record_user_activity(
+                    actor=request.user,
+                    action=UserActivity.ACTION_CREATE,
+                    summary=f'Registered vehicle {vehicle.plate_number} for {resident.full_name}',
+                    target_type='vehicle',
+                    target_id=vehicle.pk,
+                )
                 messages.success(request, f'Vehicle {vehicle.plate_number} registered.')
                 if vehicle_form.reused_from_archive:
                     messages.info(request, f'Note: plate {vehicle.plate_number} was previously used by an archived vehicle.')
@@ -120,6 +136,13 @@ def resident_vehicle_create_self(request):
         vehicle.approved_at = None
         vehicle.approval_notes = ''
         vehicle.save()
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_CREATE,
+            summary=f'Submitted vehicle {vehicle.plate_number} for approval',
+            target_type='vehicle',
+            target_id=vehicle.pk,
+        )
         messages.success(request, f'Vehicle {vehicle.plate_number} submitted and pending admin approval.')
         if form.reused_from_archive:
             messages.info(request, f'Note: plate {vehicle.plate_number} was previously used by an archived vehicle.')
@@ -189,6 +212,13 @@ def resident_create(request):
             resident.approved_at = timezone.now()
             resident.approval_reason = ''
             resident.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_CREATE,
+                summary=f'Registered resident {resident.full_name}',
+                target_type='resident',
+                target_id=resident.pk,
+            )
             messages.success(request, f'{resident.full_name} registered successfully.')
             return redirect('resident_list')
     else:
@@ -203,6 +233,13 @@ def resident_edit(request, pk):
         form = ResidentForm(request.POST, request.FILES, instance=resident)
         if form.is_valid():
             form.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_UPDATE,
+                summary=f'Updated resident {resident.full_name}',
+                target_type='resident',
+                target_id=resident.pk,
+            )
             messages.success(request, 'Resident updated.')
             return redirect('resident_list')
     else:
@@ -218,6 +255,13 @@ def resident_delete(request, pk):
         if resident.user:
             resident.user.is_active = False
             resident.user.save(update_fields=['is_active'])
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_ARCHIVE,
+            summary=f'Archived resident {resident.full_name}',
+            target_type='resident',
+            target_id=resident.pk,
+        )
         messages.success(request, 'Resident record archived.')
     return redirect('resident_list')
 
@@ -234,6 +278,13 @@ def resident_approve(request, pk):
         if resident.user:
             resident.user.is_active = True
             resident.user.save(update_fields=['is_active'])
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_APPROVE,
+            summary=f'Approved resident {resident.full_name}',
+            target_type='resident',
+            target_id=resident.pk,
+        )
         messages.success(request, f'{resident.full_name} has been approved.')
     return redirect('resident_list')
 
@@ -250,6 +301,13 @@ def resident_reject(request, pk):
         if resident.user:
             resident.user.is_active = False
             resident.user.save(update_fields=['is_active'])
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_REJECT,
+            summary=f'Rejected resident registration for {resident.full_name}',
+            target_type='resident',
+            target_id=resident.pk,
+        )
         messages.success(request, f'{resident.full_name} has been marked as pending/inactive.')
     return redirect('resident_list')
 
@@ -269,6 +327,13 @@ def vehicle_create(request, resident_pk):
             vehicle.approved_at = timezone.now()
             vehicle.approval_notes = ''
             vehicle.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_CREATE,
+                summary=f'Registered vehicle {vehicle.plate_number} for {resident.full_name}',
+                target_type='vehicle',
+                target_id=vehicle.pk,
+            )
             messages.success(request, f'Vehicle {vehicle.plate_number} registered.')
             if form.reused_from_archive:
                 messages.info(request, f'Note: plate {vehicle.plate_number} was previously used by an archived vehicle.')
@@ -283,6 +348,13 @@ def vehicle_delete(request, pk):
     vehicle = get_object_or_404(Vehicle, pk=pk)
     if request.method == 'POST':
         vehicle.archive(user=request.user)
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_ARCHIVE,
+            summary=f'Archived vehicle {vehicle.plate_number}',
+            target_type='vehicle',
+            target_id=vehicle.pk,
+        )
         messages.success(request, f'Vehicle {vehicle.plate_number} archived.')
     return redirect('resident_list')
 
@@ -304,6 +376,13 @@ def vehicle_approval_list(request):
                 vehicle.approved_at = timezone.now()
                 vehicle.approval_notes = ''
                 vehicle.save()
+                record_user_activity(
+                    actor=request.user,
+                    action=UserActivity.ACTION_CREATE,
+                    summary=f'Registered vehicle {vehicle.plate_number} for {resident.full_name}',
+                    target_type='vehicle',
+                    target_id=vehicle.pk,
+                )
                 messages.success(request, f'Vehicle {vehicle.plate_number} registered for {resident.full_name}.')
                 if vehicle_form.reused_from_archive:
                     messages.info(request, f'Note: plate {vehicle.plate_number} was previously used by an archived vehicle.')
@@ -349,6 +428,13 @@ def vehicle_approve(request, pk):
         vehicle.approved_at = timezone.now()
         vehicle.approval_notes = ''
         vehicle.save(update_fields=['is_approved', 'approved_by', 'approved_at', 'approval_notes'])
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_APPROVE,
+            summary=f'Approved vehicle {vehicle.plate_number}',
+            target_type='vehicle',
+            target_id=vehicle.pk,
+        )
         messages.success(request, f'Vehicle {vehicle.plate_number} approved.')
     return redirect(request.POST.get('next', 'vehicle_approval_list'))
 
@@ -360,5 +446,12 @@ def vehicle_reject(request, pk):
         reason = (request.POST.get('reason') or '').strip()
         vehicle.approval_notes = reason or 'Vehicle registration requirements were not satisfied.'
         vehicle.save(update_fields=['approval_notes'])
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_REJECT,
+            summary=f'Rejected vehicle {vehicle.plate_number}',
+            target_type='vehicle',
+            target_id=vehicle.pk,
+        )
         messages.success(request, f'Pending vehicle {vehicle.plate_number} was rejected.')
     return redirect(request.POST.get('next', 'vehicle_approval_list'))

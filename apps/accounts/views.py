@@ -9,6 +9,8 @@ from django.core.paginator import Paginator
 import datetime
 from datetime import timedelta
 
+from apps.audit.models import UserActivity
+from apps.audit.services import record_user_activity
 from apps.accounts.forms import (
     LoginForm,
     PRIVACY_NOTICE_VERSION,
@@ -111,6 +113,13 @@ def resident_register(request):
         vehicles_valid = vehicle_formset.is_valid()
         if form_valid and vehicles_valid:
             user, resident = form.save(vehicle_formset)
+            record_user_activity(
+                actor=user,
+                action=UserActivity.ACTION_CREATE,
+                summary=f'Submitted resident registration for {resident.full_name}',
+                target_type='resident registration',
+                target_id=resident.pk,
+            )
             vehicle_count = len(vehicle_formset.forms) - len(vehicle_formset.deleted_forms)
             messages.success(
                 request,
@@ -252,7 +261,14 @@ def user_create(request):
     if request.method == 'POST':
         form = UserCreateForm(request.POST)
         if form.is_valid():
-            form.save()
+            user = form.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_CREATE,
+                summary=f'Created {user.get_role_display().lower()} account {user.username}',
+                target_type='account',
+                target_id=user.pk,
+            )
             messages.success(request, 'User created successfully.')
             return redirect('user_management')
     else:
@@ -267,6 +283,13 @@ def user_edit(request, pk):
         form = UserEditForm(request.POST, instance=user)
         if form.is_valid():
             form.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_UPDATE,
+                summary=f'Updated account {user.username}',
+                target_type='account',
+                target_id=user.pk,
+            )
             messages.success(request, 'User updated successfully.')
             return redirect('user_management')
     else:
@@ -281,6 +304,13 @@ def user_toggle_active(request, pk):
         user.is_active = not user.is_active
         user.save()
         state = 'activated' if user.is_active else 'deactivated'
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_ACTIVATE if user.is_active else UserActivity.ACTION_DEACTIVATE,
+            summary=f'{state.capitalize()} account {user.username}',
+            target_type='account',
+            target_id=user.pk,
+        )
         messages.success(request, f'User {user.get_full_name()} has been {state}.')
     return redirect('user_management')
 
@@ -292,6 +322,13 @@ def user_delete(request, pk):
         name = user.get_full_name() or user.username
         user.is_active = False
         user.save(update_fields=['is_active'])
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_DEACTIVATE,
+            summary=f'Deactivated account {user.username}',
+            target_type='account',
+            target_id=user.pk,
+        )
         messages.success(request, f'User "{name}" has been deactivated.')
     return redirect('user_management')
 
@@ -338,6 +375,13 @@ def guard_dashboard(request):
                     log.visitor_name = known_visitor.full_name if known_visitor else ''
 
                 log.save()
+                record_user_activity(
+                    actor=request.user,
+                    action=UserActivity.ACTION_CREATE,
+                    summary=f'Manual vehicle log added for {log.plate_number} ({log.get_status_display()})',
+                    target_type='vehicle log',
+                    target_id=log.pk,
+                )
                 broadcast_log(log)
                 if blacklist_entry:
                     blacklist_note = blacklist_entry.remarks or blacklist_entry.reason or 'Blacklisted plate.'

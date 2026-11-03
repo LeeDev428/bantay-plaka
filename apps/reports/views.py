@@ -11,6 +11,7 @@ from django.shortcuts import redirect
 from django.shortcuts import render
 from django.utils import timezone
 
+from apps.audit.services import audit_export
 from apps.export_helpers import build_export_chart_data
 from apps.logs.models import VehicleLog
 from apps.logs.services import get_active_blacklist_map
@@ -137,6 +138,7 @@ def report_dashboard(request):
 
 
 @login_required
+@audit_export('vehicle log report (CSV)')
 def export_csv(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -194,6 +196,7 @@ def export_csv(request):
 
 
 @login_required
+@audit_export('vehicle log report (PDF)')
 def export_pdf(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -243,6 +246,7 @@ def export_pdf(request):
 
 
 @login_required
+@audit_export('vehicle log report (Excel)')
 def export_excel(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -305,6 +309,7 @@ def export_excel(request):
 
 
 @login_required
+@audit_export('visitors inside report (CSV)')
 def export_visitors_inside(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')

@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.utils import timezone
 
+from apps.audit.services import audit_export
 from apps.logs.models import VehicleLog
 from apps.logs.services import get_active_blacklist_map
 from apps.export_helpers import build_excel_response, build_pdf_response
@@ -73,6 +74,7 @@ def _chart_data(logs):
 
 
 @login_required
+@audit_export('vehicle logs (Excel)')
 def export_logs_excel(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')
@@ -104,6 +106,7 @@ def export_logs_excel(request):
 
 
 @login_required
+@audit_export('vehicle logs (PDF)')
 def export_logs_pdf(request):
     if request.user.is_resident():
         messages.error(request, 'Access denied.')

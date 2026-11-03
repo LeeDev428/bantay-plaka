@@ -71,6 +71,14 @@
       </select>
     </div>
     <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Edit Status</label>
+      <select name="edited" class="select select-bordered select-sm bg-white">
+        <option value="">All Logs</option>
+        <option value="edited" {% if edited_q == 'edited' %}selected{% endif %}>Edited Only</option>
+        <option value="not_edited" {% if edited_q == 'not_edited' %}selected{% endif %}>Not Edited</option>
+      </select>
+    </div>
+    <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
       <input type="date" name="date_from" value="{{ date_from_q }}" class="input input-bordered input-sm bg-white" />
     </div>
@@ -105,7 +113,14 @@
       <tbody>
         {% for log in logs %}
         <tr class="hover:bg-slate-50 transition-colors">
-          <td class="font-mono font-semibold text-slate-800">{{ log.plate_number }}</td>
+          <td class="font-mono font-semibold text-slate-800">
+            {{ log.plate_number }}
+            {% if log.has_edits %}
+              <span class="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 align-middle font-sans text-[10px] font-semibold text-amber-800" title="This log has been edited">
+                <i class="fa fa-pen-to-square"></i> Edited
+              </span>
+            {% endif %}
+          </td>
           <td class="text-sm text-slate-600">{{ log.get_display_name }}</td>
           <td>
             {% if log.entry_type == 'RESIDENT' %}
@@ -141,13 +156,20 @@
             {% endif %}
           </td>
           <td class="text-xs text-slate-500">{{ log.logged_by.get_full_name|default:'System' }}</td>
-          {% with log.edit_history.all as edit_history %}
           <td class="text-xs text-slate-400">
             {{ log.local_time|date:"M d, Y h:i:s A" }}
-            {% if edit_history %}<span class="ml-1 font-semibold text-amber-600">(Edited)</span>{% endif %}
           </td>
           <td>
             <div class="flex items-center gap-1">
+              {% if log.snapshot %}
+              <button type="button" data-media-preview data-preview-type="image"
+                      data-preview-url="{{ log.snapshot.url }}"
+                      data-preview-title="Plate snapshot — {{ log.plate_number }}"
+                      class="btn btn-xs bg-emerald-50 hover:bg-emerald-100 border-0 text-emerald-700"
+                      title="See Snapshot" aria-label="See snapshot for {{ log.plate_number }}">
+                <i class="fa fa-image text-[11px]"></i>
+              </button>
+              {% endif %}
               <button
                 onclick="openEditModal({{ log.pk }}, '{{ log.plate_number|escapejs }}', '{{ log.entry_type|escapejs }}', '{{ log.status|escapejs }}', '{{ log.resident_name|escapejs }}', '{{ log.visitor_name|escapejs }}')"
                 class="btn btn-xs bg-blue-50 hover:bg-blue-100 border-0 text-blue-600" title="Edit">
@@ -159,13 +181,18 @@
                 <i class="fa fa-box-archive text-[11px]"></i>
               </button>
             </div>
-            {% if edit_history %}
+            {% if log.has_edits %}
             <details class="mt-1 text-left">
-              <summary class="cursor-pointer text-[11px] font-medium text-slate-500 hover:text-blue-600">Edit history ({{ edit_history|length }})</summary>
+              <summary class="cursor-pointer text-[11px] font-semibold text-blue-600 hover:text-blue-700">
+                <i class="fa fa-clock-rotate-left mr-1"></i>See Edit Logs
+              </summary>
               <div class="mt-2 max-h-48 w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-                {% for edit in edit_history %}
+                {% for edit in log.edit_history.all %}
                 <div class="{% if not forloop.first %}border-t border-slate-100 pt-2 mt-2{% endif %}">
-                  <p class="text-[11px] font-semibold text-slate-700">{{ edit.changed_at|localtime|date:"M d, Y h:i:s A" }} by {{ edit.edited_by.get_full_name|default:edit.edited_by.username|default:"System" }}</p>
+                  <p class="text-[11px] font-semibold text-slate-700">
+                    {{ edit.changed_at|localtime|date:"M d, Y h:i:s A" }} by
+                    {% if edit.edited_by %}{{ edit.edited_by.get_full_name|default:edit.edited_by.username }}{% else %}System{% endif %}
+                  </p>
                   {% for field, values in edit.changes.items %}
                   <p class="mt-1 text-[11px] text-slate-600">
                     <span class="font-medium">{{ field }}:</span>
@@ -180,7 +207,6 @@
             </details>
             {% endif %}
           </td>
-          {% endwith %}
         </tr>
         {% empty %}
         <tr><td colspan="9" class="text-center text-slate-400 py-12">No logs found.</td></tr>
@@ -191,12 +217,12 @@
   {% if logs.has_other_pages %}
   <div class="flex justify-center py-4 gap-1 border-t border-slate-100">
     {% if logs.has_previous %}
-      <a href="?page={{ logs.previous_page_number }}&q={{ q }}&plate={{ plate_q }}&entry_type={{ entry_type_q }}&status={{ status_q }}&date_from={{ date_from_q }}&date_to={{ date_to_q }}"
+      <a href="?page={{ logs.previous_page_number }}&q={{ q|urlencode }}&plate={{ plate_q|urlencode }}&entry_type={{ entry_type_q|urlencode }}&status={{ status_q|urlencode }}&edited={{ edited_q|urlencode }}&date_from={{ date_from_q|urlencode }}&date_to={{ date_to_q|urlencode }}"
         class="btn btn-sm btn-ghost text-slate-600">&laquo; Prev</a>
     {% endif %}
     <span class="btn btn-sm btn-disabled bg-slate-100 text-slate-500">{{ logs.number }} / {{ logs.paginator.num_pages }}</span>
     {% if logs.has_next %}
-      <a href="?page={{ logs.next_page_number }}&q={{ q }}&plate={{ plate_q }}&entry_type={{ entry_type_q }}&status={{ status_q }}&date_from={{ date_from_q }}&date_to={{ date_to_q }}"
+      <a href="?page={{ logs.next_page_number }}&q={{ q|urlencode }}&plate={{ plate_q|urlencode }}&entry_type={{ entry_type_q|urlencode }}&status={{ status_q|urlencode }}&edited={{ edited_q|urlencode }}&date_from={{ date_from_q|urlencode }}&date_to={{ date_to_q|urlencode }}"
         class="btn btn-sm btn-ghost text-slate-600">Next &raquo;</a>
     {% endif %}
   </div>
@@ -280,6 +306,8 @@
     </form>
   </div>
 </div>
+
+{% include 'logs/partials/media_preview_modal.html' %}
 
 {% endblock %}
 

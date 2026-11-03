@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
 from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
@@ -16,6 +16,8 @@ from django.urls import reverse
 from django.utils import timezone
 import requests
 
+from apps.audit.models import UserActivity
+from apps.audit.services import record_user_activity
 from apps.logs.models import VehicleLog, VehicleLogEditHistory, VideoRecording, UnrecognizedPlateAlert
 from apps.logs.forms import ManualLogForm, LogEditForm
 from apps.logs.services import broadcast_log, attach_blacklist_metadata
@@ -91,6 +93,13 @@ def manual_entry(request):
                 log.resident_name = ''
 
             log.save()
+            record_user_activity(
+                actor=request.user,
+                action=UserActivity.ACTION_CREATE,
+                summary=f'Manual vehicle log added for {log.plate_number} ({log.get_status_display()})',
+                target_type='vehicle log',
+                target_id=log.pk,
+            )
             broadcast_log(log)
             if blacklist_entry:
                 blacklist_note = blacklist_entry.remarks or blacklist_entry.reason or 'Blacklisted plate.'
@@ -116,8 +125,11 @@ def log_list(request):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
+    edit_history = VehicleLogEditHistory.objects.filter(vehicle_log_id=OuterRef('pk'))
     logs_qs = VehicleLog.objects.select_related('logged_by').prefetch_related(
         'edit_history__edited_by',
+    ).annotate(
+        has_edits=Exists(edit_history),
     ).order_by('-timestamp')
 
     # filters
@@ -125,6 +137,7 @@ def log_list(request):
     plate_q = request.GET.get('plate', '').strip()
     entry_type_q = request.GET.get('entry_type', '').strip()
     status_q = request.GET.get('status', '').strip()
+    edited_q = request.GET.get('edited', '').strip()
     date_from_q = request.GET.get('date_from', '').strip()
     date_to_q = request.GET.get('date_to', '').strip()
 
@@ -140,6 +153,12 @@ def log_list(request):
         logs_qs = logs_qs.filter(entry_type=entry_type_q)
     if status_q:
         logs_qs = logs_qs.filter(status=status_q)
+    if edited_q == 'edited':
+        logs_qs = logs_qs.filter(has_edits=True)
+    elif edited_q == 'not_edited':
+        logs_qs = logs_qs.filter(has_edits=False)
+    else:
+        edited_q = ''
     tz = timezone.get_current_timezone()
     if date_from_q:
         try:
@@ -167,6 +186,7 @@ def log_list(request):
         'plate_q': plate_q,
         'entry_type_q': entry_type_q,
         'status_q': status_q,
+        'edited_q': edited_q,
         'date_from_q': date_from_q,
         'date_to_q': date_to_q,
     })
@@ -529,6 +549,14 @@ def log_edit(request, pk):
                         edited_by=request.user,
                         changes=changes,
                     )
+                    record_user_activity(
+                        actor=request.user,
+                        action=UserActivity.ACTION_UPDATE,
+                        summary=f'Edited vehicle log #{pk} for {updated_log.plate_number}',
+                        target_type='vehicle log',
+                        target_id=pk,
+                        details={'changes': changes},
+                    )
             messages.success(request, f'Log #{pk} updated successfully.')
         else:
             messages.error(request, 'Failed to update log. Please check the fields.')
@@ -544,5 +572,12 @@ def log_delete(request, pk):
     log = get_object_or_404(VehicleLog, pk=pk)
     if request.method == 'POST':
         log.archive(user=request.user)
+        record_user_activity(
+            actor=request.user,
+            action=UserActivity.ACTION_ARCHIVE,
+            summary=f'Archived vehicle log for {log.plate_number}',
+            target_type='vehicle log',
+            target_id=pk,
+        )
         messages.success(request, f'Log #{pk} archived.')
     return redirect(request.POST.get('next', 'log_list'))

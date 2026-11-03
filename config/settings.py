@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'apps.detection',
     'apps.reports',
     'apps.archive',
+    'apps.audit.apps.AuditConfig',
     # channels
     'channels',
 ]

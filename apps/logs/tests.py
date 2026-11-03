@@ -101,6 +101,9 @@ class VehicleLogListTests(SimpleTestCase):
         def order_by(self, *_args):
             return self
 
+        def distinct(self):
+            return self
+
         def filter(self, **kwargs):
             self.filters.append(kwargs)
             return self
@@ -161,7 +164,7 @@ class VehicleLogListTests(SimpleTestCase):
         self.assertContains(response, 'OLD1234')
         self.assertContains(response, 'ABC1234')
         self.assertContains(response, 'value="edited" selected')
-        self.assertIn({'has_edits': True}, self.query.filters)
+        self.assertIn({'edit_history__isnull': False}, self.query.filters)
 
     def test_list_hides_snapshot_action_when_log_has_no_snapshot(self):
         self.query[0].snapshot = None
@@ -177,8 +180,9 @@ class VehicleLogListTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'See Snapshot')
-        self.assertNotContains(response, 'See Edit Logs')
-        self.assertIn({'has_edits': False}, self.query.filters)
+        self.assertContains(response, 'See Edit Logs')
+        self.assertContains(response, 'No edit history has been recorded for this log.')
+        self.assertIn({'edit_history__isnull': True}, self.query.filters)
         self.assertContains(response, 'value="not_edited" selected')
 
 

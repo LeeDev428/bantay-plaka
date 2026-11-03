@@ -181,12 +181,12 @@
                 <i class="fa fa-box-archive text-[11px]"></i>
               </button>
             </div>
-            {% if log.has_edits %}
             <details class="mt-1 text-left">
-              <summary class="cursor-pointer text-[11px] font-semibold text-blue-600 hover:text-blue-700">
-                <i class="fa fa-clock-rotate-left mr-1"></i>See Edit Logs
+              <summary class="btn btn-xs cursor-pointer {% if log.has_edits %}bg-blue-50 hover:bg-blue-100 text-blue-700{% else %}bg-slate-50 hover:bg-slate-100 text-slate-500{% endif %} border-0">
+                <i class="fa fa-clock-rotate-left text-[11px]"></i>See Edit Logs
               </summary>
-              <div class="mt-2 max-h-48 w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+              <div class="mt-2 max-h-48 w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 text-left shadow-sm">
+                {% if log.has_edits %}
                 {% for edit in log.edit_history.all %}
                 <div class="{% if not forloop.first %}border-t border-slate-100 pt-2 mt-2{% endif %}">
                   <p class="text-[11px] font-semibold text-slate-700">
@@ -203,9 +203,11 @@
                   {% endfor %}
                 </div>
                 {% endfor %}
+                {% else %}
+                <p class="text-[11px] text-slate-500">No edit history has been recorded for this log.</p>
+                {% endif %}
               </div>
             </details>
-            {% endif %}
           </td>
         </tr>
         {% empty %}

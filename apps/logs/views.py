@@ -154,9 +154,9 @@ def log_list(request):
     if status_q:
         logs_qs = logs_qs.filter(status=status_q)
     if edited_q == 'edited':
-        logs_qs = logs_qs.filter(has_edits=True)
+        logs_qs = logs_qs.filter(edit_history__isnull=False).distinct()
     elif edited_q == 'not_edited':
-        logs_qs = logs_qs.filter(has_edits=False)
+        logs_qs = logs_qs.filter(edit_history__isnull=True)
     else:
         edited_q = ''
     tz = timezone.get_current_timezone()

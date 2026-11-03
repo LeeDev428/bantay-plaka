@@ -28,6 +28,44 @@ from apps.archive.registry import ARCHIVE_REGISTRY
 
 
 class VehicleLogEditHistoryTests(SimpleTestCase):
+    def test_edit_view_records_changes_from_a_real_bound_form(self):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_resident=lambda: False,
+        )
+        log = VehicleLog(
+            pk=12,
+            plate_number='OLD1234',
+            entry_type=VehicleLog.TYPE_VISITOR,
+            status=VehicleLog.STATUS_IN,
+            visitor_name='Visitor Name',
+        )
+        request = RequestFactory().post('/logs/12/edit/', {
+            'plate_number': 'NEW1234',
+            'entry_type': VehicleLog.TYPE_VISITOR,
+            'status': VehicleLog.STATUS_OUT,
+            'resident_name': '',
+            'visitor_name': 'Visitor Name',
+            'next': '/logs/',
+        })
+        request.user = user
+
+        with (
+            patch('apps.logs.views.get_object_or_404', return_value=log),
+            patch.object(log, 'save'),
+            patch('apps.logs.views.VehicleLogEditHistory.objects.create') as create_history,
+            patch('apps.logs.views.record_user_activity'),
+            patch('apps.logs.views.transaction.atomic', return_value=nullcontext()),
+            patch('apps.logs.views.messages.success'),
+        ):
+            response = log_edit(request, 12)
+
+        self.assertEqual(response.status_code, 302)
+        create_history.assert_called_once()
+        changes = create_history.call_args.kwargs['changes']
+        self.assertEqual(changes['Plate Number'], {'old': 'OLD1234', 'new': 'NEW1234'})
+        self.assertEqual(changes['Status'], {'old': 'Time In', 'new': 'Time Out'})
+
     def test_log_correction_records_old_and_new_values(self):
         user = SimpleNamespace(
             is_authenticated=True,
@@ -161,6 +199,8 @@ class VehicleLogListTests(SimpleTestCase):
         self.assertContains(response, 'https://media.example/ABC1234.jpg')
         self.assertContains(response, 'Edited')
         self.assertContains(response, 'See Edit Logs')
+        self.assertContains(response, 'openEditHistoryModal(12,')
+        self.assertContains(response, 'id="edit-history-modal"')
         self.assertContains(response, 'OLD1234')
         self.assertContains(response, 'ABC1234')
         self.assertContains(response, 'value="edited" selected')
@@ -184,6 +224,40 @@ class VehicleLogListTests(SimpleTestCase):
         self.assertContains(response, 'No edit history has been recorded for this log.')
         self.assertIn({'edit_history__isnull': True}, self.query.filters)
         self.assertContains(response, 'value="not_edited" selected')
+
+    def test_saving_without_changes_does_not_create_edit_history(self):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_resident=lambda: False,
+        )
+        log = SimpleNamespace(
+            pk=12,
+            plate_number='ABC1234',
+            entry_type=VehicleLog.TYPE_VISITOR,
+            status=VehicleLog.STATUS_IN,
+            resident_name='',
+            visitor_name='Visitor Name',
+            save=Mock(),
+        )
+        form = Mock()
+        form.is_valid.return_value = True
+        form.save.return_value = log
+        request = RequestFactory().post('/logs/12/edit/', {'next': '/logs/'})
+        request.user = user
+
+        with (
+            patch('apps.logs.views.get_object_or_404', return_value=log),
+            patch('apps.logs.views.LogEditForm', return_value=form),
+            patch('apps.logs.views.VehicleLogEditHistory.objects.create') as create_history,
+            patch('apps.logs.views.record_user_activity'),
+            patch('apps.logs.views.transaction.atomic', return_value=nullcontext()),
+            patch('apps.logs.views.messages.info') as info_message,
+        ):
+            response = log_edit(request, 12)
+
+        self.assertEqual(response.status_code, 302)
+        create_history.assert_not_called()
+        info_message.assert_called_once_with(request, 'No changes were detected for log #12.')
 
 
 class VideoGalleryTests(SimpleTestCase):

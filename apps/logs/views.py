@@ -508,18 +508,18 @@ def log_edit(request, pk):
     log = get_object_or_404(VehicleLog, pk=pk)
     if request.method == 'POST':
         form = LogEditForm(request.POST, instance=log)
+        tracked_fields = {
+            'plate_number': 'Plate Number',
+            'entry_type': 'Entry Type',
+            'status': 'Status',
+            'resident_name': 'Resident Name',
+            'visitor_name': 'Visitor Name',
+        }
+        previous_values = {
+            field_name: getattr(log, field_name)
+            for field_name in tracked_fields
+        }
         if form.is_valid():
-            tracked_fields = {
-                'plate_number': 'Plate Number',
-                'entry_type': 'Entry Type',
-                'status': 'Status',
-                'resident_name': 'Resident Name',
-                'visitor_name': 'Visitor Name',
-            }
-            previous_values = {
-                field_name: getattr(log, field_name)
-                for field_name in tracked_fields
-            }
             updated_log = form.save(commit=False)
             if updated_log.entry_type == VehicleLog.TYPE_RESIDENT:
                 updated_log.visitor_name = ''
@@ -557,7 +557,10 @@ def log_edit(request, pk):
                         target_id=pk,
                         details={'changes': changes},
                     )
-            messages.success(request, f'Log #{pk} updated successfully.')
+            if changes:
+                messages.success(request, f'Log #{pk} updated successfully.')
+            else:
+                messages.info(request, f'No changes were detected for log #{pk}.')
         else:
             messages.error(request, 'Failed to update log. Please check the fields.')
     return redirect(request.POST.get('next', 'log_list'))

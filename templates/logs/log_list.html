@@ -180,34 +180,35 @@
                 class="btn btn-xs bg-amber-50 hover:bg-amber-100 border-0 text-amber-700" title="Archive">
                 <i class="fa fa-box-archive text-[11px]"></i>
               </button>
+                <button type="button"
+                  onclick="openEditHistoryModal({{ log.pk }}, '{{ log.plate_number|escapejs }}')"
+                  class="btn btn-xs {% if log.has_edits %}bg-blue-50 hover:bg-blue-100 text-blue-700{% else %}bg-slate-50 hover:bg-slate-100 text-slate-500{% endif %} border-0"
+                  title="See Edit Logs" aria-label="See edit logs for {{ log.plate_number }}">
+                  <i class="fa fa-clock-rotate-left text-[11px]"></i>
+                </button>
             </div>
-            <details class="mt-1 text-left">
-              <summary class="btn btn-xs cursor-pointer {% if log.has_edits %}bg-blue-50 hover:bg-blue-100 text-blue-700{% else %}bg-slate-50 hover:bg-slate-100 text-slate-500{% endif %} border-0">
-                <i class="fa fa-clock-rotate-left text-[11px]"></i>See Edit Logs
-              </summary>
-              <div class="mt-2 max-h-48 w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 text-left shadow-sm">
+            <div id="edit-history-{{ log.pk }}" class="hidden">
                 {% if log.has_edits %}
-                {% for edit in log.edit_history.all %}
-                <div class="{% if not forloop.first %}border-t border-slate-100 pt-2 mt-2{% endif %}">
-                  <p class="text-[11px] font-semibold text-slate-700">
-                    {{ edit.changed_at|localtime|date:"M d, Y h:i:s A" }} by
-                    {% if edit.edited_by %}{{ edit.edited_by.get_full_name|default:edit.edited_by.username }}{% else %}System{% endif %}
-                  </p>
-                  {% for field, values in edit.changes.items %}
-                  <p class="mt-1 text-[11px] text-slate-600">
-                    <span class="font-medium">{{ field }}:</span>
-                    <span>{{ values.old|default:"—" }}</span>
-                    <i class="fa fa-arrow-right mx-1 text-[9px] text-slate-400"></i>
-                    <span>{{ values.new|default:"—" }}</span>
-                  </p>
+                  {% for edit in log.edit_history.all %}
+                  <article class="{% if not forloop.first %}border-t border-slate-100 pt-3 mt-3{% endif %}">
+                    <p class="text-sm font-semibold text-slate-700">
+                      {{ edit.changed_at|localtime|date:"M d, Y h:i:s A" }} by
+                      {% if edit.edited_by %}{{ edit.edited_by.get_full_name|default:edit.edited_by.username }}{% else %}System{% endif %}
+                    </p>
+                    {% for field, values in edit.changes.items %}
+                    <p class="mt-2 text-sm text-slate-600">
+                      <span class="font-medium">{{ field }}:</span>
+                      <span class="break-all">{{ values.old|default:"—" }}</span>
+                      <i class="fa fa-arrow-right mx-2 text-xs text-slate-400"></i>
+                      <span class="break-all">{{ values.new|default:"—" }}</span>
+                    </p>
+                    {% endfor %}
+                  </article>
                   {% endfor %}
-                </div>
-                {% endfor %}
                 {% else %}
-                <p class="text-[11px] text-slate-500">No edit history has been recorded for this log.</p>
+                  <p class="text-sm text-slate-500">No edit history has been recorded for this log.</p>
                 {% endif %}
-              </div>
-            </details>
+            </div>
           </td>
         </tr>
         {% empty %}
@@ -229,6 +230,28 @@
     {% endif %}
   </div>
   {% endif %}
+</div>
+
+<!-- Edit History Modal -->
+<div id="edit-history-modal" class="fixed inset-0 z-[60] hidden items-center justify-center px-4 py-6"
+     role="dialog" aria-modal="true" aria-labelledby="edit-history-modal-title">
+  <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeEditHistoryModal()"></div>
+  <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 id="edit-history-modal-title" class="text-lg font-bold text-slate-800">Edit History</h3>
+        <p id="edit-history-modal-plate" class="text-sm text-slate-500 mt-0.5"></p>
+      </div>
+      <button type="button" onclick="closeEditHistoryModal()" class="text-slate-400 hover:text-slate-600"
+              aria-label="Close edit history">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+    <div id="edit-history-modal-content" class="px-6 py-5 overflow-y-auto"></div>
+    <div class="px-6 py-3 border-t border-slate-100 flex justify-end shrink-0">
+      <button type="button" onclick="closeEditHistoryModal()" class="btn btn-ghost btn-sm text-slate-600">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- Edit Modal -->
@@ -339,6 +362,20 @@
   function closeDeleteModal() {
     document.getElementById('delete-modal').classList.add('hidden');
   }
+  function openEditHistoryModal(pk, plate) {
+    const source = document.getElementById(`edit-history-${pk}`);
+    const content = document.getElementById('edit-history-modal-content');
+    content.replaceChildren(...Array.from(source.childNodes, node => node.cloneNode(true)));
+    document.getElementById('edit-history-modal-plate').textContent = `Plate ${plate}`;
+    const modal = document.getElementById('edit-history-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+  function closeEditHistoryModal() {
+    const modal = document.getElementById('edit-history-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
   function toggleNameInputs() {
     const entryType = document.getElementById('edit-entry-type').value;
     const residentInput = document.getElementById('edit-resident-name');
@@ -357,7 +394,7 @@
   }
   document.getElementById('edit-entry-type').addEventListener('change', toggleNameInputs);
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeEditModal(); closeDeleteModal(); }
+    if (e.key === 'Escape') { closeEditModal(); closeDeleteModal(); closeEditHistoryModal(); }
   });
 </script>
 {% endblock %}

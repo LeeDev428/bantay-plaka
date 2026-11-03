@@ -111,6 +111,12 @@
                 data-vehicle-type="{{ visitor.vehicle_type|escapejs }}"
                 data-vehicle-type-other="{{ visitor.vehicle_type_other|escapejs }}"
                 data-visitor-type="{{ visitor.visitor_type|escapejs }}"
+                data-id-document-url="{% url 'visitor_document' visitor.pk 'id' %}"
+                data-or-document-url="{% url 'visitor_document' visitor.pk 'or' %}"
+                data-cr-document-url="{% url 'visitor_document' visitor.pk 'cr' %}"
+                data-has-id-document="{{ visitor.valid_id_document|yesno:'true,false' }}"
+                data-has-or-document="{{ visitor.or_document|yesno:'true,false' }}"
+                data-has-cr-document="{{ visitor.cr_document|yesno:'true,false' }}"
               >
                 <i class="fa fa-pen text-xs"></i>
               </button>
@@ -183,18 +189,44 @@
       <h3 id="visitor-create-title" class="text-lg font-bold text-slate-800">Log Visitor</h3>
       <button type="button" class="text-slate-400 hover:text-slate-600" aria-label="Close visitor form" onclick="closeVisitorCreateModal()"><i class="fa fa-xmark text-xl"></i></button>
     </div>
-    <form method="post" class="form-modal-content px-6 py-5 space-y-3" novalidate>
+    <form id="visitor-create-form" method="post" enctype="multipart/form-data" class="form-modal-content px-6 py-5 space-y-3" novalidate>
       {% csrf_token %}
       <input type="hidden" name="action" value="create_visitor">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Type of Visitor <span class="text-red-400">*</span></label>
+        {{ visitor_form.visitor_type }}
+        <div class="flex gap-2" role="group" aria-label="Type of visitor">
+          <button type="button" data-visitor-type="VISITOR" aria-pressed="true" class="btn btn-sm border-blue-600 bg-blue-600 text-white">Visitor</button>
+          <button type="button" data-visitor-type="VERIFIED_VISITOR" aria-pressed="false" class="btn btn-sm border-slate-300 bg-white text-slate-700">Verified Visitor</button>
+        </div>
+        {% if visitor_form.visitor_type.errors %}<p class="text-red-500 text-xs mt-1">{{ visitor_form.visitor_type.errors.0 }}</p>{% endif %}
+      </div>
+      <div id="visitor-verified-documents" class="hidden rounded-xl border border-blue-100 bg-blue-50 p-4">
+        <p class="text-sm font-semibold text-slate-700 mb-3">Verified Visitor Documents <span class="text-red-400">*</span></p>
+        <div class="grid sm:grid-cols-3 gap-3">
+          {% for field in visitor_form %}
+            {% if field.name == 'valid_id_document' or field.name == 'or_document' or field.name == 'cr_document' %}
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">{{ field.label }} <span class="text-red-400">*</span></label>
+                {{ field }}
+                {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <p class="text-xs text-slate-500 mt-2">JPG, PNG, or PDF; maximum 5 MB per file.</p>
+      </div>
       <div class="grid sm:grid-cols-2 gap-3">
         {% for field in visitor_form %}
-          <div class="{% if field.name == 'purpose' or field.name == 'host_name' or field.name == 'vehicle_type_other' %}sm:col-span-2{% endif %}">
-            <label class="block text-sm font-medium text-slate-700 mb-1">
-              {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
-            </label>
-            {{ field }}
-            {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
-          </div>
+          {% if field.name != 'visitor_type' and field.name != 'valid_id_document' and field.name != 'or_document' and field.name != 'cr_document' %}
+            <div class="{% if field.name == 'purpose' or field.name == 'host_name' or field.name == 'vehicle_type_other' %}sm:col-span-2{% endif %}">
+              <label class="block text-sm font-medium text-slate-700 mb-1">
+                {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+              </label>
+              {{ field }}
+              {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+            </div>
+          {% endif %}
         {% endfor %}
       </div>
       <div class="form-modal-actions flex justify-end gap-2">
@@ -215,7 +247,7 @@
         <i class="fa fa-xmark text-xl"></i>
       </button>
     </div>
-    <form id="visitor-edit-form" method="post" class="px-6 py-5 space-y-3">
+    <form id="visitor-edit-form" method="post" enctype="multipart/form-data" class="px-6 py-5 space-y-3">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ request.get_full_path }}">
       <div class="grid sm:grid-cols-2 gap-3">
@@ -268,6 +300,25 @@
           <option value="VERIFIED_VISITOR">Verified Visitor</option>
         </select>
       </div>
+      <div id="edit-visitor-documents" class="hidden rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-3">
+        <p class="text-sm font-semibold text-slate-700">Verified Visitor Documents <span class="text-red-400">*</span></p>
+        <div id="edit-id-document-wrap">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Valid ID</label>
+          <a id="edit-id-document-link" class="hidden text-xs text-blue-600 underline mb-1" target="_blank" rel="noopener">View current ID</a>
+          <input id="edit-id-document" type="file" name="valid_id_document" accept=".jpg,.jpeg,.png,.pdf" class="file-input file-input-bordered w-full">
+        </div>
+        <div id="edit-or-document-wrap">
+          <label class="block text-sm font-medium text-slate-700 mb-1">OR</label>
+          <a id="edit-or-document-link" class="hidden text-xs text-blue-600 underline mb-1" target="_blank" rel="noopener">View current OR</a>
+          <input id="edit-or-document" type="file" name="or_document" accept=".jpg,.jpeg,.png,.pdf" class="file-input file-input-bordered w-full">
+        </div>
+        <div id="edit-cr-document-wrap">
+          <label class="block text-sm font-medium text-slate-700 mb-1">CR</label>
+          <a id="edit-cr-document-link" class="hidden text-xs text-blue-600 underline mb-1" target="_blank" rel="noopener">View current CR</a>
+          <input id="edit-cr-document" type="file" name="cr_document" accept=".jpg,.jpeg,.png,.pdf" class="file-input file-input-bordered w-full">
+        </div>
+        <p class="text-xs text-slate-500">JPG, PNG, or PDF; maximum 5 MB per file.</p>
+      </div>
       <div class="pt-2 flex justify-end gap-2">
         <button type="button" class="btn btn-ghost" onclick="closeVisitorEditModal()">Cancel</button>
         <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">Save Changes</button>
@@ -283,6 +334,9 @@
 (function () {
   const createModal = document.getElementById('visitor-create-modal');
   const openCreateBtn = document.getElementById('open-visitor-create-modal');
+  const createForm = document.getElementById('visitor-create-form');
+  const createVisitorType = createForm?.querySelector('[name="visitor-visitor_type"]');
+  const verifiedDocuments = document.getElementById('visitor-verified-documents');
   const editModal = document.getElementById('visitor-edit-modal');
   const editForm  = document.getElementById('visitor-edit-form');
   const archiveModal = document.getElementById('visitor-archive-modal');
@@ -299,6 +353,39 @@
   const vehicleTypeOtherWrap = document.getElementById('edit-vehicle-type-other-wrap');
   const vehicleTypeOther     = document.getElementById('edit-vehicle-type-other');
   const visitorType          = document.getElementById('edit-visitor-type');
+  const editDocuments        = document.getElementById('edit-visitor-documents');
+  const editIdDocument       = document.getElementById('edit-id-document');
+  const editOrDocument       = document.getElementById('edit-or-document');
+  const editCrDocument       = document.getElementById('edit-cr-document');
+  const editIdDocumentLink   = document.getElementById('edit-id-document-link');
+  const editOrDocumentLink   = document.getElementById('edit-or-document-link');
+  const editCrDocumentLink   = document.getElementById('edit-cr-document-link');
+
+  function syncCreateVisitorType() {
+    if (!createVisitorType || !verifiedDocuments) return;
+    const isVerified = createVisitorType.value === 'VERIFIED_VISITOR';
+    verifiedDocuments.classList.toggle('hidden', !isVerified);
+    verifiedDocuments.querySelectorAll('input[type="file"]').forEach((input) => {
+      input.required = isVerified;
+    });
+    createForm.querySelectorAll('[data-visitor-type]').forEach((button) => {
+      const selected = button.dataset.visitorType === createVisitorType.value;
+      button.setAttribute('aria-pressed', String(selected));
+      button.classList.toggle('border-blue-600', selected);
+      button.classList.toggle('bg-blue-600', selected);
+      button.classList.toggle('text-white', selected);
+      button.classList.toggle('border-slate-300', !selected);
+      button.classList.toggle('bg-white', !selected);
+      button.classList.toggle('text-slate-700', !selected);
+    });
+  }
+  createForm?.querySelectorAll('[data-visitor-type]').forEach((button) => {
+    button.addEventListener('click', () => {
+      createVisitorType.value = button.dataset.visitorType;
+      syncCreateVisitorType();
+    });
+  });
+  syncCreateVisitorType();
 
   window.closeVisitorCreateModal = function () {
     createModal?.classList.add('hidden');
@@ -322,6 +409,18 @@
     if (!isOther && vehicleTypeOther) vehicleTypeOther.value = '';
   }
 
+  function syncEditVisitorDocuments(hasId, hasOr, hasCr) {
+    const isVerified = visitorType && visitorType.value === 'VERIFIED_VISITOR';
+    if (editDocuments) editDocuments.classList.toggle('hidden', !isVerified);
+    [
+      [editIdDocument, hasId],
+      [editOrDocument, hasOr],
+      [editCrDocument, hasCr],
+    ].forEach(([input, hasDocument]) => {
+      if (input) input.required = Boolean(isVerified && !hasDocument);
+    });
+  }
+
   window.closeVisitorEditModal = function () {
     editModal?.classList.add('hidden');
     editModal?.classList.remove('flex');
@@ -339,13 +438,30 @@
       vehicleType.value      = btn.dataset.vehicleType || '';
       vehicleTypeOther.value = btn.dataset.vehicleTypeOther || '';
       if (visitorType) visitorType.value = btn.dataset.visitorType || 'VISITOR';
+      editIdDocumentLink.href = btn.dataset.idDocumentUrl || '';
+      editOrDocumentLink.href = btn.dataset.orDocumentUrl || '';
+      editCrDocumentLink.href = btn.dataset.crDocumentUrl || '';
+      const hasId = btn.dataset.hasIdDocument === 'true';
+      const hasOr = btn.dataset.hasOrDocument === 'true';
+      const hasCr = btn.dataset.hasCrDocument === 'true';
+      editIdDocumentLink.classList.toggle('hidden', !hasId);
+      editOrDocumentLink.classList.toggle('hidden', !hasOr);
+      editCrDocumentLink.classList.toggle('hidden', !hasCr);
       syncVehicleTypeOther();
+      syncEditVisitorDocuments(hasId, hasOr, hasCr);
       editModal.classList.remove('hidden');
       editModal.classList.add('flex');
     });
   });
 
   if (vehicleType) vehicleType.addEventListener('change', syncVehicleTypeOther);
+  if (visitorType) visitorType.addEventListener('change', () => {
+    syncEditVisitorDocuments(
+      !editIdDocumentLink.classList.contains('hidden'),
+      !editOrDocumentLink.classList.contains('hidden'),
+      !editCrDocumentLink.classList.contains('hidden'),
+    );
+  });
 
   window.closeVisitorArchiveModal = function () {
     archiveModal?.classList.add('hidden');

@@ -10,8 +10,18 @@
   </div>
 
   <div class="page-card p-6 lg:p-8">
-    <form method="post" novalidate id="visitor-form">
+    <form method="post" enctype="multipart/form-data" novalidate id="visitor-form">
       {% csrf_token %}
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Type of Visitor <span class="text-red-400">*</span></label>
+        {{ form.visitor_type }}
+        <div class="flex gap-2" role="group" aria-label="Type of visitor">
+          <button type="button" data-visitor-type="VISITOR" aria-pressed="true" class="btn btn-sm border-blue-600 bg-blue-600 text-white">Visitor</button>
+          <button type="button" data-visitor-type="VERIFIED_VISITOR" aria-pressed="false" class="btn btn-sm border-slate-300 bg-white text-slate-700">Verified Visitor</button>
+        </div>
+        {% if form.visitor_type.errors %}<p class="text-red-500 text-xs mt-1">{{ form.visitor_type.errors.0 }}</p>{% endif %}
+      </div>
 
       <div class="mb-4 max-w-sm">
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Status <span class="text-red-400">*</span></label>
@@ -68,10 +78,26 @@
         {% if form.vehicle_type_other.errors %}<p class="text-red-500 text-xs mt-1">{{ form.vehicle_type_other.errors.0 }}</p>{% endif %}
       </div>
 
-      <div class="mb-4 max-w-sm">
-        <label class="block text-sm font-medium text-slate-700 mb-1.5">Visitor Type <span class="text-red-400">*</span></label>
-        {{ form.visitor_type }}
-        {% if form.visitor_type.errors %}<p class="text-red-500 text-xs mt-1">{{ form.visitor_type.errors.0 }}</p>{% endif %}
+      <div id="visitor-verified-documents" class="hidden mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+        <p class="text-sm font-semibold text-slate-700 mb-3">Verified Visitor Documents <span class="text-red-400">*</span></p>
+        <div class="grid sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Valid ID <span class="text-red-400">*</span></label>
+            {{ form.valid_id_document }}
+            {% if form.valid_id_document.errors %}<p class="text-red-500 text-xs mt-1">{{ form.valid_id_document.errors.0 }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">OR <span class="text-red-400">*</span></label>
+            {{ form.or_document }}
+            {% if form.or_document.errors %}<p class="text-red-500 text-xs mt-1">{{ form.or_document.errors.0 }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">CR <span class="text-red-400">*</span></label>
+            {{ form.cr_document }}
+            {% if form.cr_document.errors %}<p class="text-red-500 text-xs mt-1">{{ form.cr_document.errors.0 }}</p>{% endif %}
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-2">JPG, PNG, or PDF; maximum 5 MB per file.</p>
       </div>
 
       <div class="mt-5 pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
@@ -91,6 +117,35 @@
   const typeInput = document.getElementById('id_vehicle_type');
   const otherGroup = document.getElementById('vehicle-type-other-group');
   const otherInput = document.getElementById('id_vehicle_type_other');
+  const visitorTypeInput = document.getElementById('id_visitor_type');
+  const verifiedDocuments = document.getElementById('visitor-verified-documents');
+  const visitorForm = document.getElementById('visitor-form');
+
+  function syncVisitorType() {
+    if (!visitorTypeInput || !verifiedDocuments) return;
+    const isVerified = visitorTypeInput.value === 'VERIFIED_VISITOR';
+    verifiedDocuments.classList.toggle('hidden', !isVerified);
+    verifiedDocuments.querySelectorAll('input[type="file"]').forEach((input) => {
+      input.required = isVerified;
+    });
+    visitorForm.querySelectorAll('[data-visitor-type]').forEach((button) => {
+      const selected = button.dataset.visitorType === visitorTypeInput.value;
+      button.setAttribute('aria-pressed', String(selected));
+      button.classList.toggle('border-blue-600', selected);
+      button.classList.toggle('bg-blue-600', selected);
+      button.classList.toggle('text-white', selected);
+      button.classList.toggle('border-slate-300', !selected);
+      button.classList.toggle('bg-white', !selected);
+      button.classList.toggle('text-slate-700', !selected);
+    });
+  }
+  visitorForm.querySelectorAll('[data-visitor-type]').forEach((button) => {
+    button.addEventListener('click', () => {
+      visitorTypeInput.value = button.dataset.visitorType;
+      syncVisitorType();
+    });
+  });
+  syncVisitorType();
 
   function syncVehicleTypeOther() {
     if (!typeInput || !otherGroup || !otherInput) return;

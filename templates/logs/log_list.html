@@ -141,7 +141,11 @@
             {% endif %}
           </td>
           <td class="text-xs text-slate-500">{{ log.logged_by.get_full_name|default:'System' }}</td>
-          <td class="text-xs text-slate-400">{{ log.local_time|date:"M d, Y h:i:s A" }}</td>
+          {% with log.edit_history.all as edit_history %}
+          <td class="text-xs text-slate-400">
+            {{ log.local_time|date:"M d, Y h:i:s A" }}
+            {% if edit_history %}<span class="ml-1 font-semibold text-amber-600">(Edited)</span>{% endif %}
+          </td>
           <td>
             <div class="flex items-center gap-1">
               <button
@@ -155,7 +159,28 @@
                 <i class="fa fa-box-archive text-[11px]"></i>
               </button>
             </div>
+            {% if edit_history %}
+            <details class="mt-1 text-left">
+              <summary class="cursor-pointer text-[11px] font-medium text-slate-500 hover:text-blue-600">Edit history ({{ edit_history|length }})</summary>
+              <div class="mt-2 max-h-48 w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+                {% for edit in edit_history %}
+                <div class="{% if not forloop.first %}border-t border-slate-100 pt-2 mt-2{% endif %}">
+                  <p class="text-[11px] font-semibold text-slate-700">{{ edit.changed_at|localtime|date:"M d, Y h:i:s A" }} by {{ edit.edited_by.get_full_name|default:edit.edited_by.username|default:"System" }}</p>
+                  {% for field, values in edit.changes.items %}
+                  <p class="mt-1 text-[11px] text-slate-600">
+                    <span class="font-medium">{{ field }}:</span>
+                    <span>{{ values.old|default:"—" }}</span>
+                    <i class="fa fa-arrow-right mx-1 text-[9px] text-slate-400"></i>
+                    <span>{{ values.new|default:"—" }}</span>
+                  </p>
+                  {% endfor %}
+                </div>
+                {% endfor %}
+              </div>
+            </details>
+            {% endif %}
           </td>
+          {% endwith %}
         </tr>
         {% empty %}
         <tr><td colspan="9" class="text-center text-slate-400 py-12">No logs found.</td></tr>

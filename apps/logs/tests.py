@@ -1,6 +1,7 @@
 import json
 import tempfile
 import datetime
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,11 +18,66 @@ from apps.logs.views import (
     recording_thumbnail,
     snapshot_archive,
     snapshot_gallery,
+    log_edit,
     video_archive,
     video_gallery,
 )
 from apps.logs.models import UnrecognizedPlateAlert, VehicleLog, VideoRecording
 from apps.archive.registry import ARCHIVE_REGISTRY
+
+
+class VehicleLogEditHistoryTests(SimpleTestCase):
+    def test_log_correction_records_old_and_new_values(self):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_resident=lambda: False,
+        )
+        original_log = SimpleNamespace(
+            pk=12,
+            plate_number='OLD1234',
+            entry_type=VehicleLog.TYPE_VISITOR,
+            status=VehicleLog.STATUS_IN,
+            resident_name='',
+            visitor_name='Visitor Name',
+        )
+        updated_log = SimpleNamespace(
+            pk=12,
+            plate_number='NEW1234',
+            entry_type=VehicleLog.TYPE_RESIDENT,
+            status=VehicleLog.STATUS_OUT,
+            resident_name='Resident Name',
+            visitor_name='',
+            save=Mock(),
+        )
+        form = Mock()
+        form.is_valid.return_value = True
+        form.save.return_value = updated_log
+        request = RequestFactory().post('/logs/12/edit/', {'next': '/logs/'})
+        request.user = user
+
+        with (
+            patch('apps.logs.views.get_object_or_404', return_value=original_log),
+            patch('apps.logs.views.LogEditForm', return_value=form),
+            patch('apps.logs.views.VehicleLogEditHistory.objects.create') as create_history,
+            patch('apps.logs.views.transaction.atomic', return_value=nullcontext()),
+            patch('apps.logs.views.messages.success'),
+        ):
+            response = log_edit(request, 12)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, '/logs/')
+        create_history.assert_called_once_with(
+            vehicle_log=updated_log,
+            edited_by=user,
+            changes={
+                'Plate Number': {'old': 'OLD1234', 'new': 'NEW1234'},
+                'Entry Type': {'old': 'Visitor', 'new': 'Resident'},
+                'Status': {'old': 'Time In', 'new': 'Time Out'},
+                'Resident Name': {'old': '', 'new': 'Resident Name'},
+                'Visitor Name': {'old': 'Visitor Name', 'new': ''},
+            },
+        )
+        updated_log.save.assert_called_once_with()
 
 
 class VideoGalleryTests(SimpleTestCase):

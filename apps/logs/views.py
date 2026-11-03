@@ -7,6 +7,7 @@ from urllib.parse import quote
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
@@ -15,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 import requests
 
-from apps.logs.models import VehicleLog, VideoRecording, UnrecognizedPlateAlert
+from apps.logs.models import VehicleLog, VehicleLogEditHistory, VideoRecording, UnrecognizedPlateAlert
 from apps.logs.forms import ManualLogForm, LogEditForm
 from apps.logs.services import broadcast_log, attach_blacklist_metadata
 from apps.residents.models import Vehicle
@@ -115,7 +116,9 @@ def log_list(request):
         messages.error(request, 'Access denied.')
         return redirect('resident_dashboard')
 
-    logs_qs = VehicleLog.objects.select_related('logged_by').order_by('-timestamp')
+    logs_qs = VehicleLog.objects.select_related('logged_by').prefetch_related(
+        'edit_history__edited_by',
+    ).order_by('-timestamp')
 
     # filters
     q = request.GET.get('q', '').strip()
@@ -486,12 +489,46 @@ def log_edit(request, pk):
     if request.method == 'POST':
         form = LogEditForm(request.POST, instance=log)
         if form.is_valid():
+            tracked_fields = {
+                'plate_number': 'Plate Number',
+                'entry_type': 'Entry Type',
+                'status': 'Status',
+                'resident_name': 'Resident Name',
+                'visitor_name': 'Visitor Name',
+            }
+            previous_values = {
+                field_name: getattr(log, field_name)
+                for field_name in tracked_fields
+            }
             updated_log = form.save(commit=False)
             if updated_log.entry_type == VehicleLog.TYPE_RESIDENT:
                 updated_log.visitor_name = ''
             else:
                 updated_log.resident_name = ''
-            updated_log.save()
+
+            choice_labels = {
+                'entry_type': dict(VehicleLog.ENTRY_TYPE_CHOICES),
+                'status': dict(VehicleLog.STATUS_CHOICES),
+            }
+            changes = {}
+            for field_name, label in tracked_fields.items():
+                old_value = previous_values[field_name]
+                new_value = getattr(updated_log, field_name)
+                if old_value == new_value:
+                    continue
+                changes[label] = {
+                    'old': choice_labels.get(field_name, {}).get(old_value, old_value),
+                    'new': choice_labels.get(field_name, {}).get(new_value, new_value),
+                }
+
+            with transaction.atomic():
+                updated_log.save()
+                if changes:
+                    VehicleLogEditHistory.objects.create(
+                        vehicle_log=updated_log,
+                        edited_by=request.user,
+                        changes=changes,
+                    )
             messages.success(request, f'Log #{pk} updated successfully.')
         else:
             messages.error(request, 'Failed to update log. Please check the fields.')

@@ -1,6 +1,23 @@
+import uuid
+from pathlib import PurePath
+
 from django.db import models
 from apps.accounts.models import User
 from apps.core.models import Archivable
+from apps.residents.storage import PrivateRegistrationDocumentStorage
+from apps.residents.validators import validate_uploaded_document
+
+
+def visitor_id_upload_path(_instance, filename):
+    return f"visitor_documents/ids/{uuid.uuid4().hex}{PurePath(filename).suffix.lower()}"
+
+
+def visitor_or_upload_path(_instance, filename):
+    return f"visitor_documents/or/{uuid.uuid4().hex}{PurePath(filename).suffix.lower()}"
+
+
+def visitor_cr_upload_path(_instance, filename):
+    return f"visitor_documents/cr/{uuid.uuid4().hex}{PurePath(filename).suffix.lower()}"
 
 
 class Visitor(Archivable, models.Model):
@@ -19,6 +36,27 @@ class Visitor(Archivable, models.Model):
     plate_number = models.CharField(max_length=20, blank=True, db_index=True)
     vehicle_type = models.CharField(max_length=15, blank=True)
     vehicle_type_other = models.CharField(max_length=120, blank=True)
+    valid_id_document = models.FileField(
+        upload_to=visitor_id_upload_path,
+        null=True,
+        blank=True,
+        storage=PrivateRegistrationDocumentStorage(),
+        validators=[validate_uploaded_document],
+    )
+    or_document = models.FileField(
+        upload_to=visitor_or_upload_path,
+        null=True,
+        blank=True,
+        storage=PrivateRegistrationDocumentStorage(),
+        validators=[validate_uploaded_document],
+    )
+    cr_document = models.FileField(
+        upload_to=visitor_cr_upload_path,
+        null=True,
+        blank=True,
+        storage=PrivateRegistrationDocumentStorage(),
+        validators=[validate_uploaded_document],
+    )
     visitor_type = models.CharField(
         max_length=20,
         choices=VISITOR_TYPE_CHOICES,

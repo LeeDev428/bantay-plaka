@@ -1,12 +1,54 @@
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, SimpleTestCase
 from django.urls import reverse
 
 from apps.archive.registry import ARCHIVE_REGISTRY
+from apps.visitors.forms import VisitorForm
 from apps.visitors.models import Visitor
 from apps.visitors.views import blacklist_archive, visitor_archive
+
+
+class VisitorFormTests(SimpleTestCase):
+    def setUp(self):
+        self.data = {
+            'first_name': 'Test',
+            'last_name': 'Visitor',
+            'contact_number': '09123456789',
+            'purpose': 'Visit',
+            'host_name': 'Resident',
+            'plate_number': 'ABC1234',
+            'vehicle_type': 'CAR',
+            'status': 'TIME_IN',
+            'visitor_type': Visitor.TYPE_VISITOR,
+        }
+
+    def test_regular_visitor_does_not_require_documents(self):
+        form = VisitorForm(data=self.data)
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_verified_visitor_requires_id_or_and_cr_documents(self):
+        form = VisitorForm(data={**self.data, 'visitor_type': Visitor.TYPE_VERIFIED})
+
+        self.assertFalse(form.is_valid())
+        for field_name in ('valid_id_document', 'or_document', 'cr_document'):
+            self.assertIn(field_name, form.errors)
+
+    def test_verified_visitor_accepts_valid_id_or_and_cr_documents(self):
+        png = b'\x89PNG\r\n\x1a\nvalid'
+        files = {
+            field_name: SimpleUploadedFile(f'{field_name}.png', png, content_type='image/png')
+            for field_name in ('valid_id_document', 'or_document', 'cr_document')
+        }
+        form = VisitorForm(
+            data={**self.data, 'visitor_type': Visitor.TYPE_VERIFIED},
+            files=files,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
 
 
 class VisitorArchiveTests(SimpleTestCase):

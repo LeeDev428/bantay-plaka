@@ -1,9 +1,13 @@
+import datetime
+import mimetypes
+from pathlib import PurePath
+
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
 from django.db.models import Q
-import datetime
+from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 
 from apps.visitors.models import Visitor, BlacklistEntry
@@ -27,7 +31,7 @@ def visitor_log_entry(request):
         return redirect('resident_dashboard')
 
     if request.method == 'POST':
-        form = VisitorForm(request.POST)
+        form = VisitorForm(request.POST, request.FILES)
         if form.is_valid():
             visitor = form.save(commit=False)
 
@@ -70,7 +74,7 @@ def visitor_list(request):
     if request.method == 'POST':
         action = (request.POST.get('action') or '').strip()
         if action == 'create_visitor':
-            visitor_form = VisitorForm(request.POST, prefix='visitor')
+            visitor_form = VisitorForm(request.POST, request.FILES, prefix='visitor')
             if visitor_form.is_valid():
                 visitor = visitor_form.save(commit=False)
                 if _is_blacklisted(visitor.plate_number):
@@ -136,14 +140,53 @@ def visitor_edit(request, pk):
 
     visitor = get_object_or_404(Visitor, pk=pk)
     if request.method == 'POST':
-        form = VisitorEditForm(request.POST, instance=visitor)
+        form = VisitorEditForm(request.POST, request.FILES, instance=visitor)
         if form.is_valid():
             form.save()
             messages.success(request, f'Visitor {visitor.full_name} updated.')
         else:
-            messages.error(request, 'Failed to update visitor entry.')
+            errors = ' '.join(
+                f'{form.fields[field_name].label}: {", ".join(error_list)}'
+                for field_name, error_list in form.errors.items()
+                if field_name in form.fields
+            )
+            messages.error(
+                request,
+                f'Failed to update visitor entry. Check required fields and uploaded documents. {errors}',
+            )
 
     return redirect(request.POST.get('next', 'visitor_list'))
+
+
+@login_required
+def visitor_document(request, pk, document_type):
+    if request.user.is_resident():
+        return HttpResponseForbidden('You do not have permission to view this document.')
+
+    document_fields = {
+        'id': 'valid_id_document',
+        'or': 'or_document',
+        'cr': 'cr_document',
+    }
+    field_name = document_fields.get(document_type)
+    if not field_name:
+        raise Http404('Visitor document not found.')
+
+    visitor = get_object_or_404(Visitor, pk=pk)
+    document = getattr(visitor, field_name)
+    if not document:
+        raise Http404('Visitor document not found.')
+
+    content_type = mimetypes.guess_type(document.name)[0] or 'application/octet-stream'
+    response = FileResponse(
+        document.open('rb'),
+        as_attachment=False,
+        filename=f'visitor-{document_type}{PurePath(document.name).suffix.lower()}',
+        content_type=content_type,
+    )
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    return response
 
 
 @login_required

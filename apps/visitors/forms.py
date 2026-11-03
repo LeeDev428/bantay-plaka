@@ -5,6 +5,21 @@ from apps.logs.models import VehicleLog
 from apps.visitors.models import Visitor, BlacklistEntry
 
 
+VERIFIED_VISITOR_DOCUMENT_FIELDS = (
+    'valid_id_document',
+    'or_document',
+    'cr_document',
+)
+
+
+def _validate_verified_visitor_documents(form, cleaned):
+    if cleaned.get('visitor_type') != Visitor.TYPE_VERIFIED:
+        return
+    for field_name in VERIFIED_VISITOR_DOCUMENT_FIELDS:
+        if not cleaned.get(field_name) and not getattr(form.instance, field_name, None):
+            form.add_error(field_name, 'This document is required for a verified visitor.')
+
+
 class VisitorForm(forms.ModelForm):
     status = forms.ChoiceField(
         choices=VehicleLog.STATUS_CHOICES,
@@ -24,6 +39,7 @@ class VisitorForm(forms.ModelForm):
             'vehicle_type',
             'vehicle_type_other',
             'visitor_type',
+            *VERIFIED_VISITOR_DOCUMENT_FIELDS,
         ]
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
@@ -48,7 +64,24 @@ class VisitorForm(forms.ModelForm):
                 'class': 'input input-bordered w-full',
                 'placeholder': 'Specify vehicle type (if Other)',
             }),
-            'visitor_type': forms.Select(attrs={'class': 'select select-bordered w-full'}),
+            'visitor_type': forms.HiddenInput(),
+            'valid_id_document': forms.FileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
+            'or_document': forms.FileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
+            'cr_document': forms.FileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
+        }
+        labels = {
+            'valid_id_document': 'Valid ID',
+            'or_document': 'OR',
+            'cr_document': 'CR',
         }
 
     def __init__(self, *args, **kwargs):
@@ -78,6 +111,7 @@ class VisitorForm(forms.ModelForm):
             self.add_error('vehicle_type_other', 'Please specify the custom vehicle type.')
         if vehicle_type != 'OTHER':
             cleaned['vehicle_type_other'] = ''
+        _validate_verified_visitor_documents(self, cleaned)
         return cleaned
 
 
@@ -147,6 +181,7 @@ class VisitorEditForm(forms.ModelForm):
             'vehicle_type',
             'vehicle_type_other',
             'visitor_type',
+            *VERIFIED_VISITOR_DOCUMENT_FIELDS,
         ]
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
@@ -172,6 +207,23 @@ class VisitorEditForm(forms.ModelForm):
                 'placeholder': 'Specify vehicle type (if Other)',
             }),
             'visitor_type': forms.Select(attrs={'class': 'select select-bordered w-full'}),
+            'valid_id_document': forms.FileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
+            'or_document': forms.FileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
+            'cr_document': forms.FileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.jpg,.jpeg,.png,.pdf',
+            }),
+        }
+        labels = {
+            'valid_id_document': 'Valid ID',
+            'or_document': 'OR',
+            'cr_document': 'CR',
         }
 
     def __init__(self, *args, **kwargs):
@@ -196,4 +248,5 @@ class VisitorEditForm(forms.ModelForm):
             self.add_error('vehicle_type_other', 'Please specify the custom vehicle type.')
         if vehicle_type != 'OTHER':
             cleaned['vehicle_type_other'] = ''
+        _validate_verified_visitor_documents(self, cleaned)
         return cleaned

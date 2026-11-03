@@ -4,6 +4,7 @@ from apps.visitors import views
 urlpatterns = [
     path('', views.visitor_list, name='visitor_list'),
     path('log/', views.visitor_log_entry, name='visitor_log_entry'),
+    path('<int:pk>/documents/<str:document_type>/', views.visitor_document, name='visitor_document'),
     path('export/excel/', views.visitor_export_excel, name='visitor_export_excel'),
     path('export/pdf/', views.visitor_export_pdf, name='visitor_export_pdf'),
     path('<int:pk>/edit/', views.visitor_edit, name='visitor_edit'),

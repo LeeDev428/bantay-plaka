@@ -83,6 +83,30 @@ class VehicleLog(Archivable, models.Model):
         return f'{self.plate_number} | {self.camera_role} | {self.entry_type} | {self.status} | {self.timestamp:%Y-%m-%d %H:%M}'
 
 
+class VehicleLogEditHistory(models.Model):
+    vehicle_log = models.ForeignKey(
+        VehicleLog,
+        on_delete=models.CASCADE,
+        related_name='edit_history',
+    )
+    edited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='vehicle_log_edits',
+    )
+    changed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    changes = models.JSONField()
+
+    class Meta:
+        db_table = 'vehicle_log_edit_history'
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f'Edits for log #{self.vehicle_log_id} at {self.changed_at:%Y-%m-%d %H:%M}'
+
+
 class CameraFeedSnapshot(models.Model):
     camera_role = models.CharField(
         max_length=20,

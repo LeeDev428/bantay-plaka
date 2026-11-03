@@ -73,7 +73,7 @@
     <a href="{% url 'resident_list' %}" class="sidebar-link {% if 'resident' in request.resolver_match.url_name %}active{% endif %}">
       <i class="fa fa-house-user w-5 text-center"></i> Residents
     </a>
-    <a href="{% url 'user_management' %}" class="sidebar-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
+    <a href="{% url 'user_management' %}" class="sidebar-link {% if request.resolver_match.url_name == 'user_management' or request.resolver_match.url_name == 'user_create' or request.resolver_match.url_name == 'user_edit' or request.resolver_match.url_name == 'user_toggle_active' or request.resolver_match.url_name == 'user_delete' or request.resolver_match.url_name == 'users_export_excel' or request.resolver_match.url_name == 'users_export_pdf' %}active{% endif %}">
       <i class="fa fa-users-gear w-5 text-center"></i> Guard &amp; Admin
     </a>
     <a href="{% url 'user_activity' %}" class="sidebar-link {% if request.resolver_match.url_name == 'user_activity' %}active{% endif %}">

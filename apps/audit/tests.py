@@ -35,6 +35,7 @@ class UserActivityViewTests(SimpleTestCase):
             get_action_display=lambda: 'Create',
         )
         request = RequestFactory().get('/activity/?action=CREATE&q=guard1')
+        request.resolver_match = SimpleNamespace(url_name='user_activity', namespace='')
         request.user = SimpleNamespace(
             is_authenticated=True,
             is_admin=lambda: True,
@@ -57,6 +58,14 @@ class UserActivityViewTests(SimpleTestCase):
         self.assertContains(response, 'Added visitor Alex')
         self.assertContains(response, 'guard1')
         self.assertContains(response, 'visitor #7')
+        self.assertNotRegex(
+            response.content.decode(),
+            r'href="/dashboard/admin/users/" class="sidebar-link active"',
+        )
+        self.assertRegex(
+            response.content.decode(),
+            r'href="/activity/" class="sidebar-link active"',
+        )
 
     def test_non_admin_is_redirected_from_activity_page(self):
         request = RequestFactory().get('/activity/')

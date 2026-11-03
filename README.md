@@ -43,15 +43,22 @@ Choose one:
 ### Resident document storage
 Resident IDs and vehicle OR/CR documents use private storage: authenticated Cloudinary assets in production and a local directory outside `/media/` in development. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` for production. The Railway/Procfile startup runs `migrate_registration_documents` before serving requests; it moves existing public registration documents into private storage and removes their public copies. A failed migration prevents the app from starting, so resolve the storage/API error before retrying deployment.
 
-### Password-reset email on Railway
-Railway Hobby blocks outbound SMTP, so configure a transactional email API such as Resend for password-reset messages. In Railway's app service Variables, set:
+### Password-reset email with Google SMTP
+The app uses Django's SMTP backend with Google SMTP. In Railway's app service Variables, set:
 
-- `EMAIL_BACKEND=apps.core.email_backend.ResendEmailBackend`
-- `RESEND_API_KEY` to an API key created in Resend
-- `DEFAULT_FROM_EMAIL` to a sender address/domain verified with Resend, for example `BantayPlaka <noreply@your-verified-domain.com>`
+- `EMAIL_HOST=smtp.gmail.com`
+- `EMAIL_PORT=587`
+- `EMAIL_USE_TLS=True`
+- `EMAIL_HOST_USER` to the Gmail address that will send the reset email
+- `EMAIL_HOST_PASSWORD` to a Google App Password (not the Google account password)
+- `DEFAULT_FROM_EMAIL` to the same Gmail address
 - `PASSWORD_RESET_DOMAIN=bantay-plaka-production-3246.up.railway.app` so reset links always use the current website host, regardless of which Railway hostname received the request. Update this value if the public domain changes.
 
-Create the Resend API key and verify the sender domain in Resend before testing. Keep the API key only in Railway Variables, not in source control or chat. Redeploy after adding the variables. The reset link is sent to the email address entered on the form; Django does not send it for inactive accounts, including resident accounts awaiting approval.
+The Google account must have 2-Step Verification enabled to create an App Password. See [Google's App Password instructions](https://support.google.com/accounts/answer/185833). Keep the App Password only in Railway Variables and your local `.env`; do not commit or share it.
+
+**Railway plan requirement:** Railway currently enables outbound SMTP only on the Pro plan and above. Free, Trial, and Hobby services cannot connect to Google SMTP. After upgrading, redeploy the app service for SMTP access to take effect. On a plan without SMTP access, use an HTTPS email API instead.
+
+Also remove any old `EMAIL_BACKEND=apps.core.email_backend.ResendEmailBackend` setting from Railway Variables; the app now selects Django's SMTP backend directly. The reset link is sent only for active accounts.
 
 ---
 

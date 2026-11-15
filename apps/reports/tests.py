@@ -66,6 +66,95 @@ class ReportPeriodComparisonTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context['compare_previous_period'])
         self.assertEqual(response.context['comparison_data'], [])
+        self.assertContains(response, 'value="1D"')
+        self.assertContains(response, 'value="3D"')
+        self.assertContains(response, 'value="14D"')
+        self.assertContains(response, 'value="30D"')
+        self.assertContains(response, 'value="CUSTOM"')
+
+    def test_preset_ranges_use_the_selected_bucket_count(self):
+        for period, expected_buckets in (
+            ('3D', 3),
+            ('7D', 7),
+            ('14D', 14),
+            ('30D', 30),
+        ):
+            with self.subTest(period=period):
+                response = self.client.get(
+                    reverse('report_dashboard'),
+                    {'chart_period': period},
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(len(response.context['daily_data']), expected_buckets)
+                self.assertEqual(response.context['activity_bucket'], 'day')
+
+        one_day_response = self.client.get(
+            reverse('report_dashboard'),
+            {'chart_period': '1D'},
+        )
+        self.assertEqual(one_day_response.status_code, 200)
+        self.assertEqual(one_day_response.context['activity_bucket'], 'hour')
+        self.assertGreater(len(one_day_response.context['daily_data']), 0)
+        self.assertLessEqual(len(one_day_response.context['daily_data']), 24)
+
+        comparison_response = self.client.get(
+            reverse('report_dashboard'),
+            {'chart_period': '1D', 'compare_period': '1'},
+        )
+        self.assertEqual(
+            len(comparison_response.context['comparison_data']),
+            len(comparison_response.context['daily_data']),
+        )
+
+    def test_custom_range_includes_selected_end_minute_and_filters_all_charts(self):
+        selected_day = self.today - timedelta(days=2)
+        start = timezone.make_aware(
+            datetime.datetime.combine(selected_day, datetime.time(hour=9))
+        )
+        end = timezone.make_aware(
+            datetime.datetime.combine(selected_day, datetime.time(hour=12))
+        )
+        self._create_log_at(start - timedelta(minutes=1), VehicleLog.STATUS_IN, 'BEFORE01')
+        self._create_log_at(start, VehicleLog.STATUS_IN, 'START001')
+        self._create_log_at(end, VehicleLog.STATUS_OUT, 'END0001')
+        self._create_log_at(end + timedelta(minutes=1), VehicleLog.STATUS_IN, 'AFTER001')
+
+        response = self.client.get(reverse('report_dashboard'), {
+            'chart_period': 'CUSTOM',
+            'activity_from': start.strftime('%Y-%m-%dT%H:%M'),
+            'activity_to': end.strftime('%Y-%m-%dT%H:%M'),
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['chart_period_q'], 'CUSTOM')
+        self.assertEqual(response.context['traffic_total'], 2)
+        self.assertEqual(
+            sum(item['time_in'] + item['time_out'] for item in response.context['daily_data']),
+            2,
+        )
+        self.assertEqual(response.context['daily_data'][-1]['time_out'], 1)
+
+    def test_invalid_custom_range_shows_error_and_falls_back_to_seven_days(self):
+        response = self.client.get(reverse('report_dashboard'), {
+            'chart_period': 'CUSTOM',
+            'activity_from': '2025-01-02T12:00',
+            'activity_to': '2025-01-02T11:00',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['chart_period_q'], '7D')
+        self.assertContains(response, 'The start date/time must be before the end date/time.')
+
+    def test_custom_range_over_ten_years_is_rejected(self):
+        response = self.client.get(reverse('report_dashboard'), {
+            'chart_period': 'CUSTOM',
+            'activity_from': '2000-01-01T00:00',
+            'activity_to': '2040-01-01T00:00',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['chart_period_q'], '7D')
+        self.assertContains(response, 'Custom date/time ranges cannot exceed 10 years.')
 
     def test_traffic_categories_count_entries_in_the_selected_period(self):
         self._create_log(
@@ -128,6 +217,11 @@ class ReportPeriodComparisonTests(TestCase):
         self.assertEqual(visitors['OVERSTAY1']['visitor_name'], 'Sam Guest')
         self.assertContains(response, 'Over 12h')
         self.assertContains(response, 'Export CSV')
+        html = response.content.decode()
+        self.assertLess(
+            html.index('id="trafficSourceChart"'),
+            html.index('id="visitors-currently-inside"'),
+        )
 
     def test_current_visitors_section_shows_an_empty_state(self):
         VehicleLog.objects.all().delete()

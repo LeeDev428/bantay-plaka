@@ -1,21 +1,123 @@
-<h2 class="font-semibold text-slate-800 mb-4">7-Day Activity</h2>
+<div class="flex flex-col gap-3 mb-4">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div>
+      <h2 class="font-semibold text-slate-800">Activity Chart</h2>
+      {% if chart_period_q == 'CUSTOM' %}
+      <p class="text-xs text-slate-400 mt-0.5">{{ activity_period_label }}</p>
+      {% endif %}
+    </div>
+    <form method="get" id="activity-chart-form" class="flex flex-wrap items-center gap-3">
+      {% if top_window_q %}
+      <input type="hidden" name="top_window" value="{{ top_window_q }}">
+      <input type="hidden" name="top_entry_type" value="{{ top_entry_type_q }}">
+      {% endif %}
+      <select name="chart_period" id="activity-chart-period" class="select select-bordered select-sm bg-white">
+        <option value="1D" {% if chart_period_q == '1D' %}selected{% endif %}>1D</option>
+        <option value="3D" {% if chart_period_q == '3D' %}selected{% endif %}>3D</option>
+        <option value="7D" {% if chart_period_q == '7D' %}selected{% endif %}>7D</option>
+        <option value="14D" {% if chart_period_q == '14D' %}selected{% endif %}>14D</option>
+        <option value="30D" {% if chart_period_q == '30D' %}selected{% endif %}>30D</option>
+        <option value="CUSTOM" {% if chart_period_q == 'CUSTOM' %}selected{% endif %}>CUSTOM</option>
+      </select>
+      {% if show_comparison_toggle %}
+      <label class="flex items-center gap-2 text-xs text-slate-500">
+        <input type="checkbox" name="compare_period" value="1"
+          class="checkbox checkbox-xs checkbox-primary"
+          {% if compare_previous_period %}checked{% endif %}
+          onchange="this.form.submit()">
+        Compare previous period
+      </label>
+      {% endif %}
+    </form>
+  </div>
+  <div id="activity-custom-range" class="{% if chart_period_q != 'CUSTOM' %}hidden{% endif %}">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="chart_period" value="CUSTOM">
+      {% if top_window_q %}
+      <input type="hidden" name="top_window" value="{{ top_window_q }}">
+      <input type="hidden" name="top_entry_type" value="{{ top_entry_type_q }}">
+      {% endif %}
+      {% if compare_previous_period %}
+      <input type="hidden" name="compare_period" value="1">
+      {% endif %}
+      <label class="text-xs text-slate-500">
+        Start date/time
+        <input type="datetime-local" name="activity_from" value="{{ activity_from_q }}"
+          class="input input-bordered input-sm mt-1 block bg-white" required>
+      </label>
+      <label class="text-xs text-slate-500">
+        End date/time
+        <input type="datetime-local" name="activity_to" value="{{ activity_to_q }}"
+          class="input input-bordered input-sm mt-1 block bg-white" required>
+      </label>
+      <button type="submit" class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">Apply</button>
+    </form>
+  </div>
+</div>
+{% if compare_previous_period %}
+<p class="text-xs text-slate-400 mb-3">
+  Comparing {{ comparison_period_label }} with the selected period.
+</p>
+{% endif %}
 <div class="h-64">
-  <canvas id="dashboardActivityChart"></canvas>
+  <canvas id="activityChart"></canvas>
 </div>
 <script>
 (function () {
-  const canvas = document.getElementById('dashboardActivityChart');
+  const form = document.getElementById('activity-chart-form');
+  const period = document.getElementById('activity-chart-period');
+  const customRange = document.getElementById('activity-custom-range');
+  if (form && period && customRange) {
+    period.addEventListener('change', function () {
+      if (period.value === 'CUSTOM') {
+        customRange.classList.remove('hidden');
+      } else {
+        form.submit();
+      }
+    });
+  }
+
+  const canvas = document.getElementById('activityChart');
   if (!canvas) return;
   const data = {{ daily_data|safe }};
+  const comparisonData = {{ comparison_data|default:'[]'|safe }};
+  const datasets = [
+    { label: 'Time In', data: data.map(item => item.time_in), backgroundColor: '#3b82f6', borderRadius: 4, barPercentage: 0.7 },
+    { label: 'Time Out', data: data.map(item => item.time_out), backgroundColor: '#ef4444', borderRadius: 4, barPercentage: 0.7 },
+  ];
+
+  if (comparisonData.length) {
+    datasets.push(
+      {
+        type: 'line',
+        label: 'Previous Period · Time In',
+        data: comparisonData.map(item => item.time_in),
+        borderColor: '#93c5fd',
+        backgroundColor: 'transparent',
+        borderDash: [5, 4],
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.25,
+      },
+      {
+        type: 'line',
+        label: 'Previous Period · Time Out',
+        data: comparisonData.map(item => item.time_out),
+        borderColor: '#fda4af',
+        backgroundColor: 'transparent',
+        borderDash: [5, 4],
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.25,
+      }
+    );
+  }
 
   new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: data.map(day => day.label),
-      datasets: [
-        { label: 'Time In', data: data.map(day => day.time_in), backgroundColor: '#3b82f6', borderRadius: 4, barPercentage: 0.7 },
-        { label: 'Time Out', data: data.map(day => day.time_out), backgroundColor: '#ef4444', borderRadius: 4, barPercentage: 0.7 },
-      ]
+      labels: data.map(item => item.label),
+      datasets: datasets,
     },
     options: {
       responsive: true,

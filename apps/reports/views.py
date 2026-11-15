@@ -13,7 +13,12 @@ from django.utils import timezone
 
 from apps.audit.services import audit_export
 from apps.export_helpers import build_export_chart_data
-from apps.logs.analytics import build_traffic_mix
+from apps.logs.analytics import (
+    build_activity_chart_data,
+    build_traffic_mix,
+    format_activity_range,
+    resolve_activity_period,
+)
 from apps.logs.models import VehicleLog
 from apps.logs.services import get_active_blacklist_map
 
@@ -93,54 +98,43 @@ def report_dashboard(request):
         overstay_count += item['is_overstay']
     currently_inside = len(currently_inside_items)
 
-    # Activity chart with selectable period
-    chart_period_q = request.GET.get('chart_period', '7').strip()
     try:
-        chart_days = int(chart_period_q)
-        if chart_days not in (7, 30, 90):
-            chart_days = 7
-    except ValueError:
-        chart_days = 7
-    chart_period_q = str(chart_days)
+        activity_period = resolve_activity_period(
+            request.GET.get('chart_period', '7D'),
+            request.GET.get('activity_from', ''),
+            request.GET.get('activity_to', ''),
+        )
+    except ValueError as error:
+        messages.error(request, str(error))
+        activity_period = resolve_activity_period('7D')
 
+    activity_start = activity_period['activity_start']
+    activity_end = activity_period['activity_end']
+    daily_data = build_activity_chart_data(
+        activity_start,
+        activity_end,
+        activity_period['activity_bucket'],
+        activity_period['activity_label_format'],
+    )
     compare_previous_period = request.GET.get('compare_period') == '1'
-    current_period_start = today - timedelta(days=chart_days - 1)
-    previous_period_start = current_period_start - timedelta(days=chart_days)
-
-    def _daily_activity(date):
-        start, end = _day_range(date)
-        counts = {
-            VehicleLog.STATUS_IN: 0,
-            VehicleLog.STATUS_OUT: 0,
-        }
-        for item in (
-            VehicleLog.objects
-            .filter(timestamp__gte=start, timestamp__lt=end)
-            .values('status')
-            .annotate(total=Count('pk'))
-        ):
-            counts[item['status']] = item['total']
-        return counts
-
-    daily_data = []
     comparison_data = []
-    for i in range(chart_days - 1, -1, -1):
-        d = today - timedelta(days=i)
-        day_counts = _daily_activity(d)
-        daily_data.append({
-            'date': d.strftime('%Y-%m-%d'),
-            'label': d.strftime('%b %d') if chart_days > 7 else d.strftime('%a'),
-            'time_in': day_counts[VehicleLog.STATUS_IN],
-            'time_out': day_counts[VehicleLog.STATUS_OUT],
-        })
-        if compare_previous_period:
-            previous_counts = _daily_activity(d - timedelta(days=chart_days))
-            comparison_data.append({
-                'time_in': previous_counts[VehicleLog.STATUS_IN],
-                'time_out': previous_counts[VehicleLog.STATUS_OUT],
-            })
+    comparison_period_label = ''
+    if compare_previous_period:
+        if activity_period['chart_period_q'] == '1D':
+            previous_start = activity_start - timedelta(days=1)
+            previous_end = previous_start + (activity_end - activity_start)
+        else:
+            previous_end = activity_start
+            previous_start = previous_end - activity_period['activity_comparison_duration']
+        comparison_data = build_activity_chart_data(
+            previous_start,
+            previous_end,
+            activity_period['activity_bucket'],
+            activity_period['activity_label_format'],
+        )
+        comparison_period_label = format_activity_range(previous_start, previous_end)
 
-    traffic_mix = build_traffic_mix(current_period_start, today + timedelta(days=1))
+    traffic_mix = build_traffic_mix(activity_start, activity_end)
 
     # Top vehicles with filters and pagination
     top_window_q = request.GET.get('top_window', 'WEEK').upper()
@@ -182,17 +176,15 @@ def report_dashboard(request):
         'daily_data': daily_data,
         'comparison_data': comparison_data,
         'compare_previous_period': compare_previous_period,
-        'comparison_period_label': (
-            f'{previous_period_start:%b %d, %Y} – '
-            f'{(current_period_start - timedelta(days=1)):%b %d, %Y}'
-        ),
-        'traffic_period_label': f'Last {chart_days} days',
-        'chart_period_q': chart_period_q,
+        'comparison_period_label': comparison_period_label,
+        'show_comparison_toggle': True,
         'top_vehicles': top_vehicles,
         'top_rank_offset': top_rank_offset,
         'top_window_q': top_window_q,
         'top_entry_type_q': top_entry_type_q,
     }
+    context.update(activity_period)
+    context['traffic_period_label'] = activity_period['activity_period_label']
     context.update(traffic_mix)
     return render(request, 'reports/dashboard.html', context)
 

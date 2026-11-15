@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.logs.models import VehicleLog
@@ -140,6 +143,9 @@ class AdminDashboardApprovalCountTests(TestCase):
             'Vehicle Approvals <span class="ml-1 font-bold">1</span>',
         )
         self.assertContains(response, reverse('vehicle_approval_list'))
+        self.assertContains(response, 'Activity Chart')
+        self.assertContains(response, 'value="1D"')
+        self.assertContains(response, 'value="CUSTOM"')
         self.assertContains(response, 'Traffic by Category')
         self.assertContains(response, 'Traffic by Source')
         self.assertContains(response, 'trafficCategoryChart')
@@ -172,9 +178,36 @@ class GuardDashboardAnalyticsTests(TestCase):
         self.assertEqual(len(response.context['daily_data']), 7)
         self.assertEqual(response.context['traffic_total'], 1)
         self.assertEqual(response.context['traffic_source_total'], 1)
-        self.assertContains(response, '7-Day Activity')
+        self.assertContains(response, 'Activity Chart')
+        self.assertContains(response, 'value="1D"')
+        self.assertContains(response, 'value="CUSTOM"')
         self.assertContains(response, 'Traffic by Category')
         self.assertContains(response, 'Traffic by Source')
-        self.assertContains(response, 'dashboardActivityChart')
+        self.assertContains(response, 'activityChart')
         self.assertContains(response, 'trafficCategoryChart')
         self.assertContains(response, 'trafficSourceChart')
+
+    def test_guard_dashboard_custom_range_filters_all_shared_analytics(self):
+        start = timezone.localtime(timezone.now()) - timedelta(hours=4)
+        end = start + timedelta(hours=2)
+        log = VehicleLog.objects.create(
+            plate_number='CUSTOM1',
+            entry_type=VehicleLog.TYPE_VISITOR,
+            status=VehicleLog.STATUS_IN,
+            source=VehicleLog.SOURCE_MANUAL,
+        )
+        VehicleLog.objects.filter(pk=log.pk).update(timestamp=start + timedelta(hours=1))
+
+        response = self.client.get(reverse('guard_dashboard'), {
+            'chart_period': 'CUSTOM',
+            'activity_from': start.strftime('%Y-%m-%dT%H:%M'),
+            'activity_to': end.strftime('%Y-%m-%dT%H:%M'),
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['chart_period_q'], 'CUSTOM')
+        self.assertEqual(response.context['traffic_total'], 1)
+        self.assertEqual(
+            sum(item['time_in'] + item['time_out'] for item in response.context['daily_data']),
+            1,
+        )

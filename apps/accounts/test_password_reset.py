@@ -1,22 +1,20 @@
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django.core.mail.backends.smtp import EmailBackend
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import resolve, reverse
 
 from apps.accounts.forms import BantayPlakaPasswordResetForm
-from config import settings as project_settings
 
 
 @override_settings(
     PASSWORD_RESET_DOMAIN='bantay-plaka-production-3246.up.railway.app',
 )
 class PasswordResetDomainTests(SimpleTestCase):
-    def test_password_reset_uses_django_smtp_backend(self):
-        self.assertEqual(
-            project_settings.EMAIL_BACKEND,
-            'django.core.mail.backends.smtp.EmailBackend',
-        )
+    @override_settings(EMAIL_TIMEOUT=15)
+    def test_smtp_backend_uses_finite_email_timeout(self):
+        self.assertEqual(EmailBackend().timeout, 15)
 
     def test_reset_email_uses_configured_domain_instead_of_request_host(self):
         form = BantayPlakaPasswordResetForm(data={'email': 'reset@example.com'})

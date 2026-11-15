@@ -42,23 +42,26 @@ def report_dashboard(request):
     latest_status = (
         VehicleLog.objects
         .filter(plate_number=OuterRef('plate_number'))
-        .order_by('-timestamp')
+        .order_by('-timestamp', '-pk')
         .values('status')[:1]
     )
     latest_type = (
         VehicleLog.objects
         .filter(plate_number=OuterRef('plate_number'))
-        .order_by('-timestamp')
+        .order_by('-timestamp', '-pk')
         .values('entry_type')[:1]
     )
-    currently_inside = (
+    latest_timestamp = (
         VehicleLog.objects
-        .values('plate_number')
-        .distinct()
-        .annotate(last_status=Subquery(latest_status))
-        .annotate(last_type=Subquery(latest_type))
-        .filter(last_status=VehicleLog.STATUS_IN, last_type=VehicleLog.TYPE_VISITOR)
-        .count()
+        .filter(plate_number=OuterRef('plate_number'))
+        .order_by('-timestamp', '-pk')
+        .values('timestamp')[:1]
+    )
+    latest_visitor_name = (
+        VehicleLog.objects
+        .filter(plate_number=OuterRef('plate_number'))
+        .order_by('-timestamp', '-pk')
+        .values('visitor_name')[:1]
     )
     currently_inside_items = list(
         VehicleLog.objects
@@ -66,9 +69,28 @@ def report_dashboard(request):
         .distinct()
         .annotate(last_status=Subquery(latest_status))
         .annotate(last_type=Subquery(latest_type))
+        .annotate(last_timestamp=Subquery(latest_timestamp))
+        .annotate(last_visitor_name=Subquery(latest_visitor_name))
         .filter(last_status=VehicleLog.STATUS_IN, last_type=VehicleLog.TYPE_VISITOR)
-        .order_by('plate_number')
+        .order_by('last_timestamp', 'plate_number')
     )
+    now = timezone.now()
+    overstay_threshold = timedelta(hours=12)
+    overstay_count = 0
+    for item in currently_inside_items:
+        elapsed = max(now - item['last_timestamp'], timedelta())
+        total_minutes = int(elapsed.total_seconds() // 60)
+        days, remaining_minutes = divmod(total_minutes, 24 * 60)
+        hours, minutes = divmod(remaining_minutes, 60)
+        item['visitor_name'] = item['last_visitor_name'] or '—'
+        item['duration_label'] = (
+            f'{days}d {hours}h' if days else
+            f'{hours}h {minutes}m' if hours else
+            f'{minutes}m'
+        )
+        item['is_overstay'] = elapsed >= overstay_threshold
+        overstay_count += item['is_overstay']
+    currently_inside = len(currently_inside_items)
 
     # Activity chart with selectable period
     chart_period_q = request.GET.get('chart_period', '7').strip()
@@ -80,17 +102,71 @@ def report_dashboard(request):
         chart_days = 7
     chart_period_q = str(chart_days)
 
+    compare_previous_period = request.GET.get('compare_period') == '1'
+    current_period_start = today - timedelta(days=chart_days - 1)
+    previous_period_start = current_period_start - timedelta(days=chart_days)
+
+    def _daily_activity(date):
+        start, end = _day_range(date)
+        counts = {
+            VehicleLog.STATUS_IN: 0,
+            VehicleLog.STATUS_OUT: 0,
+        }
+        for item in (
+            VehicleLog.objects
+            .filter(timestamp__gte=start, timestamp__lt=end)
+            .values('status')
+            .annotate(total=Count('pk'))
+        ):
+            counts[item['status']] = item['total']
+        return counts
+
     daily_data = []
+    comparison_data = []
     for i in range(chart_days - 1, -1, -1):
         d = today - timedelta(days=i)
-        d_start, d_end = _day_range(d)
-        day_qs = VehicleLog.objects.filter(timestamp__gte=d_start, timestamp__lt=d_end)
+        day_counts = _daily_activity(d)
         daily_data.append({
             'date': d.strftime('%Y-%m-%d'),
             'label': d.strftime('%b %d') if chart_days > 7 else d.strftime('%a'),
-            'time_in': day_qs.filter(status=VehicleLog.STATUS_IN).count(),
-            'time_out': day_qs.filter(status=VehicleLog.STATUS_OUT).count(),
+            'time_in': day_counts[VehicleLog.STATUS_IN],
+            'time_out': day_counts[VehicleLog.STATUS_OUT],
         })
+        if compare_previous_period:
+            previous_counts = _daily_activity(d - timedelta(days=chart_days))
+            comparison_data.append({
+                'time_in': previous_counts[VehicleLog.STATUS_IN],
+                'time_out': previous_counts[VehicleLog.STATUS_OUT],
+            })
+
+    current_period_start_dt, _ = _day_range(current_period_start)
+    traffic_counts = dict(
+        VehicleLog.objects
+        .filter(timestamp__gte=current_period_start_dt, timestamp__lt=today_end)
+        .values('entry_type')
+        .annotate(total=Count('pk'))
+        .values_list('entry_type', 'total')
+    )
+    traffic_total = sum(traffic_counts.values())
+    category_labels = {
+        VehicleLog.TYPE_RESIDENT: 'Residents',
+        VehicleLog.TYPE_VISITOR: 'Visitors',
+        VehicleLog.TYPE_UNKNOWN: 'Unknown',
+    }
+    category_colors = {
+        VehicleLog.TYPE_RESIDENT: '#3b82f6',
+        VehicleLog.TYPE_VISITOR: '#8b5cf6',
+        VehicleLog.TYPE_UNKNOWN: '#94a3b8',
+    }
+    traffic_categories = [
+        {
+            'label': category_labels[entry_type],
+            'count': traffic_counts.get(entry_type, 0),
+            'percentage': round(traffic_counts.get(entry_type, 0) * 100 / traffic_total, 1) if traffic_total else 0,
+            'color': category_colors[entry_type],
+        }
+        for entry_type in category_labels
+    ]
 
     # Top vehicles with filters and pagination
     top_window_q = request.GET.get('top_window', 'WEEK').upper()
@@ -127,7 +203,17 @@ def report_dashboard(request):
         'today_unique': today_unique,
         'currently_inside': currently_inside,
         'currently_inside_items': currently_inside_items,
+        'overstay_count': overstay_count,
+        'overstay_threshold_hours': int(overstay_threshold.total_seconds() // 3600),
         'daily_data': daily_data,
+        'comparison_data': comparison_data,
+        'compare_previous_period': compare_previous_period,
+        'comparison_period_label': (
+            f'{previous_period_start:%b %d, %Y} – '
+            f'{(current_period_start - timedelta(days=1)):%b %d, %Y}'
+        ),
+        'traffic_categories': traffic_categories,
+        'traffic_total': traffic_total,
         'chart_period_q': chart_period_q,
         'top_vehicles': top_vehicles,
         'top_rank_offset': top_rank_offset,

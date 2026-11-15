@@ -49,6 +49,7 @@ The app uses Django's SMTP backend with Google SMTP. In Railway's app service Va
 - `EMAIL_HOST=smtp.gmail.com`
 - `EMAIL_PORT=587`
 - `EMAIL_USE_TLS=True`
+- `EMAIL_TIMEOUT=15` to prevent SMTP connection attempts from hanging indefinitely
 - `EMAIL_HOST_USER` to the Gmail address that will send the reset email
 - `EMAIL_HOST_PASSWORD` to a Google App Password (not the Google account password)
 - `DEFAULT_FROM_EMAIL` to the same Gmail address
@@ -58,7 +59,19 @@ The Google account must have 2-Step Verification enabled to create an App Passwo
 
 **Railway plan requirement:** Railway currently enables outbound SMTP only on the Pro plan and above. Free, Trial, and Hobby services cannot connect to Google SMTP. After upgrading, redeploy the app service for SMTP access to take effect. On a plan without SMTP access, use an HTTPS email API instead.
 
-Also remove any old `EMAIL_BACKEND=apps.core.email_backend.ResendEmailBackend` setting from Railway Variables; the app now selects Django's SMTP backend directly. The reset link is sent only for active accounts.
+By default the app selects Django's SMTP backend. The backend can be changed through `EMAIL_BACKEND`; the reset link is sent only for active accounts.
+
+#### Free HTTPS email alternative for Railway Free, Trial, and Hobby
+Resend offers a free transactional email plan (currently limited to 100 emails per day). Unlike SMTP, its HTTPS API works on Railway plans that block outbound SMTP. Resend requires a domain you own and have verified; a Railway app hostname or an unverified placeholder sender domain will not work.
+
+To use it, set these in the Railway app service Variables:
+
+- `EMAIL_BACKEND=apps.core.email_backend.ResendEmailBackend`
+- `RESEND_API_KEY` to a new API key from Resend
+- `DEFAULT_FROM_EMAIL` to an address at the verified domain, such as `BantayPlaka <noreply@your-real-domain.com>`
+- Keep `PASSWORD_RESET_DOMAIN` set to the current public app hostname
+
+Add the DNS records Resend provides for your domain and wait until Resend marks it verified. The backend is selectable with `EMAIL_BACKEND`, so you do not need SMTP access or an additional Python package for this option. Remove the Gmail SMTP variables if they are no longer used.
 
 ---
 

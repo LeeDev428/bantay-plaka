@@ -80,3 +80,57 @@ class ResidentAccountPageTests(TestCase):
         self.assertContains(response, 'Mobile number')
         self.assertContains(response, 'Privacy notice accepted')
         self.assertEqual(response.context['vehicle_count'], 1)
+
+
+@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+class AdminDashboardApprovalCountTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_user(
+            username='dashboard_admin',
+            password='SecurePass123!',
+            role=User.ROLE_ADMIN,
+        )
+        resident = Resident.objects.create(
+            first_name='Taylor',
+            last_name='Resident',
+            address='Paragon Village',
+            is_approved=False,
+        )
+        Resident.objects.create(
+            first_name='Morgan',
+            last_name='Resident',
+            address='Paragon Village',
+            is_approved=False,
+        )
+        Vehicle.objects.create(
+            resident=resident,
+            plate_number='PENDING1',
+            is_approved=False,
+        )
+        Vehicle.objects.create(
+            resident=resident,
+            plate_number='REJECTED1',
+            is_approved=False,
+            approval_notes='Registration requirements were not satisfied.',
+        )
+        Vehicle.objects.create(
+            resident=resident,
+            plate_number='APPROVED1',
+            is_approved=True,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def test_dashboard_shortcut_counts_only_pending_vehicle_approvals(self):
+        response = self.client.get(reverse('admin_dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['pending_residents'], 2)
+        self.assertEqual(response.context['pending_vehicle_approvals'], 1)
+        self.assertContains(
+            response,
+            'Vehicle Approvals <span class="ml-1 font-bold">1</span>',
+        )
+        self.assertContains(response, reverse('vehicle_approval_list'))

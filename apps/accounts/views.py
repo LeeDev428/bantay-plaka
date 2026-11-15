@@ -214,6 +214,10 @@ def admin_dashboard(request):
         'total_vehicles': Vehicle.objects.count(),
         'total_guards': User.objects.filter(role=User.ROLE_GUARD, is_active=True).count(),
         'pending_residents': Resident.objects.filter(is_approved=False).count(),
+        'pending_vehicle_approvals': Vehicle.objects.filter(
+            is_approved=False,
+            approval_notes='',
+        ).count(),
         'today_in': VehicleLog.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end, status=VehicleLog.STATUS_IN).count(),
         'today_out': VehicleLog.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end, status=VehicleLog.STATUS_OUT).count(),
         'recent_logs': recent_logs,

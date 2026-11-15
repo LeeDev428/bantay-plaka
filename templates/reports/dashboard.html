@@ -68,29 +68,131 @@
   </a>
 </div>
 
+<section class="page-card mb-6">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+    <div>
+      <h2 class="font-semibold text-slate-800">Visitors Currently Inside</h2>
+      <p class="text-xs text-slate-400 mt-0.5">
+        {{ currently_inside }} vehicle{{ currently_inside|pluralize }} inside
+        {% if overstay_count %}&middot; {{ overstay_count }} over {{ overstay_threshold_hours }} hours{% endif %}
+      </p>
+    </div>
+    <a href="{% url 'report_export_visitors_inside' %}"
+      class="btn btn-sm bg-slate-700 hover:bg-slate-800 border-0 text-white">
+      <i class="fa fa-file-csv mr-1"></i> Export CSV
+    </a>
+  </div>
+  {% if currently_inside_items %}
+  <div class="max-h-96 overflow-y-auto">
+    <table class="table table-sm">
+      <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+        <tr>
+          <th class="font-semibold">Plate</th>
+          <th class="font-semibold">Visitor</th>
+          <th class="font-semibold">Entered</th>
+          <th class="font-semibold">Duration</th>
+          <th class="font-semibold">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for visitor in currently_inside_items %}
+        <tr class="{% if visitor.is_overstay %}bg-amber-50{% endif %}">
+          <td class="font-mono font-semibold text-slate-800">{{ visitor.plate_number }}</td>
+          <td class="text-slate-600">{{ visitor.visitor_name }}</td>
+          <td class="text-slate-500">{{ visitor.last_timestamp|date:"M d, Y h:i A" }}</td>
+          <td class="font-medium text-slate-700">{{ visitor.duration_label }}</td>
+          <td>
+            {% if visitor.is_overstay %}
+            <span class="badge badge-sm bg-amber-100 text-amber-700 border-0">Over {{ overstay_threshold_hours }}h</span>
+            {% else %}
+            <span class="badge badge-sm bg-emerald-100 text-emerald-700 border-0">On site</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="px-5 py-10 text-center text-sm text-slate-400">No visitors are currently inside.</div>
+  {% endif %}
+</section>
+
 <div class="grid lg:grid-cols-3 gap-6 mb-6">
   <!-- 7-Day Activity Chart -->
   <div class="lg:col-span-2 page-card p-5">
     <div class="flex items-center justify-between mb-4">
       <h2 class="font-semibold text-slate-800">Activity Chart</h2>
-      <form method="get" class="flex items-center gap-2">
+      <form method="get" class="flex flex-wrap items-center gap-3">
+        <input type="hidden" name="top_window" value="{{ top_window_q }}">
+        <input type="hidden" name="top_entry_type" value="{{ top_entry_type_q }}">
         <select name="chart_period" class="select select-bordered select-sm bg-white" onchange="this.form.submit()">
           <option value="7" {% if chart_period_q == '7' %}selected{% endif %}>Last 7 Days</option>
           <option value="30" {% if chart_period_q == '30' %}selected{% endif %}>Last 30 Days</option>
           <option value="90" {% if chart_period_q == '90' %}selected{% endif %}>Last 90 Days</option>
         </select>
+        <label class="flex items-center gap-2 text-xs text-slate-500">
+          <input type="checkbox" name="compare_period" value="1"
+            class="checkbox checkbox-xs checkbox-primary"
+            {% if compare_previous_period %}checked{% endif %}
+            onchange="this.form.submit()">
+          Compare previous period
+        </label>
       </form>
     </div>
+    {% if compare_previous_period %}
+    <p class="text-xs text-slate-400 mb-3">
+      Comparing {{ comparison_period_label }} with the selected period.
+    </p>
+    {% endif %}
     <div class="h-64">
       <canvas id="activityChart"></canvas>
     </div>
   </div>
 
+  <div class="lg:col-span-2 page-card p-5">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="font-semibold text-slate-800">Traffic by Category</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Vehicle log entries · Last {{ chart_period_q }} days</p>
+      </div>
+      <span class="text-sm font-semibold text-slate-600">{{ traffic_total }} total</span>
+    </div>
+    {% if traffic_total %}
+    <div class="grid sm:grid-cols-2 gap-6 items-center">
+      <div class="h-48">
+        <canvas id="trafficCategoryChart" aria-label="Vehicle log entries by category"></canvas>
+      </div>
+      <div class="space-y-3">
+        {% for category in traffic_categories %}
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: {{ category.color }}"></span>
+            <span class="text-sm text-slate-600">{{ category.label }}</span>
+          </div>
+          <span class="text-sm font-semibold text-slate-800">{{ category.count }}
+            <span class="text-xs font-normal text-slate-400">({{ category.percentage }}%)</span>
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="h-48 flex items-center justify-center text-sm text-slate-400">
+      No vehicle log activity in this period.
+    </div>
+    {% endif %}
+  </div>
+
   <!-- Top Vehicles -->
-  <div class="page-card">
+  <div class="page-card lg:col-start-3 lg:row-start-1">
     <div class="px-5 py-4 border-b border-slate-100">
       <h2 class="font-semibold text-slate-800">Top Vehicles</h2>
       <form method="get" class="mt-3 grid grid-cols-2 gap-2">
+        <input type="hidden" name="chart_period" value="{{ chart_period_q }}">
+        {% if compare_previous_period %}
+        <input type="hidden" name="compare_period" value="1">
+        {% endif %}
         <select name="top_window" class="select select-bordered select-sm bg-white">
           <option value="WEEK" {% if top_window_q == 'WEEK' %}selected{% endif %}>This Week</option>
           <option value="MONTH" {% if top_window_q == 'MONTH' %}selected{% endif %}>Last 30 Days</option>
@@ -122,13 +224,13 @@
     {% if top_vehicles.has_other_pages %}
     <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs">
       {% if top_vehicles.has_previous %}
-        <a class="text-blue-600 font-semibold" href="?top_window={{ top_window_q }}&top_entry_type={{ top_entry_type_q }}&top_page={{ top_vehicles.previous_page_number }}">&laquo; Prev</a>
+        <a class="text-blue-600 font-semibold" href="?top_window={{ top_window_q }}&top_entry_type={{ top_entry_type_q }}&top_page={{ top_vehicles.previous_page_number }}&chart_period={{ chart_period_q }}{% if compare_previous_period %}&amp;compare_period=1{% endif %}">&laquo; Prev</a>
       {% else %}
         <span class="text-slate-300">&laquo; Prev</span>
       {% endif %}
       <span class="text-slate-500">Page {{ top_vehicles.number }} of {{ top_vehicles.paginator.num_pages }}</span>
       {% if top_vehicles.has_next %}
-        <a class="text-blue-600 font-semibold" href="?top_window={{ top_window_q }}&top_entry_type={{ top_entry_type_q }}&top_page={{ top_vehicles.next_page_number }}">Next &raquo;</a>
+        <a class="text-blue-600 font-semibold" href="?top_window={{ top_window_q }}&top_entry_type={{ top_entry_type_q }}&top_page={{ top_vehicles.next_page_number }}&chart_period={{ chart_period_q }}{% if compare_previous_period %}&amp;compare_period=1{% endif %}">Next &raquo;</a>
       {% else %}
         <span class="text-slate-300">Next &raquo;</span>
       {% endif %}
@@ -235,27 +337,57 @@
   const labels = {{ daily_data|safe }}.map(d => d.label);
   const timeIn = {{ daily_data|safe }}.map(d => d.time_in);
   const timeOut = {{ daily_data|safe }}.map(d => d.time_out);
+  const comparisonData = {{ comparison_data|safe }};
+  const trafficCategories = {{ traffic_categories|safe }};
+  const datasets = [
+    {
+      label: 'Time In',
+      data: timeIn,
+      backgroundColor: '#3b82f6',
+      borderRadius: 4,
+      barPercentage: 0.7,
+    },
+    {
+      label: 'Time Out',
+      data: timeOut,
+      backgroundColor: '#ef4444',
+      borderRadius: 4,
+      barPercentage: 0.7,
+    }
+  ];
+
+  if (comparisonData.length) {
+    datasets.push(
+      {
+        type: 'line',
+        label: 'Previous Period · Time In',
+        data: comparisonData.map(d => d.time_in),
+        borderColor: '#93c5fd',
+        backgroundColor: 'transparent',
+        borderDash: [5, 4],
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.25,
+      },
+      {
+        type: 'line',
+        label: 'Previous Period · Time Out',
+        data: comparisonData.map(d => d.time_out),
+        borderColor: '#fda4af',
+        backgroundColor: 'transparent',
+        borderDash: [5, 4],
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.25,
+      }
+    );
+  }
 
   new Chart(document.getElementById('activityChart'), {
     type: 'bar',
     data: {
       labels: labels,
-      datasets: [
-        {
-          label: 'Time In',
-          data: timeIn,
-          backgroundColor: '#3b82f6',
-          borderRadius: 4,
-          barPercentage: 0.7,
-        },
-        {
-          label: 'Time Out',
-          data: timeOut,
-          backgroundColor: '#ef4444',
-          borderRadius: 4,
-          barPercentage: 0.7,
-        }
-      ]
+      datasets: datasets
     },
     options: {
       responsive: true,
@@ -279,6 +411,38 @@
       }
     }
   });
+
+  const trafficCanvas = document.getElementById('trafficCategoryChart');
+  if (trafficCanvas) {
+    new Chart(trafficCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: trafficCategories.map(category => category.label),
+        datasets: [{
+          data: trafficCategories.map(category => category.count),
+          backgroundColor: trafficCategories.map(category => category.color),
+          borderColor: '#ffffff',
+          borderWidth: 3,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const category = trafficCategories[context.dataIndex];
+                return ` ${category.label}: ${category.count} (${category.percentage}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
 })();
 </script>
 {% endblock %}

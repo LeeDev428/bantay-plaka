@@ -119,6 +119,12 @@ class AdminDashboardApprovalCountTests(TestCase):
             plate_number='APPROVED1',
             is_approved=True,
         )
+        VehicleLog.objects.create(
+            plate_number='APPROVED1',
+            entry_type=VehicleLog.TYPE_RESIDENT,
+            status=VehicleLog.STATUS_IN,
+            source=VehicleLog.SOURCE_CAMERA,
+        )
 
     def setUp(self):
         self.client.force_login(self.admin)
@@ -134,3 +140,41 @@ class AdminDashboardApprovalCountTests(TestCase):
             'Vehicle Approvals <span class="ml-1 font-bold">1</span>',
         )
         self.assertContains(response, reverse('vehicle_approval_list'))
+        self.assertContains(response, 'Traffic by Category')
+        self.assertContains(response, 'Traffic by Source')
+        self.assertContains(response, 'trafficCategoryChart')
+        self.assertContains(response, 'trafficSourceChart')
+
+
+@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+class GuardDashboardAnalyticsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.guard = User.objects.create_user(
+            username='dashboard_guard',
+            password='SecurePass123!',
+            role=User.ROLE_GUARD,
+        )
+        VehicleLog.objects.create(
+            plate_number='GATE123',
+            entry_type=VehicleLog.TYPE_VISITOR,
+            status=VehicleLog.STATUS_IN,
+            source=VehicleLog.SOURCE_MANUAL,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.guard)
+
+    def test_guard_dashboard_shows_shared_activity_and_traffic_charts(self):
+        response = self.client.get(reverse('guard_dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['daily_data']), 7)
+        self.assertEqual(response.context['traffic_total'], 1)
+        self.assertEqual(response.context['traffic_source_total'], 1)
+        self.assertContains(response, '7-Day Activity')
+        self.assertContains(response, 'Traffic by Category')
+        self.assertContains(response, 'Traffic by Source')
+        self.assertContains(response, 'dashboardActivityChart')
+        self.assertContains(response, 'trafficCategoryChart')
+        self.assertContains(response, 'trafficSourceChart')

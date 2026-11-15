@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.core.paginator import Paginator
 import datetime
 from datetime import timedelta
@@ -20,12 +20,39 @@ from apps.accounts.forms import (
     ResidentSignupForm,
 )
 from apps.accounts.models import User
+from apps.logs.analytics import build_traffic_mix
 from apps.logs.models import VehicleLog, CameraFeedSnapshot, UnrecognizedPlateAlert
 from apps.logs.forms import ManualLogForm
 from apps.logs.services import attach_blacklist_metadata, broadcast_log
 from apps.residents.forms import VehicleRegistrationFormSetFactory
 from apps.residents.models import Resident, Vehicle
 from apps.visitors.models import BlacklistEntry, Visitor
+
+
+def _dashboard_activity_data(today, days=7):
+    tz = timezone.get_current_timezone()
+    daily_data = []
+    for offset in range(days - 1, -1, -1):
+        day = today - timedelta(days=offset)
+        start = timezone.make_aware(datetime.datetime.combine(day, datetime.time.min), tz)
+        end = start + timedelta(days=1)
+        counts = {
+            VehicleLog.STATUS_IN: 0,
+            VehicleLog.STATUS_OUT: 0,
+        }
+        for item in (
+            VehicleLog.objects
+            .filter(timestamp__gte=start, timestamp__lt=end)
+            .values('status')
+            .annotate(total=Count('pk'))
+        ):
+            counts[item['status']] = item['total']
+        daily_data.append({
+            'label': day.strftime('%a'),
+            'time_in': counts[VehicleLog.STATUS_IN],
+            'time_out': counts[VehicleLog.STATUS_OUT],
+        })
+    return daily_data
 
 
 def _camera_feed_context() -> dict:
@@ -190,24 +217,8 @@ def admin_dashboard(request):
         VehicleLog.objects.select_related('logged_by').all()[:10]
     )
 
-    # 7-day chart data
-    from datetime import timedelta as _td
-    import datetime as _dt
-    def _day_range(d):
-        tz = timezone.get_current_timezone()
-        s = timezone.make_aware(_dt.datetime.combine(d, _dt.time.min), tz)
-        return s, s + _td(days=1)
-
-    daily_data = []
-    for i in range(6, -1, -1):
-        d = today - _td(days=i)
-        d_start, d_end = _day_range(d)
-        day_qs = VehicleLog.objects.filter(timestamp__gte=d_start, timestamp__lt=d_end)
-        daily_data.append({
-            'label': d.strftime('%a'),
-            'time_in': day_qs.filter(status=VehicleLog.STATUS_IN).count(),
-            'time_out': day_qs.filter(status=VehicleLog.STATUS_OUT).count(),
-        })
+    daily_data = _dashboard_activity_data(today)
+    traffic_mix = build_traffic_mix(today - timedelta(days=6), today + timedelta(days=1))
 
     context = {
         'total_residents': Resident.objects.count(),
@@ -222,9 +233,11 @@ def admin_dashboard(request):
         'today_out': VehicleLog.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end, status=VehicleLog.STATUS_OUT).count(),
         'recent_logs': recent_logs,
         'daily_data': daily_data,
+        'traffic_period_label': 'Last 7 days',
         'latest_unrecognized_alerts': UnrecognizedPlateAlert.objects.select_related('recording')[:3],
         'unrecognized_alert_count': UnrecognizedPlateAlert.objects.count(),
     }
+    context.update(traffic_mix)
     return render(request, 'dashboard/admin/index.html', context)
 
 
@@ -401,12 +414,17 @@ def guard_dashboard(request):
     recent_logs = attach_blacklist_metadata(
         VehicleLog.objects.select_related('logged_by').all()[:10]
     )
+    today = timezone.localdate()
+    traffic_mix = build_traffic_mix(today - timedelta(days=6), today + timedelta(days=1))
     context = {
         'recent_logs': recent_logs,
         'manual_form': manual_form,
+        'daily_data': _dashboard_activity_data(today),
+        'traffic_period_label': 'Last 7 days',
         'latest_unrecognized_alerts': UnrecognizedPlateAlert.objects.select_related('recording')[:3],
         'unrecognized_alert_count': UnrecognizedPlateAlert.objects.count(),
     }
+    context.update(traffic_mix)
     context.update(_camera_feed_context())
     return render(request, 'dashboard/guard/index.html', context)
 

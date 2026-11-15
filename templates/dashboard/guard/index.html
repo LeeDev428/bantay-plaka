@@ -2,6 +2,10 @@
 {% block title %}Guard Dashboard{% endblock %}
 {% block breadcrumb %}Dashboard &raquo; Gate Monitor{% endblock %}
 
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <!-- Page Header -->
 <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between mb-6 gap-4">
@@ -176,6 +180,11 @@
     </div>
   </div>
 </div>
+
+<div class="page-card p-5 mb-6">
+  {% include 'partials/dashboard_activity_chart.html' %}
+</div>
+{% include 'partials/traffic_mix_charts.html' %}
 
 <!-- Live Gate Log -->
 <div class="page-card min-w-0 mb-4">

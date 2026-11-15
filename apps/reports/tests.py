@@ -92,8 +92,15 @@ class ReportPeriodComparisonTests(TestCase):
             [(item['label'], item['count']) for item in response.context['traffic_categories']],
             [('Residents', 1), ('Visitors', 1), ('Unknown', 1)],
         )
+        self.assertEqual(response.context['traffic_source_total'], 3)
+        self.assertEqual(
+            [(item['label'], item['count']) for item in response.context['traffic_sources']],
+            [('Camera', 0), ('Manual', 3)],
+        )
         self.assertContains(response, 'Traffic by Category')
         self.assertContains(response, 'trafficCategoryChart')
+        self.assertContains(response, 'Traffic by Source')
+        self.assertContains(response, 'trafficSourceChart')
 
     def test_current_visitors_show_entry_time_and_twelve_hour_overstay(self):
         now = timezone.now()

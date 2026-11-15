@@ -150,40 +150,6 @@
     </div>
   </div>
 
-  <div class="lg:col-span-2 page-card p-5">
-    <div class="flex items-center justify-between mb-4">
-      <div>
-        <h2 class="font-semibold text-slate-800">Traffic by Category</h2>
-        <p class="text-xs text-slate-400 mt-0.5">Vehicle log entries · Last {{ chart_period_q }} days</p>
-      </div>
-      <span class="text-sm font-semibold text-slate-600">{{ traffic_total }} total</span>
-    </div>
-    {% if traffic_total %}
-    <div class="grid sm:grid-cols-2 gap-6 items-center">
-      <div class="h-48">
-        <canvas id="trafficCategoryChart" aria-label="Vehicle log entries by category"></canvas>
-      </div>
-      <div class="space-y-3">
-        {% for category in traffic_categories %}
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: {{ category.color }}"></span>
-            <span class="text-sm text-slate-600">{{ category.label }}</span>
-          </div>
-          <span class="text-sm font-semibold text-slate-800">{{ category.count }}
-            <span class="text-xs font-normal text-slate-400">({{ category.percentage }}%)</span>
-          </span>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% else %}
-    <div class="h-48 flex items-center justify-center text-sm text-slate-400">
-      No vehicle log activity in this period.
-    </div>
-    {% endif %}
-  </div>
-
   <!-- Top Vehicles -->
   <div class="page-card lg:col-start-3 lg:row-start-1">
     <div class="px-5 py-4 border-b border-slate-100">
@@ -238,6 +204,8 @@
     {% endif %}
   </div>
 </div>
+
+{% include 'partials/traffic_mix_charts.html' %}
 
 <!-- Export Modal -->
 <div id="reports-export-modal" class="fixed inset-0 z-50 hidden items-start sm:items-center justify-center px-4 py-6">
@@ -338,7 +306,6 @@
   const timeIn = {{ daily_data|safe }}.map(d => d.time_in);
   const timeOut = {{ daily_data|safe }}.map(d => d.time_out);
   const comparisonData = {{ comparison_data|safe }};
-  const trafficCategories = {{ traffic_categories|safe }};
   const datasets = [
     {
       label: 'Time In',
@@ -412,37 +379,6 @@
     }
   });
 
-  const trafficCanvas = document.getElementById('trafficCategoryChart');
-  if (trafficCanvas) {
-    new Chart(trafficCanvas, {
-      type: 'doughnut',
-      data: {
-        labels: trafficCategories.map(category => category.label),
-        datasets: [{
-          data: trafficCategories.map(category => category.count),
-          backgroundColor: trafficCategories.map(category => category.color),
-          borderColor: '#ffffff',
-          borderWidth: 3,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: '68%',
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (context) => {
-                const category = trafficCategories[context.dataIndex];
-                return ` ${category.label}: ${category.count} (${category.percentage}%)`;
-              }
-            }
-          }
-        }
-      }
-    });
-  }
 })();
 </script>
 {% endblock %}

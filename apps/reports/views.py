@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from apps.audit.services import audit_export
 from apps.export_helpers import build_export_chart_data
+from apps.logs.analytics import build_traffic_mix
 from apps.logs.models import VehicleLog
 from apps.logs.services import get_active_blacklist_map
 
@@ -139,34 +140,7 @@ def report_dashboard(request):
                 'time_out': previous_counts[VehicleLog.STATUS_OUT],
             })
 
-    current_period_start_dt, _ = _day_range(current_period_start)
-    traffic_counts = dict(
-        VehicleLog.objects
-        .filter(timestamp__gte=current_period_start_dt, timestamp__lt=today_end)
-        .values('entry_type')
-        .annotate(total=Count('pk'))
-        .values_list('entry_type', 'total')
-    )
-    traffic_total = sum(traffic_counts.values())
-    category_labels = {
-        VehicleLog.TYPE_RESIDENT: 'Residents',
-        VehicleLog.TYPE_VISITOR: 'Visitors',
-        VehicleLog.TYPE_UNKNOWN: 'Unknown',
-    }
-    category_colors = {
-        VehicleLog.TYPE_RESIDENT: '#3b82f6',
-        VehicleLog.TYPE_VISITOR: '#8b5cf6',
-        VehicleLog.TYPE_UNKNOWN: '#94a3b8',
-    }
-    traffic_categories = [
-        {
-            'label': category_labels[entry_type],
-            'count': traffic_counts.get(entry_type, 0),
-            'percentage': round(traffic_counts.get(entry_type, 0) * 100 / traffic_total, 1) if traffic_total else 0,
-            'color': category_colors[entry_type],
-        }
-        for entry_type in category_labels
-    ]
+    traffic_mix = build_traffic_mix(current_period_start, today + timedelta(days=1))
 
     # Top vehicles with filters and pagination
     top_window_q = request.GET.get('top_window', 'WEEK').upper()
@@ -212,14 +186,14 @@ def report_dashboard(request):
             f'{previous_period_start:%b %d, %Y} – '
             f'{(current_period_start - timedelta(days=1)):%b %d, %Y}'
         ),
-        'traffic_categories': traffic_categories,
-        'traffic_total': traffic_total,
+        'traffic_period_label': f'Last {chart_days} days',
         'chart_period_q': chart_period_q,
         'top_vehicles': top_vehicles,
         'top_rank_offset': top_rank_offset,
         'top_window_q': top_window_q,
         'top_entry_type_q': top_entry_type_q,
     }
+    context.update(traffic_mix)
     return render(request, 'reports/dashboard.html', context)
 
 

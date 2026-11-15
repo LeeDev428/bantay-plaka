@@ -1,0 +1,106 @@
+<div class="grid md:grid-cols-2 gap-6 mb-6">
+  <section class="page-card p-5">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="font-semibold text-slate-800">Traffic by Category</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Vehicle log entries · {{ traffic_period_label }}</p>
+      </div>
+      <span class="text-sm font-semibold text-slate-600">{{ traffic_total }} total</span>
+    </div>
+    {% if traffic_total %}
+    <div class="grid sm:grid-cols-2 gap-5 items-center">
+      <div class="h-44">
+        <canvas id="trafficCategoryChart" aria-label="Vehicle log entries by category"></canvas>
+      </div>
+      <div class="space-y-3">
+        {% for category in traffic_categories %}
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: {{ category.color }}"></span>
+            <span class="text-sm text-slate-600">{{ category.label }}</span>
+          </div>
+          <span class="text-sm font-semibold text-slate-800">{{ category.count }}
+            <span class="text-xs font-normal text-slate-400">({{ category.percentage }}%)</span>
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="h-44 flex items-center justify-center text-sm text-slate-400">No vehicle log activity in this period.</div>
+    {% endif %}
+  </section>
+
+  <section class="page-card p-5">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="font-semibold text-slate-800">Traffic by Source</h2>
+        <p class="text-xs text-slate-400 mt-0.5">How entries were recorded · {{ traffic_period_label }}</p>
+      </div>
+      <span class="text-sm font-semibold text-slate-600">{{ traffic_source_total }} total</span>
+    </div>
+    {% if traffic_source_total %}
+    <div class="grid sm:grid-cols-2 gap-5 items-center">
+      <div class="h-44">
+        <canvas id="trafficSourceChart" aria-label="Vehicle log entries by source"></canvas>
+      </div>
+      <div class="space-y-3">
+        {% for source in traffic_sources %}
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: {{ source.color }}"></span>
+            <span class="text-sm text-slate-600">{{ source.label }}</span>
+          </div>
+          <span class="text-sm font-semibold text-slate-800">{{ source.count }}
+            <span class="text-xs font-normal text-slate-400">({{ source.percentage }}%)</span>
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="h-44 flex items-center justify-center text-sm text-slate-400">No vehicle log activity in this period.</div>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+(function () {
+  function renderDoughnut(canvasId, categories) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: categories.map(category => category.label),
+        datasets: [{
+          data: categories.map(category => category.count),
+          backgroundColor: categories.map(category => category.color),
+          borderColor: '#ffffff',
+          borderWidth: 3,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const category = categories[context.dataIndex];
+                return ` ${category.label}: ${category.count} (${category.percentage}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  renderDoughnut('trafficCategoryChart', {{ traffic_categories|safe }});
+  renderDoughnut('trafficSourceChart', {{ traffic_sources|safe }});
+})();
+</script>

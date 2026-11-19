@@ -12,11 +12,15 @@
   <td>
     <div class="flex items-center gap-2">
       {% if log.snapshot %}
-      <a href="{{ log.snapshot.url }}" target="_blank" rel="noopener noreferrer"
+      <button type="button"
+        data-media-preview
+        data-preview-type="image"
+        data-preview-url="{{ log.snapshot.url }}"
+        data-preview-title="Plate snapshot — {{ log.plate_number }}"
         class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
-        title="View plate snapshot">
+        title="View plate snapshot" aria-label="View plate snapshot for {{ log.plate_number }}">
         <i class="fa fa-image text-xs"></i>
-      </a>
+      </button>
       {% endif %}
       {% if log.blacklist_tag %}
       <span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-red-100 text-red-700"

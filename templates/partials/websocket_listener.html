@@ -249,10 +249,15 @@
     const safePlate = escapeHtml(data.plate_number || '');
     const safeDisplayName = escapeHtml(data.display_name || '');
     const safeTimestamp = escapeHtml(data.timestamp || '');
+    const safeSnapshotUrl = escapeHtml(data.snapshot_url || '');
 
-    const blacklistCell = data.blacklist_tag
-      ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">${safeTag}</span>${data.blacklist_remarks ? `<p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="${safeRemarks}">${safeRemarks}</p>` : ''}`
-      : '<span class="text-xs text-slate-400">No remarks</span>';
+    const snapshotEvidence = safeSnapshotUrl
+      ? `<button type="button" data-media-preview data-preview-type="image" data-preview-url="${safeSnapshotUrl}" data-preview-title="Plate snapshot — ${safePlate}" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" title="View plate snapshot" aria-label="View plate snapshot for ${safePlate}"><i class="fa fa-image text-xs"></i></button>`
+      : '<span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-slate-100 text-slate-400" title="No snapshot attached"><i class="fa fa-image text-xs"></i></span>';
+    const blacklistEvidence = data.blacklist_tag
+      ? `<span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-red-100 text-red-700" title="${safeTag}: ${safeRemarks || 'Blacklisted plate detected.'}"><i class="fa fa-shield-halved text-xs"></i></span>`
+      : '<span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600" title="No blacklist alert"><i class="fa fa-circle-check text-xs"></i></span>';
+    const evidenceCell = `<div class="flex items-center gap-2">${snapshotEvidence}${blacklistEvidence}</div>`;
 
     const statusBadge = data.status === 'TIME_IN'
       ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><i class="fa fa-arrow-right text-[9px]"></i> IN</span>'
@@ -270,7 +275,7 @@
       <td class="font-mono font-semibold text-slate-800">${safePlate}</td>
       <td class="text-sm text-slate-600">${safeDisplayName}</td>
       <td>${typeBadge}</td>
-      <td>${blacklistCell}</td>
+      <td>${evidenceCell}</td>
       <td>${statusBadge}</td>
       <td>${sourceBadge}</td>
       <td class="text-xs text-slate-400">${safeTimestamp}</td>

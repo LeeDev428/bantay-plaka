@@ -151,6 +151,8 @@ class AdminDashboardApprovalCountTests(TestCase):
         self.assertContains(response, 'trafficCategoryChart')
         self.assertContains(response, 'trafficSourceChart')
         self.assertContains(response, 'Evidence')
+        self.assertContains(response, 'media-preview-modal')
+        self.assertContains(response, 'data-media-preview')
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')

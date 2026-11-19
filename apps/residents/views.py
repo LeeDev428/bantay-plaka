@@ -27,6 +27,7 @@ def resident_list(request):
     status_q = request.GET.get('status', '').strip().lower()
     vehicles_q = request.GET.get('vehicles', '').strip().lower()
     resident_form = ResidentForm(prefix='resident')
+    edit_resident_form = ResidentForm(prefix='edit')
     vehicle_form = VehicleForm(prefix='vehicle')
 
     if request.method == 'POST' and request.user.is_admin():
@@ -51,6 +52,27 @@ def resident_list(request):
                 messages.success(request, f'{resident.full_name} registered successfully.')
                 return redirect('resident_list')
             messages.error(request, 'Failed to register resident. Please check the required fields.')
+
+        if action == 'edit_resident':
+            resident = get_object_or_404(Resident, pk=request.POST.get('resident_pk'))
+            edit_resident_form = ResidentForm(
+                request.POST,
+                request.FILES,
+                instance=resident,
+                prefix='edit',
+            )
+            if edit_resident_form.is_valid():
+                resident = edit_resident_form.save()
+                record_user_activity(
+                    actor=request.user,
+                    action=UserActivity.ACTION_UPDATE,
+                    summary=f'Updated resident {resident.full_name}',
+                    target_type='resident',
+                    target_id=resident.pk,
+                )
+                messages.success(request, 'Resident updated.')
+                return redirect(request.get_full_path())
+            messages.error(request, 'Failed to update resident. Please correct the highlighted fields.')
 
         if action == 'create_vehicle':
             vehicle_form = VehicleForm(request.POST, request.FILES, prefix='vehicle')
@@ -110,6 +132,7 @@ def resident_list(request):
         'residents': residents,
         'q': q,
         'resident_form': resident_form,
+        'edit_resident_form': edit_resident_form,
         'vehicle_form': vehicle_form,
         'is_read_only_view': is_read_only_view,
         'status_q': status_q,

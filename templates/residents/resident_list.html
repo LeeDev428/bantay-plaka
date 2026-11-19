@@ -222,46 +222,34 @@
                 {% if resident.has_valid_id_document %}data-id-url="{% url 'resident_id_document' resident.pk %}"{% endif %}
                 data-approve-url="{% url 'resident_approve' resident.pk %}"
                 data-reject-url="{% url 'resident_reject' resident.pk %}"
+                data-archive-url="{% url 'resident_delete' resident.pk %}"
                 data-username="{{ resident.user.username|default:'' }}"
               >
                 <i class="fa fa-eye text-xs"></i>
               </button>
-              {% if resident.user %}
-              <form method="post" action="{% url 'resident_approve' resident.pk %}" class="inline">
-                {% csrf_token %}
-                {% if resident.is_approved %}
-                  <button type="button" class="btn btn-ghost btn-xs text-emerald-400 cursor-not-allowed opacity-50" title="Already approved" disabled>
-                    <i class="fa fa-user-check text-xs"></i>
-                  </button>
-                {% else %}
-                  <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-emerald-600" title="Approve and activate resident account">
-                    <i class="fa fa-user-check text-xs"></i>
-                  </button>
-                {% endif %}
-              </form>
-              <form method="post" action="{% url 'resident_reject' resident.pk %}" class="inline" data-reject-resident>
-                {% csrf_token %}
-                <input type="hidden" name="reason" value="">
-                {% if not resident.is_approved and not resident.approved_by %}
-                  <button type="button" class="btn btn-ghost btn-xs text-amber-400 cursor-not-allowed opacity-50" title="Already pending" disabled>
-                    <i class="fa fa-hourglass-half text-xs"></i>
-                  </button>
-                {% else %}
-                  <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Set as pending/inactive">
-                    <i class="fa fa-hourglass-half text-xs"></i>
-                  </button>
-                {% endif %}
-              </form>
-              {% endif %}
-              <a href="{% url 'resident_edit' resident.pk %}" class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600" title="Edit">
+              <button type="button"
+                class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600"
+                title="Edit resident"
+                data-resident-edit-modal
+                data-pk="{{ resident.pk }}"
+                data-name="{{ resident.full_name }}"
+                data-first-name="{{ resident.first_name }}"
+                data-middle-name="{{ resident.middle_name|default:'' }}"
+                data-last-name="{{ resident.last_name }}"
+                data-suffix="{{ resident.suffix|default:'' }}"
+                data-sex="{{ resident.sex|default:'' }}"
+                data-birth-date="{{ resident.birth_date|date:'Y-m-d' }}"
+                data-age="{{ resident.age|default:'' }}"
+                data-contact="{{ resident.contact_number|default:'' }}"
+                data-telephone="{{ resident.telephone_number|default:'' }}"
+                data-street-number="{{ resident.street_number|default:'' }}"
+                data-street-name="{{ resident.street_name|default:'' }}"
+                data-address="{{ resident.address|default:'' }}"
+                data-id-type="{{ resident.valid_id_type|default:'' }}"
+                {% if resident.has_valid_id_document %}data-id-url="{% url 'resident_id_document' resident.pk %}"{% endif %}
+              >
                 <i class="fa fa-pen text-xs"></i>
-              </a>
-              <form method="post" action="{% url 'resident_delete' resident.pk %}" class="inline" data-delete-resident data-name="{{ resident.full_name }}">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-slate-500 hover:text-amber-600" title="Archive">
-                  <i class="fa fa-box-archive text-xs"></i>
-                </button>
-              </form>
+              </button>
             </div>
           </td>
           {% endif %}
@@ -399,7 +387,7 @@
         </div>
         <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 min-h-[300px] flex flex-col">
           <p class="text-xs font-semibold text-slate-500 mb-2">Attached Valid ID</p>
-          <div id="resident-id-loading" class="hidden h-64 items-center justify-center text-sm text-slate-400">
+          <div id="resident-info-id-loading" class="hidden h-64 items-center justify-center text-sm text-slate-400">
             <i class="fa fa-spinner fa-spin mr-2"></i> Loading ID...
           </div>
           <img id="resident-info-id-image" alt="Resident valid ID" class="hidden max-h-[420px] max-w-full mx-auto rounded-lg border border-slate-200 object-contain">
@@ -411,7 +399,13 @@
     {% if user.is_admin %}
     <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
       <button type="button" class="btn btn-sm btn-ghost" data-close-resident-info>Close</button>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap justify-end gap-2">
+        <form id="resident-info-archive-form" method="post" action="" data-delete-resident data-name="">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm bg-amber-100 hover:bg-amber-200 border-0 text-amber-700">
+            <i class="fa fa-box-archive mr-1"></i> Archive
+          </button>
+        </form>
         <form id="resident-info-reject-form" method="post" action="">
           {% csrf_token %}
           <input type="hidden" name="reason" value="Registration requirements were not satisfied.">
@@ -431,6 +425,43 @@
   </div>
 </div>
 
+<div id="resident-edit-modal" class="fixed inset-0 z-[58] {% if edit_resident_form.errors %}flex{% else %}hidden{% endif %} items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/60" data-close-resident-edit></div>
+  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-labelledby="resident-edit-title">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <h3 id="resident-edit-title" class="text-lg font-bold text-slate-800">Edit Resident</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" data-close-resident-edit aria-label="Close resident editor">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+    <form id="resident-edit-form" method="post" action="{{ request.get_full_path }}" enctype="multipart/form-data" class="overflow-y-auto px-6 py-5">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit_resident">
+      <input type="hidden" name="resident_pk" id="resident-edit-pk" value="{{ edit_resident_form.instance.pk|default:'' }}">
+      <div class="grid md:grid-cols-2 gap-3">
+        {% for field in edit_resident_form %}
+          <div class="{% if field.name == 'address' or field.name == 'valid_id_type' or field.name == 'valid_id_image' %}md:col-span-2{% endif %}">
+            <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-400">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.errors %}<p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <a id="resident-edit-current-id" href="#" target="_blank" rel="noopener noreferrer" class="hidden mt-3 inline-flex items-center gap-2 text-sm text-blue-700">
+        <i class="fa fa-up-right-from-square"></i> View current ID document
+      </a>
+      <div class="mt-5 pt-4 border-t border-slate-100 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" data-close-resident-edit>Cancel</button>
+        <button type="submit" class="btn bg-blue-600 hover:bg-blue-700 border-0 text-white">
+          <i class="fa fa-floppy-disk mr-1"></i> Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="resident-id-document-modal" class="fixed inset-0 z-[56] hidden items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/60" data-close-resident-id></div>
   <div class="relative bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-labelledby="resident-id-document-title">
@@ -441,7 +472,7 @@
       </button>
     </div>
     <div class="p-4 bg-slate-50 overflow-auto flex-1 min-h-[420px]">
-      <div id="resident-id-loading" class="h-96 flex items-center justify-center text-sm text-slate-400">
+      <div id="resident-id-document-loading" class="hidden h-96 items-center justify-center text-sm text-slate-400">
         <i class="fa fa-spinner fa-spin mr-2"></i> Loading valid ID...
       </div>
       <img id="resident-id-image" alt="Resident valid ID" class="hidden max-w-full max-h-[72vh] mx-auto rounded-lg border border-slate-200 object-contain">
@@ -535,6 +566,7 @@
   const residentVehiclesContent = document.getElementById('resident-vehicles-content');
   const residentInfoModal = document.getElementById('resident-info-modal');
   const residentIdModal = document.getElementById('resident-id-document-modal');
+  const residentEditModal = document.getElementById('resident-edit-modal');
   const delModal      = document.getElementById('delete-resident-modal');
   const rejectModal   = document.getElementById('reject-resident-modal');
   let activeVehiclesResident = null;
@@ -573,6 +605,11 @@
     }
   };
 
+  function closeResidentEditModal() {
+    residentEditModal?.classList.add('hidden');
+    residentEditModal?.classList.remove('flex');
+  }
+
   function closeResidentIdModal() {
     residentIdModal?.classList.add('hidden');
     residentIdModal?.classList.remove('flex');
@@ -594,7 +631,7 @@
     document.getElementById('resident-id-document-title').textContent = title || 'Valid ID';
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    const loading = document.getElementById('resident-id-loading');
+    const loading = residentIdModal.querySelector('#resident-id-document-loading');
     const error = document.getElementById('resident-id-error');
     const image = document.getElementById('resident-id-image');
     const pdf = document.getElementById('resident-id-pdf');
@@ -653,12 +690,18 @@
         : (button.dataset.status === 'Not Approved' ? 'font-medium text-red-700' : 'font-medium text-amber-700');
       document.getElementById('resident-info-approve-form').action = button.dataset.approveUrl || '';
       document.getElementById('resident-info-reject-form').action = button.dataset.rejectUrl || '';
+      const archiveForm = document.getElementById('resident-info-archive-form');
+      archiveForm.action = button.dataset.archiveUrl || '';
+      archiveForm.dataset.name = button.dataset.name || 'this resident';
 
       const approveForm = document.getElementById('resident-info-approve-form');
       const rejectForm = document.getElementById('resident-info-reject-form');
       if (button.dataset.approved === 'true') {
         approveForm.classList.add('hidden');
         rejectForm.classList.remove('hidden');
+      } else if (button.dataset.status === 'Pending') {
+        approveForm.classList.remove('hidden');
+        rejectForm.classList.add('hidden');
       } else {
         approveForm.classList.remove('hidden');
         rejectForm.classList.remove('hidden');
@@ -667,7 +710,7 @@
       const image = document.getElementById('resident-info-id-image');
       const pdf = document.getElementById('resident-info-id-pdf');
       const empty = document.getElementById('resident-info-id-empty');
-      const loading = document.getElementById('resident-id-loading');
+      const loading = residentInfoModal.querySelector('#resident-info-id-loading');
       image.classList.add('hidden');
       pdf.classList.add('hidden');
       empty.classList.add('hidden');
@@ -706,6 +749,44 @@
   });
   document.querySelectorAll('[data-close-resident-info]').forEach((button) => {
     button.addEventListener('click', window.closeResidentInfoModal);
+  });
+
+  document.querySelectorAll('[data-resident-edit-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const form = document.getElementById('resident-edit-form');
+      document.getElementById('resident-edit-title').textContent = 'Edit ' + (button.dataset.name || 'Resident');
+      document.getElementById('resident-edit-pk').value = button.dataset.pk || '';
+      const fields = {
+        first_name: 'firstName',
+        middle_name: 'middleName',
+        last_name: 'lastName',
+        suffix: 'suffix',
+        sex: 'sex',
+        birth_date: 'birthDate',
+        age: 'age',
+        contact_number: 'contact',
+        telephone_number: 'telephone',
+        street_number: 'streetNumber',
+        street_name: 'streetName',
+        address: 'address',
+        valid_id_type: 'idType',
+      };
+      Object.entries(fields).forEach(([name, datasetName]) => {
+        const field = form.elements.namedItem('edit-' + name);
+        if (field) field.value = button.dataset[datasetName] || '';
+      });
+      const idFileInput = form.elements.namedItem('edit-valid_id_image');
+      if (idFileInput) idFileInput.value = '';
+      const currentIdLink = document.getElementById('resident-edit-current-id');
+      const hasCurrentId = Boolean(button.dataset.idUrl);
+      currentIdLink.href = button.dataset.idUrl || '#';
+      currentIdLink.classList.toggle('hidden', !hasCurrentId);
+      residentEditModal.classList.remove('hidden');
+      residentEditModal.classList.add('flex');
+    });
+  });
+  document.querySelectorAll('[data-close-resident-edit]').forEach((button) => {
+    button.addEventListener('click', closeResidentEditModal);
   });
 
   document.querySelectorAll('[data-open-resident-vehicles]').forEach((btn) => {
@@ -765,14 +846,15 @@
   delVehicleModal.addEventListener('click', (e) => { if (e.target === delVehicleModal) { delVehicleModal.classList.add('hidden'); activeDelVehicleForm = null; } });
 
   let activeRejectForm = null;
-  document.querySelectorAll('[data-reject-resident]').forEach((form) => {
-    form.querySelector('button[type="submit"]').addEventListener('click', (e) => {
+  const residentInfoRejectForm = document.getElementById('resident-info-reject-form');
+  if (residentInfoRejectForm) {
+    residentInfoRejectForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      activeRejectForm = form;
+      activeRejectForm = residentInfoRejectForm;
       document.getElementById('reject-reason').value = 'Registration requirements were not satisfied.';
       rejectModal.classList.remove('hidden');
     });
-  });
+  }
   document.getElementById('reject-cancel').addEventListener('click', () => { rejectModal.classList.add('hidden'); activeRejectForm = null; });
   document.getElementById('reject-confirm').addEventListener('click', () => {
     if (!activeRejectForm) return;
@@ -788,6 +870,7 @@
     window.closeResidentModal();
     window.closeVehicleModal();
     window.closeResidentInfoModal();
+    closeResidentEditModal();
     closeResidentIdModal();
     window.closeResidentVehiclesModal();
     delModal.classList.add('hidden');

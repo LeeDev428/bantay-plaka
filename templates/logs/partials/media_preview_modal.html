@@ -39,27 +39,27 @@
     image.classList.add('hidden');
   }
 
-  document.querySelectorAll('[data-media-preview]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const url = button.dataset.previewUrl;
-      if (!url) return;
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-media-preview]');
+    if (!button) return;
+    const url = button.dataset.previewUrl;
+    if (!url) return;
 
-      title.textContent = button.dataset.previewTitle || 'Media preview';
-      resetVideo();
-      if (button.dataset.previewType === 'video') {
-        video.src = url;
-        video.classList.remove('hidden');
-        image.classList.add('hidden');
-        video.load();
-      } else {
-        image.src = url;
-        image.alt = button.dataset.previewTitle || 'Image preview';
-        image.classList.remove('hidden');
-      }
+    title.textContent = button.dataset.previewTitle || 'Media preview';
+    resetVideo();
+    if (button.dataset.previewType === 'video') {
+      video.src = url;
+      video.classList.remove('hidden');
+      image.classList.add('hidden');
+      video.load();
+    } else {
+      image.src = url;
+      image.alt = button.dataset.previewTitle || 'Image preview';
+      image.classList.remove('hidden');
+    }
 
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    });
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
   });
 
   document.getElementById('media-preview-close').addEventListener('click', closePreview);

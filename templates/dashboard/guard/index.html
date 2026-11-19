@@ -181,11 +181,6 @@
   </div>
 </div>
 
-<div class="page-card p-5 mb-6">
-  {% include 'partials/dashboard_activity_chart.html' %}
-</div>
-{% include 'partials/traffic_mix_charts.html' %}
-
 <!-- Live Gate Log -->
 <div class="page-card min-w-0 mb-4">
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -221,6 +216,12 @@
     </table>
   </div>
 </div>
+
+<div class="page-card p-5 mb-6">
+  {% include 'partials/dashboard_activity_chart.html' %}
+</div>
+{% include 'partials/traffic_mix_charts.html' %}
+{% include 'logs/partials/media_preview_modal.html' %}
 
 {% if latest_unrecognized_alerts %}
 <section id="unrecognized-alerts" class="page-card border-l-4 border-amber-400 p-4">

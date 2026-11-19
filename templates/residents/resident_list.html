@@ -116,13 +116,18 @@
           <td>
             <p class="text-xs text-slate-600 font-medium">{{ resident.get_valid_id_type_display|default:'Not set' }}</p>
             {% if resident.has_valid_id_document and user.is_admin %}
-              <a href="{% url 'resident_id_document' resident.pk %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-800 mt-1">
+              <button type="button"
+                class="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-800 mt-1"
+                data-resident-id-modal
+                data-resident-id-url="{% url 'resident_id_document' resident.pk %}"
+                data-resident-id-title="{{ resident.get_valid_id_type_display|default:'Valid ID' }}"
+              >
                 <i class="fa fa-up-right-from-square text-[10px]"></i> View Attached ID
-              </a>
+              </button>
               {% if resident.valid_id_is_image %}
-                <a href="{% url 'resident_id_document' resident.pk %}" target="_blank" rel="noopener noreferrer" class="block mt-2 w-fit">
+                <button type="button" class="block mt-2 w-fit" data-resident-id-modal data-resident-id-url="{% url 'resident_id_document' resident.pk %}" data-resident-id-title="{{ resident.get_valid_id_type_display|default:'Valid ID' }}">
                   <img src="{% url 'resident_id_document' resident.pk %}" alt="Resident valid ID" class="h-12 w-20 rounded border border-slate-200 object-cover" />
-                </a>
+                </button>
               {% endif %}
             {% else %}
               <p class="text-[11px] text-slate-400 mt-1">{% if user.is_admin %}No uploaded ID or file unavailable.{% else %}Private{% endif %}</p>
@@ -202,6 +207,25 @@
           {% if user.is_admin %}
           <td>
             <div class="flex items-center gap-1 flex-wrap">
+              <button type="button"
+                class="btn btn-ghost btn-xs text-slate-500 hover:text-blue-600"
+                title="View resident information"
+                data-resident-info-modal
+                data-pk="{{ resident.pk }}"
+                data-name="{{ resident.full_name }}"
+                data-address="{{ resident.street_number }} {{ resident.street_name }}{% if resident.street_number or resident.street_name %}, {% endif %}{{ resident.address }}"
+                data-contact="{{ resident.contact_number|default:'—' }}"
+                data-telephone="{{ resident.telephone_number|default:'—' }}"
+                data-id-type="{{ resident.get_valid_id_type_display|default:'Not set' }}"
+                data-status="{% if resident.is_approved %}Approved{% elif resident.approved_by %}Not Approved{% else %}Pending{% endif %}"
+                data-approved="{% if resident.is_approved %}true{% else %}false{% endif %}"
+                {% if resident.has_valid_id_document %}data-id-url="{% url 'resident_id_document' resident.pk %}"{% endif %}
+                data-approve-url="{% url 'resident_approve' resident.pk %}"
+                data-reject-url="{% url 'resident_reject' resident.pk %}"
+                data-username="{{ resident.user.username|default:'' }}"
+              >
+                <i class="fa fa-eye text-xs"></i>
+              </button>
               {% if resident.user %}
               <form method="post" action="{% url 'resident_approve' resident.pk %}" class="inline">
                 {% csrf_token %}
@@ -337,6 +361,96 @@
 </div>
 {% endif %}
 
+<div id="resident-info-modal" class="fixed inset-0 z-[55] hidden items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/60" data-close-resident-info></div>
+  <div class="relative bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-labelledby="resident-info-title">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div>
+        <h3 id="resident-info-title" class="text-lg font-bold text-slate-800">Resident Information</h3>
+        <p id="resident-info-username" class="text-xs text-slate-400"></p>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-slate-600" data-close-resident-info aria-label="Close resident information">
+        <i class="fa fa-xmark text-xl"></i>
+      </button>
+    </div>
+    <div class="px-6 py-5 overflow-y-auto">
+      <div class="grid lg:grid-cols-2 gap-5">
+        <div class="space-y-3">
+          <div class="rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm">
+            <div class="grid grid-cols-[120px_1fr] px-4 py-3 gap-3">
+              <span class="text-slate-400">Name</span><span id="resident-info-name" class="font-semibold text-slate-700"></span>
+            </div>
+            <div class="grid grid-cols-[120px_1fr] px-4 py-3 gap-3">
+              <span class="text-slate-400">Address</span><span id="resident-info-address" class="text-slate-700"></span>
+            </div>
+            <div class="grid grid-cols-[120px_1fr] px-4 py-3 gap-3">
+              <span class="text-slate-400">Contact No.</span><span id="resident-info-contact" class="text-slate-700"></span>
+            </div>
+            <div class="grid grid-cols-[120px_1fr] px-4 py-3 gap-3">
+              <span class="text-slate-400">Telephone</span><span id="resident-info-telephone" class="text-slate-700"></span>
+            </div>
+            <div class="grid grid-cols-[120px_1fr] px-4 py-3 gap-3">
+              <span class="text-slate-400">Valid ID</span><span id="resident-info-id-type" class="text-slate-700"></span>
+            </div>
+            <div class="grid grid-cols-[120px_1fr] px-4 py-3 gap-3">
+              <span class="text-slate-400">Status</span><span id="resident-info-status" class="font-medium"></span>
+            </div>
+          </div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 min-h-[300px] flex flex-col">
+          <p class="text-xs font-semibold text-slate-500 mb-2">Attached Valid ID</p>
+          <div id="resident-id-loading" class="hidden h-64 items-center justify-center text-sm text-slate-400">
+            <i class="fa fa-spinner fa-spin mr-2"></i> Loading ID...
+          </div>
+          <img id="resident-info-id-image" alt="Resident valid ID" class="hidden max-h-[420px] max-w-full mx-auto rounded-lg border border-slate-200 object-contain">
+          <iframe id="resident-info-id-pdf" title="Resident valid ID PDF" class="hidden w-full h-[420px] rounded-lg border border-slate-200 bg-white"></iframe>
+          <p id="resident-info-id-empty" class="h-64 flex items-center justify-center text-sm text-slate-400">No uploaded valid ID.</p>
+        </div>
+      </div>
+    </div>
+    {% if user.is_admin %}
+    <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
+      <button type="button" class="btn btn-sm btn-ghost" data-close-resident-info>Close</button>
+      <div class="flex gap-2">
+        <form id="resident-info-reject-form" method="post" action="">
+          {% csrf_token %}
+          <input type="hidden" name="reason" value="Registration requirements were not satisfied.">
+          <button type="submit" class="btn btn-sm bg-amber-100 hover:bg-amber-200 border-0 text-amber-700">
+            <i class="fa fa-hourglass-half mr-1"></i> Set Pending
+          </button>
+        </form>
+        <form id="resident-info-approve-form" method="post" action="">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 border-0 text-white">
+            <i class="fa fa-user-check mr-1"></i> Approve &amp; Activate
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div id="resident-id-document-modal" class="fixed inset-0 z-[56] hidden items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/60" data-close-resident-id></div>
+  <div class="relative bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-labelledby="resident-id-document-title">
+    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <h3 id="resident-id-document-title" class="font-semibold text-slate-800">Valid ID</h3>
+      <button type="button" class="text-slate-400 hover:text-slate-600" data-close-resident-id aria-label="Close valid ID preview">
+        <i class="fa fa-xmark text-lg"></i>
+      </button>
+    </div>
+    <div class="p-4 bg-slate-50 overflow-auto flex-1 min-h-[420px]">
+      <div id="resident-id-loading" class="h-96 flex items-center justify-center text-sm text-slate-400">
+        <i class="fa fa-spinner fa-spin mr-2"></i> Loading valid ID...
+      </div>
+      <img id="resident-id-image" alt="Resident valid ID" class="hidden max-w-full max-h-[72vh] mx-auto rounded-lg border border-slate-200 object-contain">
+      <iframe id="resident-id-pdf" title="Resident valid ID PDF" class="hidden w-full h-[72vh] rounded-lg border border-slate-200 bg-white"></iframe>
+      <p id="resident-id-error" class="hidden h-96 items-center justify-center text-sm text-red-500">Unable to preview this valid ID.</p>
+    </div>
+  </div>
+</div>
+
 <div id="resident-vehicles-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4 py-6">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeResidentVehiclesModal()"></div>
   <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
@@ -419,6 +533,8 @@
   const vehicleModal  = document.getElementById('vehicle-modal');
   const residentVehiclesModal = document.getElementById('resident-vehicles-modal');
   const residentVehiclesContent = document.getElementById('resident-vehicles-content');
+  const residentInfoModal = document.getElementById('resident-info-modal');
+  const residentIdModal = document.getElementById('resident-id-document-modal');
   const delModal      = document.getElementById('delete-resident-modal');
   const rejectModal   = document.getElementById('reject-resident-modal');
   let activeVehiclesResident = null;
@@ -438,6 +554,159 @@
     residentVehiclesModal?.classList.add('hidden');
     residentVehiclesModal?.classList.remove('flex');
   };
+
+  let residentInfoIdObjectUrl = '';
+  let residentIdObjectUrl = '';
+
+  window.closeResidentInfoModal = function () {
+    residentInfoModal?.classList.add('hidden');
+    residentInfoModal?.classList.remove('flex');
+    const image = document.getElementById('resident-info-id-image');
+    const pdf = document.getElementById('resident-info-id-pdf');
+    image?.classList.add('hidden');
+    pdf?.classList.add('hidden');
+    pdf?.removeAttribute('src');
+    image?.removeAttribute('src');
+    if (residentInfoIdObjectUrl) {
+      URL.revokeObjectURL(residentInfoIdObjectUrl);
+      residentInfoIdObjectUrl = '';
+    }
+  };
+
+  function closeResidentIdModal() {
+    residentIdModal?.classList.add('hidden');
+    residentIdModal?.classList.remove('flex');
+    const image = document.getElementById('resident-id-image');
+    const pdf = document.getElementById('resident-id-pdf');
+    image?.classList.add('hidden');
+    pdf?.classList.add('hidden');
+    pdf?.removeAttribute('src');
+    image?.removeAttribute('src');
+    if (residentIdObjectUrl) {
+      URL.revokeObjectURL(residentIdObjectUrl);
+      residentIdObjectUrl = '';
+    }
+  }
+
+  async function previewResidentId(url, title) {
+    const modal = residentIdModal;
+    if (!modal) return;
+    document.getElementById('resident-id-document-title').textContent = title || 'Valid ID';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    const loading = document.getElementById('resident-id-loading');
+    const error = document.getElementById('resident-id-error');
+    const image = document.getElementById('resident-id-image');
+    const pdf = document.getElementById('resident-id-pdf');
+    loading.classList.remove('hidden');
+    loading.classList.add('flex');
+    error.classList.add('hidden');
+    error.classList.remove('flex');
+    image.classList.add('hidden');
+    pdf.classList.add('hidden');
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Preview unavailable');
+      const blob = await response.blob();
+      residentIdObjectUrl = URL.createObjectURL(blob);
+      loading.classList.add('hidden');
+      loading.classList.remove('flex');
+      if (blob.type === 'application/pdf') {
+        pdf.src = residentIdObjectUrl;
+        pdf.classList.remove('hidden');
+      } else if (blob.type.startsWith('image/')) {
+        image.src = residentIdObjectUrl;
+        image.classList.remove('hidden');
+      } else {
+        throw new Error('Unsupported document type');
+      }
+    } catch (error) {
+      loading.classList.add('hidden');
+      loading.classList.remove('flex');
+      document.getElementById('resident-id-error').classList.remove('hidden');
+      document.getElementById('resident-id-error').classList.add('flex');
+    }
+  }
+
+  document.querySelectorAll('[data-resident-id-modal]').forEach((button) => {
+    button.addEventListener('click', () => previewResidentId(button.dataset.residentIdUrl, button.dataset.residentIdTitle));
+  });
+  document.querySelectorAll('[data-close-resident-id]').forEach((button) => {
+    button.addEventListener('click', closeResidentIdModal);
+  });
+
+  document.querySelectorAll('[data-resident-info-modal]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      residentInfoModal.classList.remove('hidden');
+      residentInfoModal.classList.add('flex');
+      document.getElementById('resident-info-title').textContent = button.dataset.name || 'Resident Information';
+      document.getElementById('resident-info-name').textContent = button.dataset.name || '—';
+      document.getElementById('resident-info-address').textContent = button.dataset.address || '—';
+      document.getElementById('resident-info-contact').textContent = button.dataset.contact || '—';
+      document.getElementById('resident-info-telephone').textContent = button.dataset.telephone || '—';
+      document.getElementById('resident-info-id-type').textContent = button.dataset.idType || 'Not set';
+      document.getElementById('resident-info-username').textContent = button.dataset.username ? '@' + button.dataset.username : '';
+      const status = document.getElementById('resident-info-status');
+      status.textContent = button.dataset.status || 'Pending';
+      status.className = button.dataset.approved === 'true'
+        ? 'font-medium text-emerald-700'
+        : (button.dataset.status === 'Not Approved' ? 'font-medium text-red-700' : 'font-medium text-amber-700');
+      document.getElementById('resident-info-approve-form').action = button.dataset.approveUrl || '';
+      document.getElementById('resident-info-reject-form').action = button.dataset.rejectUrl || '';
+
+      const approveForm = document.getElementById('resident-info-approve-form');
+      const rejectForm = document.getElementById('resident-info-reject-form');
+      if (button.dataset.approved === 'true') {
+        approveForm.classList.add('hidden');
+        rejectForm.classList.remove('hidden');
+      } else {
+        approveForm.classList.remove('hidden');
+        rejectForm.classList.remove('hidden');
+      }
+
+      const image = document.getElementById('resident-info-id-image');
+      const pdf = document.getElementById('resident-info-id-pdf');
+      const empty = document.getElementById('resident-info-id-empty');
+      const loading = document.getElementById('resident-id-loading');
+      image.classList.add('hidden');
+      pdf.classList.add('hidden');
+      empty.classList.add('hidden');
+      pdf.removeAttribute('src');
+      image.removeAttribute('src');
+      if (!button.dataset.idUrl) {
+        empty.classList.remove('hidden');
+        return;
+      }
+      loading.classList.remove('hidden');
+      loading.classList.add('flex');
+      try {
+        const response = await fetch(button.dataset.idUrl);
+        if (!response.ok) throw new Error('Preview unavailable');
+        const blob = await response.blob();
+        residentInfoIdObjectUrl = URL.createObjectURL(blob);
+        loading.classList.add('hidden');
+        loading.classList.remove('flex');
+        if (blob.type === 'application/pdf') {
+          pdf.src = residentInfoIdObjectUrl;
+          pdf.classList.remove('hidden');
+        } else if (blob.type.startsWith('image/')) {
+          image.src = residentInfoIdObjectUrl;
+          image.classList.remove('hidden');
+        } else {
+          empty.textContent = 'Unable to preview this valid ID.';
+          empty.classList.remove('hidden');
+        }
+      } catch (error) {
+        loading.classList.add('hidden');
+        loading.classList.remove('flex');
+        empty.textContent = 'Unable to preview this valid ID.';
+        empty.classList.remove('hidden');
+      }
+    });
+  });
+  document.querySelectorAll('[data-close-resident-info]').forEach((button) => {
+    button.addEventListener('click', window.closeResidentInfoModal);
+  });
 
   document.querySelectorAll('[data-open-resident-vehicles]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -518,6 +787,8 @@
     if (e.key !== 'Escape') return;
     window.closeResidentModal();
     window.closeVehicleModal();
+    window.closeResidentInfoModal();
+    closeResidentIdModal();
     window.closeResidentVehiclesModal();
     delModal.classList.add('hidden');
     delVehicleModal.classList.add('hidden');

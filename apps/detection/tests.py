@@ -1,14 +1,18 @@
 import base64
 import json
+import queue
+import tempfile
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 
 from apps.detection import views
+from apps.logs.models import VehicleLog
 
 
 @override_settings(
@@ -178,7 +182,81 @@ class RecordingIngestTests(SimpleTestCase):
         self.assertEqual(response.status_code, 503)
 
 
+@override_settings(ANPR_API_KEY='test-camera-key', DEBUG=True)
+class CameraPlateIngestTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def _ingest(self, plate, camera_role):
+        request = self.factory.post(
+            '/detection/ingest/',
+            data=json.dumps({
+                'plate_number': plate,
+                'camera_role': camera_role,
+            }),
+            content_type='application/json',
+            HTTP_X_API_KEY='test-camera-key',
+        )
+        return views.ingest_plate(request)
+
+    def test_exit_is_not_debounced_by_recent_entry(self):
+        VehicleLog.objects.create(
+            plate_number='ABC 1234',
+            entry_type=VehicleLog.TYPE_VISITOR,
+            status=VehicleLog.STATUS_IN,
+            source=VehicleLog.SOURCE_CAMERA,
+            camera_role=VehicleLog.CAMERA_ROLE_ENTRY,
+        )
+
+        with patch.object(views, 'resolve_plate', return_value={
+            'entry_type': VehicleLog.TYPE_VISITOR,
+            'resident_name': '',
+            'visitor_name': '',
+        }), patch.object(views, 'broadcast_log'):
+            response = self._ingest('ABC 1234', 'EXIT_CAM')
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['status'], VehicleLog.STATUS_OUT)
+        self.assertEqual(VehicleLog.objects.filter(plate_number='ABC 1234').count(), 2)
+
+    def test_repeat_on_same_camera_role_is_debounced(self):
+        with patch.object(views, 'resolve_plate', return_value={
+            'entry_type': VehicleLog.TYPE_VISITOR,
+            'resident_name': '',
+            'visitor_name': '',
+        }), patch.object(views, 'broadcast_log'):
+            first = self._ingest('XYZ 5678', 'ENTRY_CAM')
+            second = self._ingest('XYZ 5678', 'ENTRY_CAM')
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertTrue(json.loads(second.content)['skipped'])
+        self.assertEqual(VehicleLog.objects.filter(plate_number='XYZ 5678').count(), 1)
+
+
 class ANPRClipEventTests(SimpleTestCase):
+    def test_pending_recording_is_recovered_from_disk(self):
+        from anpr_engine.anpr_engine import ANPREngine
+
+        engine = ANPREngine.__new__(ANPREngine)
+        engine._recording_upload_queue = queue.Queue(maxsize=10)
+
+        class RecorderStub:
+            active = False
+            _path = None
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            RecorderStub.output_dir = Path(temp_dir)
+            engine._recorder = RecorderStub()
+            pending = Path(temp_dir) / 'vehicle_pending_entry.mp4'
+            pending.write_bytes(b'test-video')
+
+            engine._recover_pending_recordings()
+
+            self.assertEqual(engine._recording_upload_queue.get_nowait(), pending)
+
     def test_recognized_plate_blocked_by_episode_limit_is_not_an_unreadable_alert(self):
         from anpr_engine.anpr_engine import ANPREngine
 

@@ -73,3 +73,52 @@ class ResidentVehicleModalTests(SimpleTestCase):
         self.assertIn('Approved', html)
         self.assertIn('Add Vehicle', html)
         self.assertIn('/residents/vehicles/23/delete/', html)
+        self.assertIn('resident-info-modal', html)
+        self.assertIn('View resident information', html)
+        self.assertIn('Approve &amp; Activate', html)
+        self.assertIn('resident-id-document-modal', html)
+
+
+class VehicleApprovalDocumentModalTests(SimpleTestCase):
+    @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+    def test_vehicle_approval_document_links_open_modal_preview(self):
+        vehicle = SimpleNamespace(
+            pk=23,
+            plate_number='ABC1234',
+            resident=SimpleNamespace(full_name='Jamie Resident'),
+            get_vehicle_type_display=lambda: 'Car',
+            make='Toyota',
+            model='Vios',
+            color='White',
+            or_document=True,
+            cr_document=True,
+            created_at=None,
+        )
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_admin=True,
+            is_guard=False,
+            is_resident=False,
+            username='admin',
+            first_name='Admin',
+            role='ADMIN',
+            get_full_name=lambda: 'Test Admin',
+            get_role_display=lambda: 'Administrator',
+        )
+        request = RequestFactory().get('/residents/vehicles/approvals/')
+        request.resolver_match = SimpleNamespace(url_name='vehicle_approval_list')
+
+        html = render_to_string('residents/vehicle_approvals.html', {
+            'user': user,
+            'request': request,
+            'vehicles': Paginator([vehicle], 10).get_page(1),
+            'q': '',
+            'type_q': '',
+            'residents': [],
+            'vehicle_form': VehicleForm(prefix='vehicle'),
+        })
+
+        self.assertIn('vehicle-document-modal', html)
+        self.assertIn('data-document-modal', html)
+        self.assertIn('View OR', html)
+        self.assertIn('View CR', html)

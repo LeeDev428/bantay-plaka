@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 import json
 import base64
 import binascii
@@ -38,6 +39,7 @@ _CAMERA_WORKERS: dict[str, threading.Thread] = {}
 _CAMERA_WORKERS_LOCK = threading.Lock()
 _LAST_LIVE_SNAPSHOT_PERSIST_TS: dict[str, float] = {}
 _LAST_LIVE_SNAPSHOT_PERSIST_LOCK = threading.Lock()
+_PLATE_INGEST_LOCK = threading.Lock()
 MIN_GLOBAL_PLATE_RELOG_SECONDS = 30
 MAX_FRESH_CACHE_SECONDS = 1.5
 MAX_RECORDING_UPLOAD_BYTES = 200 * 1024 * 1024
@@ -636,72 +638,79 @@ def ingest_plate(request):
         if not plate:
             return JsonResponse({'error': 'plate_number required'}, status=400)
 
-        last_camera_log = (
-            VehicleLog.objects
-            .filter(source=VehicleLog.SOURCE_CAMERA, plate_number__iexact=plate)
-            .order_by('-timestamp')
-            .first()
-        )
-        if last_camera_log is not None:
-            age_sec = (timezone.now() - last_camera_log.timestamp).total_seconds()
-            if age_sec < MIN_GLOBAL_PLATE_RELOG_SECONDS:
-                return JsonResponse(
-                    {
-                        'ok': True,
-                        'skipped': True,
-                        'reason': 'debounced',
-                        'log_id': last_camera_log.pk,
-                        'status': last_camera_log.status,
-                        'camera_role': last_camera_log.camera_role,
-                    }
+        with _PLATE_INGEST_LOCK:
+            with transaction.atomic():
+                recent_logs = (
+                    VehicleLog.objects
+                    .select_for_update()
+                    .filter(
+                        source=VehicleLog.SOURCE_CAMERA,
+                        plate_number__iexact=plate,
+                        camera_role=camera_role,
+                    )
+                    .order_by('-timestamp')
+                )
+                last_camera_log = recent_logs.first()
+                if last_camera_log is not None:
+                    age_sec = (timezone.now() - last_camera_log.timestamp).total_seconds()
+                    if age_sec < MIN_GLOBAL_PLATE_RELOG_SECONDS:
+                        return JsonResponse(
+                            {
+                                'ok': True,
+                                'skipped': True,
+                                'reason': 'debounced',
+                                'log_id': last_camera_log.pk,
+                                'status': last_camera_log.status,
+                                'camera_role': last_camera_log.camera_role,
+                            }
+                        )
+
+                blacklist_entry = BlacklistEntry.objects.filter(plate_number__iexact=plate, is_active=True).first()
+                if blacklist_entry:
+                    broadcast_blacklist_alert(
+                        plate,
+                        tag=getattr(blacklist_entry, 'tag', ''),
+                        remarks=(getattr(blacklist_entry, 'remarks', '') or getattr(blacklist_entry, 'reason', '')),
+                    )
+                    # Only hard-block; watchlist and high-risk still get a log entry.
+                    if not blacklist_entry.tag in {BlacklistEntry.TAG_WATCHLIST, BlacklistEntry.TAG_HIGH_RISK}:
+                        return JsonResponse({'ok': False, 'blocked': True, 'error': 'Plate is blacklisted'}, status=403)
+
+                status = _next_status_for_plate(plate, camera_role)
+
+                resolved = resolve_plate(plate)
+                log = VehicleLog.objects.create(
+                    plate_number=plate,
+                    entry_type=resolved['entry_type'],
+                    status=status,
+                    source=VehicleLog.SOURCE_CAMERA,
+                    camera_role=camera_role,
+                    resident_name=resolved.get('resident_name', ''),
+                    visitor_name=resolved.get('visitor_name', ''),
                 )
 
-        blacklist_entry = BlacklistEntry.objects.filter(plate_number__iexact=plate, is_active=True).first()
-        if blacklist_entry:
-            broadcast_blacklist_alert(
-                plate,
-                tag=getattr(blacklist_entry, 'tag', ''),
-                remarks=(getattr(blacklist_entry, 'remarks', '') or getattr(blacklist_entry, 'reason', '')),
-            )
-            # Only hard-block; watchlist and high-risk still get a log entry.
-            if not blacklist_entry.tag in {BlacklistEntry.TAG_WATCHLIST, BlacklistEntry.TAG_HIGH_RISK}:
-                return JsonResponse({'ok': False, 'blocked': True, 'error': 'Plate is blacklisted'}, status=403)
+                snapshot_saved = False
+                if snapshot_b64 and (settings.DEBUG or _cloud_media_storage_ready()):
+                    try:
+                        image_bytes = base64.b64decode(snapshot_b64, validate=True)
+                        safe_plate = ''.join(c for c in plate if c.isalnum())[:12] or 'plate'
+                        filename = f'{camera_role.lower()}_{safe_plate}_{log.pk}.jpg'
+                        log.snapshot.save(filename, ContentFile(image_bytes), save=True)
+                        snapshot_saved = True
+                        _update_live_camera_snapshot(camera_role, image_bytes)
+                    except (binascii.Error, ValueError):
+                        pass
+                elif snapshot_b64:
+                    logger.error('Skipped plate snapshot upload because durable Cloudinary media storage is not configured.')
 
-        status = _next_status_for_plate(plate, camera_role)
-
-        resolved = resolve_plate(plate)
-        log = VehicleLog.objects.create(
-            plate_number=plate,
-            entry_type=resolved['entry_type'],
-            status=status,
-            source=VehicleLog.SOURCE_CAMERA,
-            camera_role=camera_role,
-            resident_name=resolved.get('resident_name', ''),
-            visitor_name=resolved.get('visitor_name', ''),
-        )
-
-        snapshot_saved = False
-        if snapshot_b64 and (settings.DEBUG or _cloud_media_storage_ready()):
-            try:
-                image_bytes = base64.b64decode(snapshot_b64, validate=True)
-                safe_plate = ''.join(c for c in plate if c.isalnum())[:12] or 'plate'
-                filename = f'{camera_role.lower()}_{safe_plate}_{log.pk}.jpg'
-                log.snapshot.save(filename, ContentFile(image_bytes), save=True)
-                snapshot_saved = True
-                _update_live_camera_snapshot(camera_role, image_bytes)
-            except (binascii.Error, ValueError):
-                pass
-        elif snapshot_b64:
-            logger.error('Skipped plate snapshot upload because durable Cloudinary media storage is not configured.')
-
-        broadcast_log(log)
-        return JsonResponse({
-            'ok': True,
-            'log_id': log.pk,
-            'status': status,
-            'camera_role': camera_role,
-            'snapshot_saved': snapshot_saved,
-        })
+                broadcast_log(log)
+                return JsonResponse({
+                    'ok': True,
+                    'log_id': log.pk,
+                    'status': status,
+                    'camera_role': camera_role,
+                    'snapshot_saved': snapshot_saved,
+                })
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON body'}, status=400)

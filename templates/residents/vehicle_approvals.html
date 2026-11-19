@@ -129,8 +129,24 @@
           <td class="text-xs text-slate-500">
             {{ vehicle.get_vehicle_type_display }}{% if vehicle.color %} – {{ vehicle.color }}{% endif %}{% if vehicle.make or vehicle.model %} – {{ vehicle.make }} {{ vehicle.model }}{% endif %}
             <div class="flex gap-2 mt-1">
-              {% if vehicle.or_document %}<a href="{% url 'vehicle_registration_document' vehicle.pk 'or' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">OR</a>{% endif %}
-              {% if vehicle.cr_document %}<a href="{% url 'vehicle_registration_document' vehicle.pk 'cr' %}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">CR</a>{% endif %}
+              {% if vehicle.or_document %}
+              <button type="button" class="inline-flex items-center gap-1 text-blue-700 hover:text-blue-800"
+                data-document-modal
+                data-document-url="{% url 'vehicle_registration_document' vehicle.pk 'or' %}"
+                data-document-title="OR - {{ vehicle.plate_number }}"
+              >
+                <i class="fa fa-file-image text-[10px]"></i> View OR
+              </button>
+              {% endif %}
+              {% if vehicle.cr_document %}
+              <button type="button" class="inline-flex items-center gap-1 text-blue-700 hover:text-blue-800"
+                data-document-modal
+                data-document-url="{% url 'vehicle_registration_document' vehicle.pk 'cr' %}"
+                data-document-title="CR - {{ vehicle.plate_number }}"
+              >
+                <i class="fa fa-file-image text-[10px]"></i> View CR
+              </button>
+              {% endif %}
             </div>
           </td>
           <td class="text-xs text-slate-400">{{ vehicle.created_at|date:"M d, Y h:i A" }}</td>
@@ -179,6 +195,27 @@
       </div>
     </div>
   {% endif %}
+</div>
+
+<!-- Registration Document Modal -->
+<div id="vehicle-document-modal" class="hidden fixed inset-0 z-[55] items-center justify-center px-4 py-6">
+  <div class="absolute inset-0 bg-slate-900/60" data-close-document-modal></div>
+  <div class="relative bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-labelledby="vehicle-document-title">
+    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <h2 id="vehicle-document-title" class="font-semibold text-slate-800">Vehicle Document</h2>
+      <button type="button" class="text-slate-400 hover:text-slate-600" data-close-document-modal aria-label="Close document preview">
+        <i class="fa fa-xmark text-lg"></i>
+      </button>
+    </div>
+    <div class="p-4 bg-slate-50 overflow-auto flex-1 min-h-[420px]">
+      <div id="vehicle-document-loading" class="h-96 flex items-center justify-center text-sm text-slate-400">
+        <i class="fa fa-spinner fa-spin mr-2"></i> Loading document...
+      </div>
+      <img id="vehicle-document-image" alt="Vehicle registration document" class="hidden max-w-full max-h-[72vh] mx-auto rounded-lg border border-slate-200 object-contain">
+      <iframe id="vehicle-document-pdf" title="Vehicle registration PDF" class="hidden w-full h-[72vh] rounded-lg border border-slate-200 bg-white"></iframe>
+      <p id="vehicle-document-error" class="hidden h-96 items-center justify-center text-sm text-red-500">Unable to preview this document.</p>
+    </div>
+  </div>
 </div>
 
 <!-- Approve Modal -->
@@ -259,6 +296,12 @@
   const modalPlate = document.getElementById('id_vehicle-plate_number');
   const modalMake = document.getElementById('id_vehicle-make');
   const modalModel = document.getElementById('id_vehicle-model');
+  const documentModal = document.getElementById('vehicle-document-modal');
+  const documentImage = document.getElementById('vehicle-document-image');
+  const documentPdf = document.getElementById('vehicle-document-pdf');
+  const documentLoading = document.getElementById('vehicle-document-loading');
+  const documentError = document.getElementById('vehicle-document-error');
+  let documentObjectUrl = '';
   let activeRejectForm = null;
 
   window.closeApprovalRegisterModal = function () {
@@ -293,6 +336,54 @@
 
   modalVehicleType?.addEventListener('change', syncModalHints);
   syncModalHints();
+
+  function closeDocumentModal() {
+    documentModal?.classList.add('hidden');
+    documentModal?.classList.remove('flex');
+    documentImage?.classList.add('hidden');
+    documentPdf?.classList.add('hidden');
+    documentPdf?.removeAttribute('src');
+    documentImage?.removeAttribute('src');
+    if (documentObjectUrl) {
+      URL.revokeObjectURL(documentObjectUrl);
+      documentObjectUrl = '';
+    }
+  }
+
+  document.querySelectorAll('[data-document-modal]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      document.getElementById('vehicle-document-title').textContent = button.dataset.documentTitle || 'Vehicle Document';
+      documentModal.classList.remove('hidden');
+      documentModal.classList.add('flex');
+      documentLoading.classList.remove('hidden');
+      documentError.classList.add('hidden');
+      documentImage.classList.add('hidden');
+      documentPdf.classList.add('hidden');
+      try {
+        const response = await fetch(button.dataset.documentUrl);
+        if (!response.ok) throw new Error('Preview unavailable');
+        const blob = await response.blob();
+        documentObjectUrl = URL.createObjectURL(blob);
+        documentLoading.classList.add('hidden');
+        if (blob.type === 'application/pdf') {
+          documentPdf.src = documentObjectUrl;
+          documentPdf.classList.remove('hidden');
+        } else if (blob.type.startsWith('image/')) {
+          documentImage.src = documentObjectUrl;
+          documentImage.classList.remove('hidden');
+        } else {
+          throw new Error('Unsupported document type');
+        }
+      } catch (error) {
+        documentLoading.classList.add('hidden');
+        documentError.classList.remove('hidden');
+        documentError.classList.add('flex');
+      }
+    });
+  });
+  document.querySelectorAll('[data-close-document-modal]').forEach((button) => {
+    button.addEventListener('click', closeDocumentModal);
+  });
 
   function closeApprove() { approveModal.classList.add('hidden'); }
   function closeReject()  { rejectModal.classList.add('hidden'); activeRejectForm = null; }
@@ -335,6 +426,7 @@
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     window.closeApprovalRegisterModal();
+    closeDocumentModal();
     closeApprove();
     closeReject();
   });

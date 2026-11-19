@@ -923,7 +923,11 @@ class ClipRecorder:
         h, w = frame.shape[:2]
         stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         path = self.output_dir / f'vehicle_{stamp}_{self.camera_role.lower()}.mp4'
-        writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+        fourcc = getattr(cv2, 'VideoWriter_fourcc', None)
+        if fourcc is None:
+            log.error("OpenCV does not provide VideoWriter_fourcc.")
+            return None
+        writer = cv2.VideoWriter(str(path), fourcc(*'mp4v'), fps, (w, h))
         if not writer.isOpened():
             writer.release()
             log.error("Could not open video writer for %s", path)
@@ -1738,15 +1742,38 @@ class ANPREngine:
                 try:
                     self._recording_upload_queue.put_nowait(path)
                 except queue.Full:
-                    log.error("Recording upload queue is full; clip remains on disk and was not uploaded: %s", path)
+                    log.warning("Recording upload queue is full; leaving clip for periodic recovery: %s", path)
 
     def _recording_upload_loop(self):
         while True:
-            path = self._recording_upload_queue.get()
+            try:
+                path = self._recording_upload_queue.get(timeout=30)
+            except queue.Empty:
+                self._recover_pending_recordings()
+                continue
             try:
                 self._upload_recording(path)
             finally:
                 self._recording_upload_queue.task_done()
+
+    def _recover_pending_recordings(self):
+        """Requeue local MP4 clips that were not uploaded before a queue or process failure."""
+        try:
+            candidates = sorted(self._recorder.output_dir.glob('vehicle_*.mp4'))
+        except Exception as exc:
+            log.warning("Could not scan pending recordings: %s", exc)
+            return
+
+        for path in candidates:
+            if getattr(self._recorder, 'active', False) and path == getattr(self._recorder, '_path', None):
+                continue
+            uploaded_marker = path.with_suffix('.uploaded')
+            if uploaded_marker.exists():
+                continue
+            try:
+                self._recording_upload_queue.put_nowait(path)
+            except queue.Full:
+                return
 
     def _upload_recording(self, path: Path):
         metadata_path = path.with_suffix('.json')
@@ -1788,6 +1815,10 @@ class ANPREngine:
                     )
                 if response.status_code == 200:
                     log.info("Uploaded recording to hosted gallery: %s", path.name)
+                    try:
+                        path.with_suffix('.uploaded').touch()
+                    except OSError as exc:
+                        log.warning("Could not mark recording as uploaded (%s): %s", path.name, exc)
                     return
                 log.error(
                     "Recording upload rejected (HTTP %d, attempt %d/2): %s",

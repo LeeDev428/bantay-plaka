@@ -10,12 +10,32 @@
     {% endif %}
   </td>
   <td>
-    {% if log.blacklist_tag %}
-      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{{ log.blacklist_tag_display|default:log.blacklist_tag }}</span>
-      <p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="{{ log.blacklist_remarks|default:log.blacklist_reason }}">{{ log.blacklist_remarks|default:log.blacklist_reason|default:'Blacklisted plate detected.' }}</p>
-    {% else %}
-      <span class="text-xs text-slate-400">No remarks</span>
-    {% endif %}
+    <div class="flex items-center gap-2">
+      {% if log.snapshot %}
+      <a href="{{ log.snapshot.url }}" target="_blank" rel="noopener noreferrer"
+        class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+        title="View plate snapshot">
+        <i class="fa fa-image text-xs"></i>
+      </a>
+      {% endif %}
+      {% if log.blacklist_tag %}
+      <span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-red-100 text-red-700"
+        title="{{ log.blacklist_tag_display|default:log.blacklist_tag }}: {{ log.blacklist_remarks|default:log.blacklist_reason|default:'Blacklisted plate detected.' }}">
+        <i class="fa fa-shield-halved text-xs"></i>
+      </span>
+      {% else %}
+      <span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"
+        title="No blacklist alert">
+        <i class="fa fa-circle-check text-xs"></i>
+      </span>
+      {% endif %}
+      {% if not log.snapshot %}
+      <span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-slate-100 text-slate-400"
+        title="No snapshot attached">
+        <i class="fa fa-image text-xs"></i>
+      </span>
+      {% endif %}
+    </div>
   </td>
   <td>
     {% if log.status == 'TIME_IN' %}

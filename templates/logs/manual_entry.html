@@ -37,7 +37,7 @@
         <tr class="bg-slate-50 text-xs uppercase text-slate-500">
           <th class="font-semibold">Plate</th>
           <th class="font-semibold">Type</th>
-          <th class="font-semibold">Remarks</th>
+          <th class="font-semibold">Alert</th>
           <th class="font-semibold">Status</th>
           <th class="font-semibold">Timestamp</th>
         </tr>
@@ -55,10 +55,14 @@
             </td>
             <td>
               {% if log.blacklist_tag %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{{ log.blacklist_tag_display|default:'Blacklisted' }}</span>
-                <p class="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title="{{ log.blacklist_remarks|default:log.blacklist_reason }}">{{ log.blacklist_remarks|default:log.blacklist_reason|default:'Blacklisted plate detected.' }}</p>
+                <span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-red-100 text-red-700"
+                  title="{{ log.blacklist_tag_display|default:log.blacklist_tag }}: {{ log.blacklist_remarks|default:log.blacklist_reason|default:'Blacklisted plate detected.' }}">
+                  <i class="fa fa-shield-halved text-xs"></i>
+                </span>
               {% else %}
-                <span class="text-xs text-slate-400">No remarks</span>
+                <span class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600" title="No blacklist alert">
+                  <i class="fa fa-circle-check text-xs"></i>
+                </span>
               {% endif %}
             </td>
             <td>

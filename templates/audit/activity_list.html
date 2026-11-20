@@ -84,7 +84,7 @@
     </table>
   </div>
   {% if events.paginator.num_pages > 1 %}
-  <div class="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-100 px-4 py-3">
     <p class="text-xs text-slate-500">Page {{ events.number }} of {{ events.paginator.num_pages }}</p>
     <div class="join">
       {% if events.has_previous %}

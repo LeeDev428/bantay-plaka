@@ -346,6 +346,7 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertContains(response, 'data-preview-type="video"')
         self.assertContains(response, 'media-preview-modal')
         self.assertContains(response, reverse('video_archive', args=[12]))
+        self.assertContains(response, 'badge shrink-0 whitespace-nowrap')
 
     def test_recording_file_serves_only_mp4_in_recordings_directory(self):
         recording = self.recordings_dir / 'clip.mp4'
@@ -461,6 +462,7 @@ class VideoGalleryTests(SimpleTestCase):
         self.assertContains(response, 'media-preview-modal')
         self.assertContains(response, reverse('alert_archive', args=[14]))
         self.assertNotContains(response, 'target="_blank"')
+        self.assertContains(response, 'badge shrink-0 whitespace-nowrap')
 
     def test_snapshot_gallery_renders_uncropped_in_page_preview(self):
         class SnapshotQuery:
